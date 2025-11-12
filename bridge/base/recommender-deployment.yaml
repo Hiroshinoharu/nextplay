@@ -1,0 +1,32 @@
+#! recommender-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: recommender
+    namespace: nextplay
+    labels:
+        com.docker.compose.project: nextplay
+        com.docker.compose.service: recommender
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: nextplay
+            com.docker.compose.service: recommender
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: nextplay
+                com.docker.compose.service: recommender
+                com.docker.compose.network.default: "true"
+        spec:
+            containers:
+                - name: recommender
+                  image: nextplay-recommender
+                  imagePullPolicy: IfNotPresent
+                  ports:
+                    - name: recommende-8082
+                      containerPort: 8082

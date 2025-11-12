@@ -1,0 +1,13 @@
+# check if there is at least one published port
+
+#! frontend-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: frontend-published
+    namespace: nextplay
+spec:
+    type: LoadBalancer
+
+# check if there is at least one published port

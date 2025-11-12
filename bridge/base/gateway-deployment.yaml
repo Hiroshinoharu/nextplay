@@ -1,0 +1,32 @@
+#! gateway-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: gateway
+    namespace: nextplay
+    labels:
+        com.docker.compose.project: nextplay
+        com.docker.compose.service: gateway
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: nextplay
+            com.docker.compose.service: gateway
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: nextplay
+                com.docker.compose.service: gateway
+                com.docker.compose.network.default: "true"
+        spec:
+            containers:
+                - name: gateway
+                  image: nextplay-gateway
+                  imagePullPolicy: IfNotPresent
+                  ports:
+                    - name: gateway-8080
+                      containerPort: 8080

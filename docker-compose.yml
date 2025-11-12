@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  gateway:
+    build: ./services/gateway
+    ports:
+      - "8080:8080"
+  
+  user:
+    build: ./services/user
+    ports:
+      - "8083:8083"
+  
+  game:
+    build: ./services/game
+    ports:
+      - "8081:8081"
+  
+  recommender:
+    build: ./services/recommender
+    ports:
+      - "8082:8082"
+  
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gateway

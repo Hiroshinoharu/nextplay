@@ -1,0 +1,21 @@
+#! recommender-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: recommender-published
+    namespace: nextplay
+    labels:
+        com.docker.compose.project: nextplay
+        com.docker.compose.service: recommender
+spec:
+    selector:
+        com.docker.compose.project: nextplay
+        com.docker.compose.service: recommender
+    ports:
+        - name: recommende-8082
+          port: 8082
+          protocol: TCP
+          targetPort: recommende-8082
+
+# check if there is at least one published port
