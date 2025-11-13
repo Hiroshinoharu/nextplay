@@ -1,76 +1,85 @@
-# Name of my workflow
+# Name of the workflow shown in GitHub Actions UI
 name: NextPlay CI - Build & Test
 
-# Run the action on specific events
+# Events that trigger the workflow: on push and on pull request
 on:
   push:
   pull_request:
 
 jobs:
+  # Single job that builds and tests all services
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # Runner environment
 
     steps:
-    
+
     # --------------------
     #   GO SERVICES
     # --------------------
-    
-    # Step 1: Checkout the repo code
+    # Checkout the repository so the runner has the source code
     - name: Checkout code
       uses: actions/checkout@v3
 
-    # Step 2: Install Go using GitHub's official setup action
+    # Install the specified Go toolchain version
     - name: Install Go
       uses: actions/setup-go@v4
       with:
         go-version: '1.24.5'
 
-    # Step 3: Cache Go dependencies
+    # Cache Go modules and build cache to speed up subsequent runs
     - name: Cache Go dependencies
       uses: actions/cache@v4
       with:
         path: |
-          ~/go/pkg/mod          # Go module cache (downloaded dependencies)
-          ~/.cache/go-build     # Go build cache (compiled packages)
+          ~/go/pkg/mod
+          ~/.cache/go-build
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-go-
-    
-    # Build Go services
-    - name: Build Go microservices
-      run: |
-        go build ./services/gateway
-        go build ./services/game
-        go build ./services/user
-    
-    # -----------------
-    # Python Service
-    # -----------------
+
+    # Build each Go microservice in its directory
+    - name: Build gateway service
+      working-directory: services/gateway
+      run: go build .
+
+    - name: Build game service
+      working-directory: services/game
+      run: go build .
+
+    - name: Build user service
+      working-directory: services/user
+      run: go build .
+
+    # --------------------
+    #   PYTHON SERVICE
+    # --------------------
+    # Install Python runtime
     - name: Install Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.10"
-    
+
+    # Install Python dependencies for the recommender service
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r services/recommender/requirements.txt
 
-    # Basic validation with fastapi
-    - name: Validate Recommender Service
+    # Quick validation: import the recommender module (fails fast if broken)
+    - name: Validate recommender service
       run: |
         python -c "import uvicorn; import services.recommender.main"
 
-  # ---------------
-  # Frontend
-  # ---------------
+    # --------------------
+    #     FRONTEND
+    # --------------------
+    # Install Node.js runtime
     - name: Install Node
       uses: actions/setup-node@v4
       with:
         node-version: "20"
-    
-    # Cache node_modules
+
+    # Cache Node modules to speed up CI
     - name: Cache Node dependencies
       uses: actions/cache@v4
       with:
@@ -78,11 +87,13 @@ jobs:
         key: ${{ runner.os }}-node-${{ hashFiles('frontend/package-lock.json') }}
         restore-keys: |
           ${{ runner.os }}-node-
-    
+
+    # Install frontend dependencies using a clean install
     - name: Install Frontend dependencies
       working-directory: frontend
       run: npm ci
 
+    # Build the frontend static assets
     - name: Build Frontend
       working-directory: frontend
       run: npm run build
