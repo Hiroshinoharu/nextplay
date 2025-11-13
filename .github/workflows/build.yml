@@ -24,7 +24,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.23'
+        go-version: '1.24.5'
 
     # Cache Go modules and build cache to speed up subsequent runs
     - name: Cache Go dependencies
@@ -33,9 +33,9 @@ jobs:
         path: |
           ~/go/pkg/mod
           ~/.cache/go-build
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        key: ${{ runner.os }}-go-v2-${{ hashFiles('**/go.sum') }}
         restore-keys: |
-          ${{ runner.os }}-go-
+          ${{ runner.os }}-go-v2-
 
     # Build each Go microservice in its directory
     - name: Build gateway service
