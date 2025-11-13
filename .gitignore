@@ -73,3 +73,6 @@ logs/
 *.seed
 *.pid.lock
 coverage/
+
+# All env files
+deploy/env

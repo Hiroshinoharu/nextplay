@@ -29,6 +29,6 @@ nextplay/
 │   ├── game/             # Fetches game data (IGDB API integration planned)
 │   └── recommender/      # Machine learning model service (FastAPI)
 ├── docker-compose.yml    # Local deployment file for multi-container setup
-├── *.yaml                # Kubernetes manifests (Deployments & Services)
+├── kube                # Kubernetes manifests (Deployments & Services)
 ├── .gitignore            # Ignored files (node_modules, build artifacts, etc.)
 └── README.md             # Project documentation

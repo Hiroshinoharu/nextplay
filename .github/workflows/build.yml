@@ -1,0 +1,88 @@
+# Name of my workflow
+name: NextPlay CI - Build & Test
+
+# Run the action on specific events
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    
+    # --------------------
+    #   GO SERVICES
+    # --------------------
+    
+    # Step 1: Checkout the repo code
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    # Step 2: Install Go using GitHub's official setup action
+    - name: Install Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24.5'
+
+    # Step 3: Cache Go dependencies
+    - name: Cache Go dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod          # Go module cache (downloaded dependencies)
+          ~/.cache/go-build     # Go build cache (compiled packages)
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    
+    # Build Go services
+    - name: Build Go microsevices
+      run: |
+        go build ./services/gateway
+        go build ./services/game
+        go build ./services/user
+    
+    # -----------------
+    # Python Service
+    # -----------------
+    - name: Install Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r services/recommender/requirements.txt
+
+    # Basic validation with fastapi
+    - name: Validate Recommender Service
+      run: |
+        python -c "import uvicorn; import services.recommender.main"
+
+  # ---------------
+  # Frontend
+  # ---------------
+    - name: Install Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+    
+    # Cache node_modules
+    - name: Cache Node dependencies
+      uses: actions/cache@v4
+      with:
+        path: frontend/node_modules
+        key: ${{ runner.os }}-node-${{ hashFiles('frontend/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+    
+    - name: Install Frontend dependencies
+      working-directory: frontend
+      run: npm ci
+
+    - name: Build Frontend
+      working-directory: frontend
+      run: npm run build

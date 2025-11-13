@@ -1,0 +1,65 @@
+# Name of pipeline
+name: NextPlay - Build & Push Docker Images
+
+on:
+  push: # On a push
+    branches:
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      # Build and push each microservice
+      - name: Build & push gateway
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/gateway
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/nextplay-gateway:latest
+
+      - name: Build & push user
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/user
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/nextplay-user:latest
+
+      - name: Build & push game
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/game
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/nextplay-game:latest
+
+      - name: Build & push recommender
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/recommender
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/nextplay-recommender:latest
+
+      - name: Build & push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ env.IMAGE_PREFIX }}/nextplay-frontend:latest

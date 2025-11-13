@@ -1,0 +1,32 @@
+# Workflow name shown in GitHub Actions UI
+name: NextPlay - Deploy to Kubernetes
+
+# Trigger this workflow when another workflow finishes.
+# It listens for runs of "NextPlay - Build & Push Docker Images" and triggers when they are completed.
+on:
+  workflow_run:
+    workflows: ["NextPlay - Build & Push Docker Images"]
+    types: [completed]
+
+jobs:
+  deploy:
+    # Run the job on an Ubuntu runner
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      # Checkout the repository so the workflow can access manifests and kustomize overlays
+      uses: actions/checkout@v4
+
+    - name: Set up kubectl
+      # Install and configure kubectl on the runner (version can be pinned if needed)
+      uses: azure/setup-kubectl@v4
+
+    - name: Configure kubeconfig
+      # Write the KUBE_CONFIG secret to the default kubeconfig path so kubectl can authenticate to the cluster.
+      # Ensure the secret contains a valid kubeconfig and is stored securely in GitHub Secrets.
+      run: echo "${{ secrets.KUBE_CONFIG }}" > ~/.kube/config
+
+    - name: Apply k8s manifests
+      # Apply Kubernetes manifests using kustomize (-k). Adjust path to your base/overlay as needed.
+      run: kubectl apply -k kube/base
