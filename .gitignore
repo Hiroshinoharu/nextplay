@@ -21,7 +21,6 @@ package-lock.json
 **/*.test
 **/bin/
 **/vendor/
-go.sum
 
 # === Python (Recommender) ===
 __pycache__/
