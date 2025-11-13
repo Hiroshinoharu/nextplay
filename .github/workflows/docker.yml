@@ -2,7 +2,7 @@
 name: NextPlay - Build & Push Docker Images
 
 on:
-  push: # On a push
+  push:
     branches:
       - main
 
@@ -33,33 +33,38 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./services/gateway
+          platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}/nextplay-gateway:latest
+          tags: ${{ env.IMAGE_PREFIX }}/gateway:latest
 
       - name: Build & push user
         uses: docker/build-push-action@v5
         with:
           context: ./services/user
+          platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}/nextplay-user:latest
+          tags: ${{ env.IMAGE_PREFIX }}/user:latest
 
       - name: Build & push game
         uses: docker/build-push-action@v5
         with:
           context: ./services/game
+          platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}/nextplay-game:latest
+          tags: ${{ env.IMAGE_PREFIX }}/game:latest
 
       - name: Build & push recommender
         uses: docker/build-push-action@v5
         with:
           context: ./services/recommender
+          platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}/nextplay-recommender:latest
+          tags: ${{ env.IMAGE_PREFIX }}/recommender:latest
 
       - name: Build & push frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
+          platforms: linux/amd64
           push: true
-          tags: ${{ env.IMAGE_PREFIX }}/nextplay-frontend:latest
+          tags: ${{ env.IMAGE_PREFIX }}/frontend:latest
