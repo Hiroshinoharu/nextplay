@@ -40,9 +40,9 @@ jobs:
     # Build Go services
     - name: Build Go microsevices
       run: |
-        go build ./services/gateway
-        go build ./services/game
-        go build ./services/user
+        go build ./services/gateway/go.mod
+        go build ./services/game/go.mod
+        go build ./services/user/go.mod
     
     # -----------------
     # Python Service
