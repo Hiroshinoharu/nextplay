@@ -5,11 +5,19 @@ services:
     build: ../services/gateway
     ports:
       - "8080:8080"
+    depends_on:
+      - user
+      - game
+      - recommender
   
   user:
     build: ../services/user
     ports:
       - "8083:8083"
+    env_file:
+      - ../deploy/env/user.env
+    depends_on:
+    - postgres
   
   game:
     build: ../services/game
@@ -27,3 +35,19 @@ services:
       - "3000:3000"
     depends_on:
       - gateway
+  
+  postgres:
+    image: postgres:16
+    container_name: nextplay-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: nextplay
+      POSTGRES_PASSWORD: nextplay
+      POSTGRES_DB: nextplay
+    volumes:
+    - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

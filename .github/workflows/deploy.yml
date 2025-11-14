@@ -4,6 +4,7 @@ name: NextPlay - Deploy to Kubernetes
 # Trigger this workflow when another workflow finishes.
 # It listens for runs of "NextPlay - Build & Push Docker Images" and triggers when they are completed.
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: ["NextPlay - Build & Push Docker Images"]
     types: [completed]
