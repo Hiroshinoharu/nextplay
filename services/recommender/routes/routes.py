@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from handlers.recommend import recommend
-from models.request import RecommendRequest
+from ..handlers.recommend import recommend
+from ..models.request import RecommendRequest
 
 def register_routes(app: FastAPI):
     """

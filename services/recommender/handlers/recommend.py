@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from models.request import RecommendRequest
+from ..models.request import RecommendRequest
 
 def recommend(payload: RecommendRequest):
     """

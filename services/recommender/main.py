@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routes.routes import register_routes
+from services.recommender.routes.routes import register_routes
 
 app = FastAPI(
     title="NextPlay Recommender Service",
