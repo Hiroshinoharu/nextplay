@@ -1,4 +1,4 @@
-module game
+module github.com/maxceban/nextplay/services/game
 
 go 1.24.5
 

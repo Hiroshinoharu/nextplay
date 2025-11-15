@@ -1,8 +1,14 @@
 from fastapi import FastAPI
 
-app = FastAPI()
-
+app = FastAPI(
+    title="NextPlay Recommender Service",
+    version="1.0.0"
+)
 
 @app.get("/")
-def root():
-    return {"service":"recommender","status":"running"}
+def health():
+    return {"service": "recommender", "status": "running"}
+
+# Import routes AFTER app is created
+from routes.routes import register_routes
+register_routes(app)

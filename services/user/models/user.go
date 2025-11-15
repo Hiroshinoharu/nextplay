@@ -5,8 +5,14 @@
 package models
 
 type User struct{
-	ID int `json:"id"`
+	ID int64 `json:"id"`
 	Username string `json:"username"`
 	Email string `json:"email"`
-	Password string `json:"-"`
+	Password string `json:"-"` // Hide in JSON
+	SteamLinked bool `json:"steam_linked"`
+
+	// Realations
+	Interaction []UserInteraction `json:"interactions"`
+	KeywordPrefs []KeywordPreferences `json:"keyword_preferences"`
+	PlatformPrefs []PlatformPreferences `json:"platform_preferences"`
 }

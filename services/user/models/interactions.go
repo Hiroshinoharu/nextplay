@@ -4,7 +4,7 @@
 
 package models
 
-type Interaction struct {
+type UserInteraction struct {
 	UserID int `json:"user_id"`
 	GameID int `json:"game_id"`
 	Rating float64 `json:"rating"`

@@ -4,14 +4,16 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func Register(c *fiber.Ctx) error{
+func Register(c *fiber.Ctx) error {
+	// TODO: Read JSON → validate → insert → return new user
 	return c.JSON(fiber.Map{
-		"msg": "register user (not implmented yet)",
+		"message": "Register endpoint hit",
 	})
 }
 
-func Login(c *fiber.Ctx) error{
+func Login(c *fiber.Ctx) error {
+	// TODO: Validate credentials → return JWT later
 	return c.JSON(fiber.Map{
-		"msg": "login endpoint (not implemented)",
+		"message": "Login endpoint hit",
 	})
 }
