@@ -10,5 +10,5 @@ FROM debian:stable-slim
 WORKDIR /app
 COPY --from=builder /app/app .
 
-EXPOSE 8080
+EXPOSE 8084
 CMD ["./app"]

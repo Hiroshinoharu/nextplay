@@ -1,53 +1,111 @@
-version: "3.9"
+version: "3.9" # Compose file format version
 
 services:
-  gateway:
-    build: ../services/gateway
+  # -------------------------------------------------------
+  #  POSTGRES DATABASE SERVICE
+  # -------------------------------------------------------
+  postgres:
+    image: postgres:16 # Use the official PostgreSQL version 16 image
+    environment:
+      POSTGRES_USER: nextplay       # Database username
+      POSTGRES_PASSWORD: nextplay   # Database password
+      POSTGRES_DB: nextplay         # Database name to create on startup
     ports:
-      - "8080:8080"
-    depends_on:
-      - user
-      - game
-      - recommender
-  
+      - "5432:5432" # Expose DB so you can connect from your host (DBeaver, psql, etc.)
+
+    # Healthcheck ensures Postgres is fully ready before other services start
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nextplay"] # Built-in readiness test
+      interval: 5s   # Check every 5 seconds
+      timeout: 5s    # Fail if Postgres doesn't answer in 5s
+      retries: 5     # Retry 5 times before marking unhealthy
+      start_period: 10s # Allow Postgres extra time to boot up
+
+  # -------------------------------------------------------
+  #  USER SERVICE (Go / Fiber)
+  # -------------------------------------------------------
   user:
-    build: ../services/user
+    build: ../services/user # Build Dockerfile located in services/user
     ports:
       - "8083:8083"
     env_file:
-      - ../deploy/env/user.env
+      - env/user.env
     depends_on:
-    - postgres
-  
+      postgres:
+        condition: service_healthy # Only start when Postgres is ready
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/"] # Hit user root endpoint
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # -------------------------------------------------------
+  #  GAME SERVICE (Go / Fiber)
+  # -------------------------------------------------------
   game:
-    build: ../services/game
+    build: ../services/game # Build Dockerfile for game microservice
     ports:
       - "8081:8081"
-  
+    env_file:
+      - env/game.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/"] # Checks if service responds
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # -------------------------------------------------------
+  #  RECOMMENDER SERVICE (Python FastAPI)
+  # -------------------------------------------------------
   recommender:
-    build: ../services/recommender
+    build: ../services/recommender # Build FastAPI image
     ports:
       - "8082:8082"
-  
-  frontend:
-    build: ../frontend
-    ports:
-      - "3000:3000"
+    env_file:
+      - env/recommender.env
     depends_on:
-      - gateway
-  
-  postgres:
-    image: postgres:16
-    container_name: nextplay-postgres
-    restart: unless-stopped
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: nextplay
-      POSTGRES_PASSWORD: nextplay
-      POSTGRES_DB: nextplay
-    volumes:
-    - pgdata:/var/lib/postgresql/data
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Uses FastAPI /docs endpoint as a health indicator
+      test: ["CMD", "curl", "-f", "http://localhost:8082/docs"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
-volumes:
-  pgdata:
+  # -------------------------------------------------------
+  #  API GATEWAY (Go / Fiber)
+  # -------------------------------------------------------
+  gateway:
+    build: ../services/gateway # Build gateway from its Dockerfile
+    ports:
+      - "8084:8084" # Main entry point for frontend → backend API
+    env_file:
+      - env/gateway.env
+    depends_on:
+      user:
+        condition: service_healthy      # Wait until user service responds
+      game:
+        condition: service_healthy      # Wait until game service responds
+      recommender:
+        condition: service_healthy      # Wait until recommender is healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/"] # Gateway health check
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # -------------------------------------------------------
+  #  FRONTEND SERVICE (React / Vite)
+  # -------------------------------------------------------
+  frontend:
+    build: ../frontend # Build frontend Dockerfile
+    ports:
+      - "3000:3000" # Expose frontend locally
+    depends_on:
+      gateway:
+        condition: service_healthy # Only start UI when backend gateway works
+    # (Optional) You can add a healthcheck too, but not required
