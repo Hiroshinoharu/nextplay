@@ -68,7 +68,7 @@ jobs:
     # Quick validation: import the recommender module (fails fast if broken)
     - name: Validate recommender service
       run: |
-        python -c "import uvicorn; import services.recommender.main"
+        python -c "import uvicorn; import services.recommender.main as m;"
 
     # --------------------
     #     FRONTEND
