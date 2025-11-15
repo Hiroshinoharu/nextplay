@@ -9,5 +9,5 @@ func main(){
 		return c.JSON(fiber.Map{"service": "gateway", "status": "runnning"})
 	})
 
-	app.Listen(":8080")
+	app.Listen(":8084")
 }

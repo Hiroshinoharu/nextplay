@@ -1,7 +1,7 @@
 package routes
 
 import (
-	"user/handlers"
+	"github.com/maxceban/nextplay/services/user/handlers"
 
 	"github.com/gofiber/fiber/v2"
 )

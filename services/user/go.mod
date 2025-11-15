@@ -1,4 +1,4 @@
-module user
+module github.com/maxceban/nextplay/services/user
 
 go 1.24.5
 
