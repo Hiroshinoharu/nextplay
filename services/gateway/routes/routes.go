@@ -65,5 +65,7 @@ func SetUpRoutes(app *fiber.App) {
 	{
 		rec.Post("/", handlers.RecommendFromFeatures)
 		rec.Get("/user/:id", handlers.GetUserRecommendations)
+		rec.Get("/item/:id", handlers.GetItemRecommendations)
+		rec.Post("/item", handlers.PostItemRecommendations)
 	}
 }

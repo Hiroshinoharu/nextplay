@@ -8,3 +8,9 @@ class RecommendRequest(BaseModel):
     disliked_keywords: List[int] = []
     disliked_platforms: List[int] = []
     questionnaire: Optional[dict] = None   # future quiz input
+
+
+class SimilarRequest(BaseModel):
+    item_id: int
+    top_k: int = 3
+    filters: Optional[dict] = None
