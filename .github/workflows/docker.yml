@@ -6,7 +6,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/nextplay
+  IMAGE_PREFIX: ghcr.io/hiroshinoharu/nextplay
 
 jobs:
   build:

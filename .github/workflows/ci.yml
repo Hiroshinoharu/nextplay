@@ -8,7 +8,7 @@ on:
 
 jobs:
   # Single job that builds and tests all services
-  build-and-test:
+  ci:
     runs-on: ubuntu-latest  # Runner environment
 
     steps:
