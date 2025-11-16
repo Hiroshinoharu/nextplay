@@ -1,27 +1,24 @@
+# ---- BUILD STAGE ----
 FROM golang:1.24 AS builder
 
 WORKDIR /app
 
-# Copy only module files first (compose sets context to repo root)
+# Copy go.mod + go.sum
 COPY services/gateway/go.mod services/gateway/go.sum ./
 RUN go mod download
 
 # Copy service source
 COPY services/gateway/ ./
 
-# Build a small, static binary
+# Build static binary
 ENV CGO_ENABLED=0
-RUN go build -ldflags="-s -w" -o /gateway .
+RUN go build -o gateway .
 
-# ----- RUNTIME STAGE -----
-FROM scratch AS final
+# ---- RUNTIME STAGE ----
+FROM scratch
 
 WORKDIR /
-
-# Optionally include certs for outbound HTTPS (small overhead)
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-
-# Copy binary
 COPY --from=builder /app/gateway /gateway
 
 EXPOSE 8084

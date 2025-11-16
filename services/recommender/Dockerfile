@@ -2,7 +2,7 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Copy ONLY the recommender code into the correct folder structure
+# Copy only the recommender service
 COPY services/recommender /app/services/recommender
 
 # Install dependencies
