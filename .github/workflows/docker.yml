@@ -20,51 +20,60 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
-      # Build and push each microservice
+
+      # GATEWAY
       - name: Build & push gateway
         uses: docker/build-push-action@v5
         with:
-          context: ./services/gateway
+          context: .
+          dockerfile: services/gateway/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/gateway:latest
 
+      # USER
       - name: Build & push user
         uses: docker/build-push-action@v5
         with:
-          context: ./services/user
+          context: .
+          dockerfile: services/user/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/user:latest
 
+      # GAME
       - name: Build & push game
         uses: docker/build-push-action@v5
         with:
-          context: ./services/game
+          context: .
+          dockerfile: services/game/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/game:latest
 
+      # RECOMMENDER
       - name: Build & push recommender
         uses: docker/build-push-action@v5
         with:
-          context: ./services/recommender
+          context: .
+          dockerfile: services/recommender/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/recommender:latest
 
+      # FRONTEND
       - name: Build & push frontend
         uses: docker/build-push-action@v5
         with:
-          context: ./frontend
+          context: .
+          dockerfile: frontend/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/frontend:latest
