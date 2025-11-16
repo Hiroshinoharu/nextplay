@@ -25,7 +25,9 @@ services:
   #  USER SERVICE (Go / Fiber)
   # -------------------------------------------------------
   user:
-    build: ../services/user # Build Dockerfile located in services/user
+    build:
+      context: ..
+      dockerfile: services/user/Dockerfile # Build Dockerfile located in services/user
     ports:
       - "8083:8083"
     env_file:
@@ -43,7 +45,11 @@ services:
   #  GAME SERVICE (Go / Fiber)
   # -------------------------------------------------------
   game:
-    build: ../services/game # Build Dockerfile for game microservice
+    build:
+      context: ..
+      dockerfile: services/game/Dockerfile # Build Dockerfile located in services/game
+      args:
+        SERVICE_NAME: game
     ports:
       - "8081:8081"
     env_file:
@@ -61,7 +67,9 @@ services:
   #  RECOMMENDER SERVICE (Python FastAPI)
   # -------------------------------------------------------
   recommender:
-    build: ../services/recommender # Build FastAPI image
+    build:
+      context: .. # Build from the root directory
+      dockerfile: services/recommender/Dockerfile # Specify recommender Dockerfile 
     ports:
       - "8082:8082"
     env_file:
@@ -80,7 +88,9 @@ services:
   #  API GATEWAY (Go / Fiber)
   # -------------------------------------------------------
   gateway:
-    build: ../services/gateway # Build gateway from its Dockerfile
+    build:
+      context: ..
+      dockerfile: services/gateway/Dockerfile # Build gateway from its Dockerfile
     ports:
       - "8084:8084" # Main entry point for frontend → backend API
     env_file:
@@ -102,10 +112,11 @@ services:
   #  FRONTEND SERVICE (React / Vite)
   # -------------------------------------------------------
   frontend:
-    build: ../frontend # Build frontend Dockerfile
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile # Build frontend Dockerfile
     ports:
       - "3000:3000" # Expose frontend locally
     depends_on:
       gateway:
         condition: service_healthy # Only start UI when backend gateway works
-    # (Optional) You can add a healthcheck too, but not required

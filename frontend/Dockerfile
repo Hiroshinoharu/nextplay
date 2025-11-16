@@ -1,36 +1,24 @@
-# Test container
+# ---- Build Stage ----
+FROM node:20-alpine AS builder
 
-# ----------------------------
-# Stage 1: Build the React app
-# ----------------------------
-FROM node:20 AS build
 WORKDIR /app
 
-# Copy package files first (for caching)
-COPY package*.json ./
+# Copy only package.json first (better caching)
+COPY frontend/package*.json ./
 
-# Install dependencies
 RUN npm install
 
-# Copy the rest of my frontend code
-COPY . .
+# Copy the rest of the frontend source
+COPY frontend/. .
 
-# Build production-ready static files
 RUN npm run build
 
-# --------------------------------------
-# Stage 2: Server with lightweight server
-# ----------------------------------------
-FROM node:20-slim
-WORKDIR /app
 
-# Install a simple HTTP server
-RUN npm install -g serve
+# ---- Serve Stage ----
+FROM nginx:alpine
 
-# Copy built assets from the previous stage
-COPY --from=build /app/dist ./dist
+COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 3000
 
-# Serve the app
-CMD ["serve", "-s", "dist", "-l", "3000"]
+CMD ["nginx", "-g", "daemon off;"]

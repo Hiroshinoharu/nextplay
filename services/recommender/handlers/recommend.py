@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from ..models.request import RecommendRequest
 
-def recommend(payload: RecommendRequest):
+async def recommend(payload: RecommendRequest):
     """
     Placeholder recommendation engine.
     ML logic will be added later.

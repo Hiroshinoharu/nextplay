@@ -8,6 +8,6 @@ app = FastAPI(
 
 register_routes(app)
 
-@app.get("/")
-def health():
-    return {"service": "recommender", "status": "running"}
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("services.recommender.main:app", host="0.0.0.0", port=8082, reload=True)
