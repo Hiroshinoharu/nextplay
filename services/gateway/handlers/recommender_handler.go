@@ -5,7 +5,8 @@ import (
 	"github.com/maxceban/nextplay/services/gateway/clients"
 )
 
-var recommenderClient = clients.NewRecommnederClient()
+// Initialize recommender client
+var recommenderClient = clients.NewRecommenderClient()
 
 // POST /api/recommend
 func RecommendFromFeatures(c *fiber.Ctx) error {

@@ -9,19 +9,19 @@ import (
 	"os"
 )
 
-type RecommenderClient struct{
+type RecommenderClient struct {
 	BaseURL string
 }
 
-func NewRecommnederClient() *RecommenderClient{
+func NewRecommenderClient() *RecommenderClient {
 	baseURL := os.Getenv("RECOMMENDER_SERVICE_URL")
-    if baseURL == "" {
-        baseURL = "http://recommender:8082"
-    }
-    return &RecommenderClient{BaseURL: baseURL}
+	if baseURL == "" {
+		baseURL = "http://recommender:8082"
+	}
+	return &RecommenderClient{BaseURL: baseURL}
 }
 
-func (c *RecommenderClient) RecommendFromFeatures(req interface{}) ([]byte, error){
+func (c *RecommenderClient) RecommendFromFeatures(req interface{}) ([]byte, error) {
 	url := fmt.Sprintf("%s/recommend", c.BaseURL)
 
 	body, _ := json.Marshal(req)
@@ -34,7 +34,7 @@ func (c *RecommenderClient) RecommendFromFeatures(req interface{}) ([]byte, erro
 	return io.ReadAll(resp.Body)
 }
 
-func (c *RecommenderClient) RecommendForUser(userID string) ([]byte, error){
+func (c *RecommenderClient) RecommendForUser(userID string) ([]byte, error) {
 	url := fmt.Sprintf("%s/recommend/user/%s", c.BaseURL, userID)
 
 	resp, err := http.Get(url)

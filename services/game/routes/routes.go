@@ -1,54 +1,68 @@
 package routes
 
 import (
-	"github.com/maxceban/nextplay/services/game/handlers"
-
 	"github.com/gofiber/fiber/v2"
+	"github.com/maxceban/nextplay/services/game/handlers"
 )
 
 func SetUpRoutes(app *fiber.App) {
 
-	// ----------
-	// GAME CRUD
-	// ----------
-	app.Get("/games", handlers.GetAllGames)
-	app.Get("/games/:id", handlers.GetGameByID)
-	app.Post("/games", handlers.CreateGame)
-	app.Put("/games/:id", handlers.UpdateGame)
-	app.Delete("/games/:id", handlers.DeleteGame)
+	// ------------------------------------
+	// BASE ROUTES: Games (Read-Only + Create)
+	// ------------------------------------
+	games := app.Group("/games")
 
-	// -----------------------
+	games.Get("/", handlers.GetAllGames)        // List all games
+	games.Get("/:id", handlers.GetGameByID)     // Get one game by ID
+	games.Post("/", handlers.CreateGame)        // Add a new game (local only)
+
+
+	// ------------------------------------
 	// GAME → PLATFORMS
-	// -----------------------
-	app.Get("/games/:id/platforms", handlers.GetGamePlatforms)
-	app.Post("/games/:id/platforms", handlers.AddGamePlatform)
-	app.Delete("/games/:id/platforms/:platformId", handlers.RemoveGamePlatform)
+	// ------------------------------------
+	platforms := games.Group("/:id/platforms")
 
-	// -----------------------
+	platforms.Get("/", handlers.GetGamePlatforms)             // List platforms for a game
+	platforms.Post("/", handlers.AddGamePlatform)             // Add platform mapping
+	platforms.Delete("/:platformId", handlers.RemoveGamePlatform)
+
+
+	// ------------------------------------
 	// GAME → KEYWORDS
-	// -----------------------
-	app.Get("/games/:id/keywords", handlers.GetGameKeywords)
-	app.Post("/games/:id/keywords", handlers.AddGameKeyword)
-	app.Delete("/games/:id/keywords/:keywordId", handlers.RemoveGameKeyword)
+	// ------------------------------------
+	keywords := games.Group("/:id/keywords")
 
-	// -----------------------
+	keywords.Get("/", handlers.GetGameKeywords)               // List keywords for a game
+	keywords.Post("/", handlers.AddGameKeyword)               // Add keyword mapping
+	keywords.Delete("/:keywordId", handlers.RemoveGameKeyword)
+
+
+	// ------------------------------------
 	// GAME → COMPANIES
-	// -----------------------
-	app.Get("/games/:id/companies", handlers.GetGameCompanies)
-	app.Post("/games/:id/companies", handlers.AddGameCompany)
-	app.Delete("/games/:id/companies/:companyId", handlers.RemoveGameCompany)
+	// ------------------------------------
+	companies := games.Group("/:id/companies")
 
-	// -----------------------
-	// GAME → FRANCHISE
-	// -----------------------
-	app.Get("/games/:id/franchise", handlers.GetGameFranchises)
-	app.Post("/games/:id/franchise", handlers.AddGameFranchise)
-	app.Delete("/games/:id/franchise/:franchiseId", handlers.RemoveGameFranchise)
+	companies.Get("/", handlers.GetGameCompanies)
+	companies.Post("/", handlers.AddGameCompany)
+	companies.Delete("/:companyId", handlers.RemoveGameCompany)
 
-	// -----------------------
+
+	// ------------------------------------
+	// GAME → FRANCHISES
+	// ------------------------------------
+	franchises := games.Group("/:id/franchise")
+
+	franchises.Get("/", handlers.GetGameFranchises)
+	franchises.Post("/", handlers.AddGameFranchise)
+	franchises.Delete("/:franchiseId", handlers.RemoveGameFranchise)
+
+
+	// ------------------------------------
 	// GAME → SERIES
-	// -----------------------
-	app.Get("/games/:id/series", handlers.GetGameSeries)
-	app.Post("/games/:id/series", handlers.AddGameSeries)
-	app.Delete("/games/:id/series/:seriesId", handlers.RemoveGameSeries)
+	// ------------------------------------
+	series := games.Group("/:id/series")
+
+	series.Get("/", handlers.GetGameSeries)
+	series.Post("/", handlers.AddGameSeries)
+	series.Delete("/:seriesId", handlers.RemoveGameSeries)
 }

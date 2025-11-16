@@ -5,8 +5,10 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// Initialize user client
 var userClient = clients.NewUserClient()
 
+// GetUserByID handles GET /api/users/:id
 func GetUserByID(c *fiber.Ctx) error {
 	id := c.Params("id")
 	resp, err := userClient.GetUserByID(id)
@@ -16,6 +18,7 @@ func GetUserByID(c *fiber.Ctx) error {
 	return c.JSON(resp)
 }
 
+// CreateUser handles POST /api/users
 func CreateUser(c *fiber.Ctx) error {
 	resp, err := userClient.CreateUser(c.Body())
 	if err != nil {
@@ -24,6 +27,7 @@ func CreateUser(c *fiber.Ctx) error {
 	return c.JSON(resp)
 }
 
+// LoginUser handles POST /api/users/login
 func LoginUser(c *fiber.Ctx) error {
 	resp, err := userClient.LoginUser(c.Body())
 	if err != nil {
@@ -32,6 +36,7 @@ func LoginUser(c *fiber.Ctx) error {
 	return c.JSON(resp)
 }
 
+// GetUserPreferences handles GET /api/users/:id/preferences
 func GetUserPreferences(c *fiber.Ctx) error {
 	id := c.Params("id")
 	resp, err := userClient.GetUserPreferences(id)
@@ -41,6 +46,7 @@ func GetUserPreferences(c *fiber.Ctx) error {
 	return c.JSON(resp)
 }
 
+// GetUserInteraction handles GET /api/users/:id/interactions
 func GetUserInteraction(c *fiber.Ctx) error{
 	id := c.Params("id")
 	resp,err := userClient.GetUserInteraction(id)
