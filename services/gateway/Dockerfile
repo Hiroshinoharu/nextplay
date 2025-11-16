@@ -22,7 +22,7 @@ WORKDIR /
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 # Copy binary
-COPY --from=builder /gateway /gateway
+COPY --from=builder /app/gateway /gateway
 
 EXPOSE 8084
 ENTRYPOINT ["/gateway"]

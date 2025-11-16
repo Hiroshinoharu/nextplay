@@ -1,17 +1,15 @@
-# Name of pipeline
 name: NextPlay - Build & Push Docker Images
 
 on:
   push:
-    branches:
-      - main
+    branches: ["main"]
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/hiroshinoharu/nextplay
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/nextplay
 
 jobs:
-  docker-build:
+  build:
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -28,52 +26,62 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # GATEWAY
-      - name: Build & push gateway
+      # ---------------------------
+      # Build & Push Gateway
+      # ---------------------------
+      - name: Build gateway
         uses: docker/build-push-action@v5
         with:
           context: .
-          dockerfile: services/gateway/Dockerfile
+          file: services/gateway/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/gateway:latest
 
-      # USER
-      - name: Build & push user
+      # ---------------------------
+      # Build & Push User
+      # ---------------------------
+      - name: Build user
         uses: docker/build-push-action@v5
         with:
           context: .
-          dockerfile: services/user/Dockerfile
+          file: services/user/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/user:latest
 
-      # GAME
-      - name: Build & push game
+      # ---------------------------
+      # Build & Push Game
+      # ---------------------------
+      - name: Build game
         uses: docker/build-push-action@v5
         with:
           context: .
-          dockerfile: services/game/Dockerfile
+          file: services/game/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/game:latest
 
-      # RECOMMENDER
-      - name: Build & push recommender
+      # ---------------------------
+      # Build & Push Recommender
+      # ---------------------------
+      - name: Build recommender
         uses: docker/build-push-action@v5
         with:
           context: .
-          dockerfile: services/recommender/Dockerfile
+          file: services/recommender/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/recommender:latest
 
-      # FRONTEND
-      - name: Build & push frontend
+      # ---------------------------
+      # Build & Push Frontend
+      # ---------------------------
+      - name: Build frontend
         uses: docker/build-push-action@v5
         with:
           context: .
-          dockerfile: frontend/Dockerfile
+          file: frontend/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/frontend:latest

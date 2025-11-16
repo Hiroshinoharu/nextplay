@@ -22,6 +22,6 @@ WORKDIR /
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 # Copy binary
-COPY --from=builder /user /user
+COPY --from=builder /app/user /user
 EXPOSE 8083
 ENTRYPOINT ["/user"]
