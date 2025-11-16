@@ -1,16 +1,53 @@
 package clients
 
-import "os"
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+)
 
-// Base URL for User Service
-var userBase = os.Getenv("USER_SERVICE_URL")
-
-// User Service Client Functions
-func UserServiceGet(ep string) (map[string]interface{}, error) {
-	return doGet(userBase + ep)
+type UserClient struct {
+	BaseURL string
 }
 
-// UserServicePost sends a POST request to the User Service
-func UserServicePost(ep string, body []byte) (map[string]interface{}, error) {
-	return doPost(userBase + ep, body)
+func NewUserClient() *UserClient {
+	baseURL := os.Getenv("USER_SERVICE_URL")
+	if baseURL == "" {
+		baseURL = "http://user:8083"
+	}
+	return &UserClient{BaseURL: baseURL}
 }
+
+// GET /users/:id
+func (c *UserClient) GetUserByID(id string) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/users/%s", c.BaseURL, id)
+	return doGet(url)
+}
+
+// POST /users
+func (c *UserClient) CreateUser(req interface{}) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/users", c.BaseURL)
+
+	body, _ := json.Marshal(req)
+	return doPost(url, body)
+}
+
+// POST /users/login
+func (c *UserClient) LoginUser(req interface{}) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/users/login", c.BaseURL)
+	body, _ := json.Marshal(req)
+	return doPost(url, body)
+}
+
+// GET /users/:id/preferences
+func (c *UserClient) GetUserPreferences(id string) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/users/%s/preferences", c.BaseURL, id)
+	return doGet(url)
+}
+
+// GET /users/:id/interactions
+func (c *UserClient) GetUserInteraction(id string) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/users/%s/interactions", c.BaseURL, id)
+	return doGet(url)
+}
+

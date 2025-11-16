@@ -1,4 +1,4 @@
-module gateway
+module github.com/maxceban/nextplay/services/gateway
 
 go 1.24.5
 

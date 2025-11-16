@@ -1,16 +1,47 @@
 package clients
 
-import "os"
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+)
 
-// Base URL for Recommender Service
-var recBase = os.Getenv("RECOMMENDER_SERVICE_URL")
-
-// Recommender Service Client Functions
-func RecommenderGet(ep string) (map[string]interface{}, error) {
-	return doGet(recBase + ep)
+type RecommenderClient struct{
+	BaseURL string
 }
 
-// RecommenderPost sends a POST request to the Recommender Service
-func RecommenderPost(ep string, payload []byte) (map[string]interface{}, error) {
-	return doPost(recBase + ep, payload)
+func NewRecommnederClient() *RecommenderClient{
+	baseURL := os.Getenv("RECOMMENDER_SERVICE_URL")
+    if baseURL == "" {
+        baseURL = "http://recommender:8082"
+    }
+    return &RecommenderClient{BaseURL: baseURL}
+}
+
+func (c *RecommenderClient) RecommendFromFeatures(req interface{}) ([]byte, error){
+	url := fmt.Sprintf("%s/recommend", c.BaseURL)
+
+	body, _ := json.Marshal(req)
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	return io.ReadAll(resp.Body)
+}
+
+func (c *RecommenderClient) RecommendForUser(userID string) ([]byte, error){
+	url := fmt.Sprintf("%s/recommend/user/%s", c.BaseURL, userID)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	return io.ReadAll(resp.Body)
 }

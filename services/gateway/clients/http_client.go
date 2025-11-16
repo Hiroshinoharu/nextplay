@@ -8,6 +8,15 @@ import (
 	"net/http"
 )
 
+// Global HTTP client for all requests
+var HttpClient = &http.Client{}
+
+var (
+	UserServiceURL string
+	GameServiceURL string
+	RecommenderServiceURL string
+)
+
 // Base URLs for different services 
 func doGet(url string) (map[string]interface{}, error) {
 	// Perform the HTTP GET request
