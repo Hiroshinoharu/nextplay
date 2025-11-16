@@ -32,7 +32,7 @@ jobs:
       - name: Build & push gateway
         uses: docker/build-push-action@v5
         with:
-          context: ..
+          context: .
           dockerfile: services/gateway/Dockerfile
           platforms: linux/amd64
           push: true
@@ -42,7 +42,7 @@ jobs:
       - name: Build & push user
         uses: docker/build-push-action@v5
         with:
-          context: ..
+          context: .
           dockerfile: services/user/Dockerfile
           platforms: linux/amd64
           push: true
@@ -52,7 +52,7 @@ jobs:
       - name: Build & push game
         uses: docker/build-push-action@v5
         with:
-          context: ..
+          context: .
           dockerfile: services/game/Dockerfile
           platforms: linux/amd64
           push: true
@@ -62,7 +62,7 @@ jobs:
       - name: Build & push recommender
         uses: docker/build-push-action@v5
         with:
-          context: ..
+          context: .
           dockerfile: services/recommender/Dockerfile
           platforms: linux/amd64
           push: true
@@ -72,7 +72,7 @@ jobs:
       - name: Build & push frontend
         uses: docker/build-push-action@v5
         with:
-          context: ..
+          context: .
           dockerfile: frontend/Dockerfile
           platforms: linux/amd64
           push: true
