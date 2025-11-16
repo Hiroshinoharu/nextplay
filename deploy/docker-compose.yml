@@ -36,7 +36,7 @@ services:
       postgres:
         condition: service_healthy # Only start when Postgres is ready
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8083/"] # Hit user root endpoint
+      test: ["CMD", "curl", "-f", "http://localhost:8083/health"] # Use container port
       interval: 5s
       timeout: 3s
       retries: 5
@@ -48,8 +48,6 @@ services:
     build:
       context: ..
       dockerfile: services/game/Dockerfile # Build Dockerfile located in services/game
-      args:
-        SERVICE_NAME: game
     ports:
       - "8081:8081"
     env_file:
@@ -58,7 +56,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/"] # Checks if service responds
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"] # Checks if service responds
       interval: 5s
       timeout: 3s
       retries: 5
@@ -79,7 +77,7 @@ services:
         condition: service_healthy
     healthcheck:
       # Uses FastAPI /docs endpoint as a health indicator
-      test: ["CMD", "curl", "-f", "http://localhost:8082/docs"]
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -103,7 +101,7 @@ services:
       recommender:
         condition: service_healthy      # Wait until recommender is healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8084/"] # Gateway health check
+      test: ["CMD", "curl", "-f", "http://localhost:8084/health"] # Gateway health check
       interval: 5s
       timeout: 3s
       retries: 5

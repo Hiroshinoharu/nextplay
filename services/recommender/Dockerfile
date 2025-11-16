@@ -2,8 +2,8 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Copy your application code
-COPY ../../ .
+# Copy ONLY the recommender code into the correct folder structure
+COPY services/recommender /app/services/recommender
 
 # Install dependencies
 RUN pip install --no-cache-dir -r services/recommender/requirements.txt

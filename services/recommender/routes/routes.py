@@ -4,7 +4,7 @@ from ..models.request import RecommendRequest
 
 def register_routes(app: FastAPI):
 
-    @app.get("/")
+    @app.get("/health")
     async def health():
         return {"service": "recommender", "status" : "running"}
 

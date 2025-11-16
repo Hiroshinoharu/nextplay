@@ -18,7 +18,7 @@ func main() {
 	app := fiber.New()
 
 	// Health Endpoint
-	app.Get("/", func(c *fiber.Ctx) error {
+	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"service": "user",
 			"status":  "running",
