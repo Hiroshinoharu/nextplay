@@ -19,6 +19,8 @@ func SetUpRoutes(app *fiber.App) {
 		users.Post("/login", handlers.LoginUser)
 		users.Get("/:id/preferences", handlers.GetUserPreferences)
 		users.Get("/:id/interactions", handlers.GetUserInteraction)
+		users.Post("/:id/preferences", handlers.CreateUserPreference)
+		users.Post("/:id/interactions", handlers.CreateUserInteraction)
 	}
 
 	// --------------------------

@@ -55,3 +55,23 @@ func GetUserInteraction(c *fiber.Ctx) error{
 	}
 	return c.JSON(resp)
 }
+
+// CreateUserPreference handles POST /api/users/:id/preferences
+func CreateUserPreference(c *fiber.Ctx) error {
+	id := c.Params("id")
+	resp, err := userClient.CreateUserPreference(id, c.Body())
+	if err != nil {
+		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(resp)
+}
+
+// CreateUserInteraction handles POST /api/users/:id/interactions
+func CreateUserInteraction(c *fiber.Ctx) error {
+	id := c.Params("id")
+	resp, err := userClient.CreateUserInteraction(id, c.Body())
+	if err != nil {
+		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(resp)
+}

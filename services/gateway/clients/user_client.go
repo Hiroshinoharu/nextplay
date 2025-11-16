@@ -1,15 +1,16 @@
 package clients
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 )
 
+// UserClient struct to interact with User Service
 type UserClient struct {
 	BaseURL string
 }
 
+// Constructor for UserClient 
 func NewUserClient() *UserClient {
 	baseURL := os.Getenv("USER_SERVICE_URL")
 	if baseURL == "" {
@@ -25,17 +26,14 @@ func (c *UserClient) GetUserByID(id string) (map[string]interface{}, error) {
 }
 
 // POST /users
-func (c *UserClient) CreateUser(req interface{}) (map[string]interface{}, error) {
+func (c *UserClient) CreateUser(body []byte) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/users", c.BaseURL)
-
-	body, _ := json.Marshal(req)
 	return doPost(url, body)
 }
 
 // POST /users/login
-func (c *UserClient) LoginUser(req interface{}) (map[string]interface{}, error) {
+func (c *UserClient) LoginUser(body []byte) (map[string]interface{}, error) {
 	url := fmt.Sprintf("%s/users/login", c.BaseURL)
-	body, _ := json.Marshal(req)
 	return doPost(url, body)
 }
 
@@ -51,3 +49,14 @@ func (c *UserClient) GetUserInteraction(id string) (map[string]interface{}, erro
 	return doGet(url)
 }
 
+// POST /users/:id/preferences
+func (c *UserClient) CreateUserPreference(id string, body []byte) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/users/%s/preferences", c.BaseURL, id)
+	return doPost(url, body)
+}
+
+// POST /users/:id/interactions
+func (c *UserClient) CreateUserInteraction(id string, body []byte) (map[string]interface{}, error) {
+	url := fmt.Sprintf("%s/users/%s/interactions", c.BaseURL, id)
+	return doPost(url, body)
+}
