@@ -10,9 +10,9 @@ COPY services/user/ ./
 ENV CGO_ENABLED=0
 RUN go build -o user .
 
-FROM scratch
+FROM alpine:3.20
 WORKDIR /
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+RUN apk add --no-cache ca-certificates curl
 COPY --from=builder /app/user /user
 
 EXPOSE 8083

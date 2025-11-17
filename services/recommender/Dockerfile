@@ -2,6 +2,13 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
+# Make Python able to import from  /app
+ENV PYTHONPATH=/app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy only the recommender service
 COPY services/recommender /app/services/recommender
 
