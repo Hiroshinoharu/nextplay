@@ -1,0 +1,49 @@
+#! postgres-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: postgres
+    namespace: deploy
+    labels:
+        com.docker.compose.project: deploy
+        com.docker.compose.service: postgres
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: deploy
+            com.docker.compose.service: postgres
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: deploy
+                com.docker.compose.service: postgres
+                com.docker.compose.network.default: "true"
+        spec:
+            containers:
+                - name: postgres
+                  image: postgres:16
+                  imagePullPolicy: IfNotPresent
+                  env:
+                    - name: POSTGRES_DB
+                      value: "nextplay"
+                    - name: POSTGRES_PASSWORD
+                      value: "nextplay"
+                    - name: POSTGRES_USER
+                      value: "nextplay"
+                  livenessProbe:
+                    exec:
+                        command:
+                            - /bin/sh
+                            - -c
+                            - pg_isready -U nextplay
+                    periodSeconds: 5
+                    initialDelaySeconds: 10
+                    timeoutSeconds: 5
+                    failureThreshold: 5
+                  ports:
+                    - name: postgres-5432
+                      containerPort: 5432

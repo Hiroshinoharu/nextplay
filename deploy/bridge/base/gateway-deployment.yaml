@@ -1,0 +1,47 @@
+#! gateway-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: gateway
+    namespace: deploy
+    labels:
+        com.docker.compose.project: deploy
+        com.docker.compose.service: gateway
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: deploy
+            com.docker.compose.service: gateway
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: deploy
+                com.docker.compose.service: gateway
+                com.docker.compose.network.default: "true"
+        spec:
+            containers:
+                - name: gateway
+                  image: deploy-gateway
+                  imagePullPolicy: IfNotPresent
+                  env:
+                    - name: GAME_SERVICE_URL
+                      value: "http://game:8081"
+                    - name: PORT
+                      value: "8084"
+                    - name: RECOMMENDER_SERVICE_URL
+                      value: "http://recommender:8082"
+                    - name: USER_SERVICE_URL
+                      value: "http://user:8083"
+                  livenessProbe:
+                    exec:
+                        command: ['curl -f http://gateway:8084/health']
+                    periodSeconds: 5
+                    timeoutSeconds: 3
+                    failureThreshold: 5
+                  ports:
+                    - name: gateway-8084
+                      containerPort: 8084

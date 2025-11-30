@@ -1,0 +1,43 @@
+#! user-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: user
+    namespace: deploy
+    labels:
+        com.docker.compose.project: deploy
+        com.docker.compose.service: user
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: deploy
+            com.docker.compose.service: user
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: deploy
+                com.docker.compose.service: user
+                com.docker.compose.network.default: "true"
+        spec:
+            containers:
+                - name: user
+                  image: deploy-user
+                  imagePullPolicy: IfNotPresent
+                  env:
+                    - name: DATABASE_URL
+                      value: "postgres://nextplay:nextplay@postgres:5432/nextplay?sslmode=disable"
+                    - name: PORT
+                      value: "8083"
+                  livenessProbe:
+                    exec:
+                        command: ['curl -f http://user:8083/health']
+                    periodSeconds: 5
+                    timeoutSeconds: 3
+                    failureThreshold: 5
+                  ports:
+                    - name: user-8083
+                      containerPort: 8083

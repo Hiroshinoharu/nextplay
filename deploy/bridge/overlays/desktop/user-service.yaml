@@ -1,0 +1,9 @@
+#! user-service.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: Service
+metadata:
+    name: user-published
+    namespace: deploy
+spec:
+    type: LoadBalancer

@@ -1,0 +1,47 @@
+#! game-deployment.yaml
+# Generated code, do not edit
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: game
+    namespace: deploy
+    labels:
+        com.docker.compose.project: deploy
+        com.docker.compose.service: game
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            com.docker.compose.project: deploy
+            com.docker.compose.service: game
+    strategy:
+        type: Recreate
+    template:
+        metadata:
+            labels:
+                com.docker.compose.project: deploy
+                com.docker.compose.service: game
+                com.docker.compose.network.default: "true"
+        spec:
+            containers:
+                - name: game
+                  image: deploy-game
+                  imagePullPolicy: IfNotPresent
+                  env:
+                    - name: DATABASE_URL
+                      value: "postgres://nextplay:nextplay@postgres:5432/nextplay?sslmode=disable"
+                    - name: IGDB_ACCESS_TOKEN
+                      value: "takqo6hgibvbknsdbf3bptqksj0m41"
+                    - name: IGDB_CLIENT_ID
+                      value: "1slvq78fhrvhf8ia04mwwy21o9kh2d"
+                    - name: PORT
+                      value: "8081"
+                  livenessProbe:
+                    exec:
+                        command: ['curl -f http://game:8081/health']
+                    periodSeconds: 5
+                    timeoutSeconds: 3
+                    failureThreshold: 5
+                  ports:
+                    - name: game-8081
+                      containerPort: 8081
