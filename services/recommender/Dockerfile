@@ -1,4 +1,4 @@
-FROM --platform=linux/arm64 tensorflow/tensorflow:2.15.1
+FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -11,8 +11,7 @@ RUN apt-get update \
 COPY services/recommender/requirements.txt /tmp/requirements.txt
 
 RUN pip install --upgrade pip setuptools wheel \
-    && pip install --no-cache-dir -r /tmp/requirements.txt \
-    && rm /tmp/requirements.txt
+    && pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY services/recommender /app/services/recommender
 
