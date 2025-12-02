@@ -1,19 +1,20 @@
-FROM python:3.10-slim
+FROM --platform=linux/arm64 tensorflow/tensorflow:2.15.1
 
 WORKDIR /app
 
-# Make Python able to import from  /app
 ENV PYTHONPATH=/app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy only the recommender service
-COPY services/recommender /app/services/recommender
+COPY services/recommender/requirements.txt /tmp/requirements.txt
 
-# Install dependencies
-RUN pip install --no-cache-dir -r services/recommender/requirements.txt
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir -r /tmp/requirements.txt \
+    && rm /tmp/requirements.txt
+
+COPY services/recommender /app/services/recommender
 
 EXPOSE 8082
 
