@@ -4,6 +4,23 @@
 -- Purpose: Core relational schema for game, user, and metadata
 -- ============================================================
 
+DROP TABLE IF EXISTS game_series CASCADE;
+DROP TABLE IF EXISTS game_keywords CASCADE;
+DROP TABLE IF EXISTS game_franchise CASCADE;
+DROP TABLE IF EXISTS game_platform CASCADE;
+DROP TABLE IF EXISTS game_companies CASCADE;
+DROP TABLE IF EXISTS user_platform_preferences CASCADE;
+DROP TABLE IF EXISTS user_keyword_preferences CASCADE;
+DROP TABLE IF EXISTS user_interactions CASCADE;
+DROP TABLE IF EXISTS app_user CASCADE;
+DROP TABLE IF EXISTS keyword CASCADE;
+DROP TABLE IF EXISTS games CASCADE;
+DROP TABLE IF EXISTS series CASCADE;
+DROP TABLE IF EXISTS platform CASCADE;
+DROP TABLE IF EXISTS franchise CASCADE;
+DROP TABLE IF EXISTS company CASCADE;
+
+
 -- ============================================================
 -- TABLE: company
 -- Purpose: Stores developers, publishers, and supporting studios
@@ -53,7 +70,7 @@ CREATE TABLE series (
 -- TABLE: game
 -- Purpose: Main table containing game metadata
 -- ============================================================
-CREATE TABLE game (
+CREATE TABLE games (
     game_id          SERIAL PRIMARY KEY,
     game_name        TEXT,
     game_description TEXT,

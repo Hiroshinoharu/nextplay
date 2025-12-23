@@ -12,6 +12,7 @@ import (
 func main() {
 	cfg, err := config.Load(config.Defaults{
 		Port: "8082",
+		DatabaseURL: "postgres://nextplay:nextplay@localhost:5432/nextplay?sslmode=disable",
 	})
 	if err != nil {
 		log.Fatal("Failed to load config: ", err)
