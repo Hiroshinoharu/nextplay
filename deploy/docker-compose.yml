@@ -30,8 +30,11 @@ services:
       dockerfile: services/user/Dockerfile # Build Dockerfile located in services/user
     ports:
       - "8083:8083"
-    env_file:
-      - env/user.env
+    environment:
+      CONFIG_FILE: /config/config.yaml
+      PORT: "8083"
+    volumes:
+      - ./config/config.yaml:/config/config.yaml:ro
     depends_on:
       postgres:
         condition: service_healthy # Only start when Postgres is ready
@@ -52,6 +55,11 @@ services:
       - "8081:8081"
     env_file:
       - env/game.env
+    environment:
+      CONFIG_FILE: /config/config.yaml
+      PORT: "8081"
+    volumes:
+      - ./config/config.yaml:/config/config.yaml:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -72,6 +80,11 @@ services:
       - "8082:8082"
     env_file:
       - env/recommender.env
+    environment:
+      CONFIG_FILE: /config/config.yaml
+      PORT: "8082"
+    volumes:
+      - ./config/config.yaml:/config/config.yaml:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,9 +103,12 @@ services:
       context: ..
       dockerfile: services/gateway/Dockerfile # Build gateway from its Dockerfile
     ports:
-      - "8084:8084" # Main entry point for frontend → backend API
-    env_file:
-      - env/gateway.env
+      - "8084:8084" # Main entry point for frontend <-> backend API
+    environment:
+      CONFIG_FILE: /config/config.yaml
+      PORT: "8084"
+    volumes:
+      - ./config/config.yaml:/config/config.yaml:ro
     depends_on:
       user:
         condition: service_healthy      # Wait until user service responds

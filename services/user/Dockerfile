@@ -7,15 +7,17 @@
 # ---- Builder stage: uses the official Go toolchain image
 FROM golang:1.24 AS builder
 
-WORKDIR /app
+WORKDIR /app/services/user
 
 # Copy only go.mod/go.sum first to leverage Docker layer caching
 COPY services/user/go.mod services/user/go.sum ./
+COPY services/shared/go.mod services/shared/go.sum ../shared/
 # Download module dependencies (cached unless mod files change)
 RUN go mod download
 
 # Copy the rest of the source code for the user service
 COPY services/user/ ./
+COPY services/shared/ ../shared/
 
 # Disable CGO to produce a static binary that runs well on Alpine
 ENV CGO_ENABLED=0
@@ -27,7 +29,7 @@ FROM alpine:3.20
 WORKDIR /
 # Install CA certs for HTTPS and curl for simple health/debug checks
 RUN apk add --no-cache ca-certificates curl
-COPY --from=builder /app/user /user
+COPY --from=builder /app/services/user/user /user
 
 # Service listens on 8083
 EXPOSE 8083

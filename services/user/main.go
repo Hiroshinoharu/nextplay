@@ -2,16 +2,23 @@ package main
 
 import (
 	"log"
-	"os"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maxceban/nextplay/services/user/db"
 	"github.com/maxceban/nextplay/services/user/routes"
+	"github.com/maxceban/nextplay/services/shared/config"
 )
 
 func main() {
+	cfg, err := config.Load(config.Defaults{
+		Port: "8082",
+	})
+	if err != nil {
+		log.Fatal("Failed to load config: ", err)
+	}
+
 	// attempts to connect to database
-	if err := db.Connect(); err != nil {
+	if err := db.Connect(cfg.DatabaseURL); err != nil {
 		log.Fatal("Failed to connect to DB: ", err)
 	}
 
@@ -28,10 +35,5 @@ func main() {
 	// Setup routes
 	routes.SetUpRoutes(app)
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8082"
-	}
-
-	app.Listen(":" + port)
+	app.Listen(":" + cfg.Port)
 }

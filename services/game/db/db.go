@@ -3,15 +3,13 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"os"
 
 	_ "github.com/lib/pq"
 )
 
 var DB *sql.DB
 
-func Connect() error {
-	dsn := os.Getenv("DATABASE_URL")
+func Connect(dsn string) error {
 	if dsn == "" {
 		return fmt.Errorf("DATABASE_URL not provided")
 	}

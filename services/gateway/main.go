@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"os"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -11,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/maxceban/nextplay/services/gateway/clients"
 	"github.com/maxceban/nextplay/services/gateway/routes"
+	"github.com/maxceban/nextplay/services/shared/config"
 )
 
 func main() {
@@ -18,9 +18,19 @@ func main() {
 	// ---------------------
 	// Load Service URLs from Env Vars
 	// ---------------------
-	clients.UserServiceURL = getEnv("USER_SERVICE_URL", "http://localhost:8083")
-	clients.GameServiceURL = getEnv("GAME_SERVICE_URL", "http://localhost:8081")
-	clients.RecommenderServiceURL = getEnv("RECOMMENDER_SERVICE_URL", "http://localhost:8082")
+	cfg, err := config.Load(config.Defaults{
+		Port:                  "8084",
+		UserServiceURL:        "http://localhost:8083",
+		GameServiceURL:        "http://localhost:8081",
+		RecommenderServiceURL: "http://localhost:8082",
+	})
+	if err != nil {
+		log.Fatal("Failed to load config: ", err)
+	}
+
+	clients.UserServiceURL = cfg.UserServiceURL
+	clients.GameServiceURL = cfg.GameServiceURL
+	clients.RecommenderServiceURL = cfg.RecommenderServiceURL
 
 	// Print to verify the logs
 	log.Println("[Gateway] User Service →", clients.UserServiceURL)
@@ -60,22 +70,13 @@ func main() {
 	routes.SetUpRoutes(app)
 
 	// Start server
-	port := getEnv("PORT", "8084")
-	log.Println("[Gateway] Listening on port", port)
-	app.Listen(":" + port)
+	log.Println("[Gateway] Listening on port", cfg.Port)
+	app.Listen(":" + cfg.Port)
 }
 
 // ---------------------------
 // Helper Functions
 // ---------------------------
-
-// getEnv returns the environment varaibale or fallback
-func getEnv(key, fallback string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return fallback
-}
 
 // Custom global error  handler for clean JSON responses
 func globalErrorHandler(c *fiber.Ctx, err error) error {
