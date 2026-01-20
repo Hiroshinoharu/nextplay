@@ -92,3 +92,65 @@ func CreateGame(g *models.Game) (int, error) {
 
 	return insertedID, nil
 }
+
+// UpdateGame updates an existing game in the database
+func UpdateGame(id int, g *models.Game) error {
+	query := `
+		UPDATE games
+		SET game_name = $1,
+			game_description = $2,
+			release_date = $3,
+			genre = $4,
+			publishers = $5,
+			story = $6,
+			cover_image = $7
+		WHERE game_id = $8;
+	`
+	result, err := DB.Exec(
+		query,
+		g.Name,
+		g.Description,
+		g.ReleaseDate,
+		g.Genre,
+		g.Publishers,
+		g.Story,
+		g.CoverImageURL,
+		id,
+	)
+
+	// Return any error encountered during execution
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
+}
+
+// DeleteGame removes a game from the database
+func DeleteGame(id int) error {
+	query := `
+		DELETE FROM games
+		WHERE game_id = $1;
+	`
+	result, err := DB.Exec(query, id)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}

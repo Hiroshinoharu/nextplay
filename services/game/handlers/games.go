@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -31,6 +32,10 @@ func GetGameByID(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	if game == nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Game not found"})
+	}
+	
 	return c.JSON(game)
 }
 
@@ -41,7 +46,7 @@ func CreateGame(c *fiber.Ctx) error {
 	// Bind JSON body to game struct
 	if err := c.BodyParser(&game); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid request body",
+			"error":   "Invalid request body",
 			"details": err.Error(),
 		})
 	}
@@ -50,7 +55,7 @@ func CreateGame(c *fiber.Ctx) error {
 	id, err := db.CreateGame(&game)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to create game",
+			"error":   "Failed to create game",
 			"details": err.Error(),
 		})
 	}
@@ -63,22 +68,72 @@ func CreateGame(c *fiber.Ctx) error {
 }
 
 func UpdateGame(c *fiber.Ctx) error {
-	id := c.Params("id")
+	// Get game ID from URL params
+	idParam := c.Params("id")
 
-	// TODO: Parse JSON
-	// TODO: UPDATE game SET … WHERE game_id=$1
+	// Convert ID to integer
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid game ID"})
+	}
+
+	// Parse incoming JSON into Game struct
+	var game models.Game
+	if err := c.BodyParser(&game); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			`error`:   "Invalid request body",
+			`details`: err.Error(),
+		})
+	}
+
+	// Call DB function to update
+	err = db.UpdateGame(id, &game)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Game not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   "Failed to update game",
+			"details": err.Error(),
+		})
+	}
+
+	// Return success message
 	return c.JSON(fiber.Map{
-		"message": "Update game",
+		"message": "Game updated successfully",
 		"game_id": id,
 	})
 }
 
 func DeleteGame(c *fiber.Ctx) error {
-	id := c.Params("id")
+	// Get game ID from URL params
+	idParam := c.Params("id")
 
-	// TODO: DELETE FROM game WHERE game_id=$1
+	// Convert ID to integer
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid game ID"})
+	}
+
+	// Call DB function to delete
+	err = db.DeleteGame(id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"error": "Game not found",
+			})
+		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   "Failed to delete game",
+			"details": err.Error(),
+		})
+	}
+
+	// Return success message
 	return c.JSON(fiber.Map{
-		"message": "Delete game",
+		"message": "Game deleted successfully",
 		"game_id": id,
 	})
 }

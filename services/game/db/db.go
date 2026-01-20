@@ -9,6 +9,7 @@ import (
 
 var DB *sql.DB
 
+// Connect initializes the database connection
 func Connect(dsn string) error {
 	if dsn == "" {
 		return fmt.Errorf("DATABASE_URL not provided")

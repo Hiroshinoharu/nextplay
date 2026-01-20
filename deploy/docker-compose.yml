@@ -10,6 +10,9 @@ services:
       POSTGRES_USER: nextplay       # Database username
       POSTGRES_PASSWORD: nextplay   # Database password
       POSTGRES_DB: nextplay         # Database name to create on startup
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro # Initialize DB with schema
     ports:
       - "5432:5432" # Expose DB so you can connect from your host (DBeaver, psql, etc.)
     # Healthcheck ensures Postgres is fully ready before other services start
@@ -133,3 +136,6 @@ services:
     depends_on:
       gateway:
         condition: service_healthy # Only start UI when backend gateway works
+
+volumes:
+  postgres_data:

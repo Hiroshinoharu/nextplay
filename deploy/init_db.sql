@@ -118,7 +118,7 @@ CREATE TABLE user_interactions (
 
     PRIMARY KEY (user_id, game_id),
     FOREIGN KEY (user_id) REFERENCES app_user(user_id),
-    FOREIGN KEY (game_id) REFERENCES game(game_id)
+    FOREIGN KEY (game_id) REFERENCES games(game_id)
 );
 
 -- ============================================================
@@ -163,7 +163,7 @@ CREATE TABLE game_companies (
     is_porting_developer    BOOLEAN DEFAULT FALSE,
 
     PRIMARY KEY (game_id, company_id),
-    FOREIGN KEY (game_id) REFERENCES game(game_id),
+    FOREIGN KEY (game_id) REFERENCES games(game_id),
     FOREIGN KEY (company_id) REFERENCES company(company_id)
 );
 
@@ -176,7 +176,7 @@ CREATE TABLE game_platform (
     platform_id INT NOT NULL,
 
     PRIMARY KEY (game_id, platform_id),
-    FOREIGN KEY (game_id) REFERENCES game(game_id),
+    FOREIGN KEY (game_id) REFERENCES games(game_id),
     FOREIGN KEY (platform_id) REFERENCES platform(platform_id)
 );
 
@@ -190,7 +190,7 @@ CREATE TABLE game_franchise (
 
     PRIMARY KEY (franchise_id, game_id),
     FOREIGN KEY (franchise_id) REFERENCES franchise(franchise_id),
-    FOREIGN KEY (game_id) REFERENCES game(game_id)
+    FOREIGN KEY (game_id) REFERENCES games(game_id)
 );
 
 -- ============================================================
@@ -202,7 +202,7 @@ CREATE TABLE game_keywords (
     keyword_id INT NOT NULL,
 
     PRIMARY KEY (game_id, keyword_id),
-    FOREIGN KEY (game_id) REFERENCES game(game_id),
+    FOREIGN KEY (game_id) REFERENCES games(game_id),
     FOREIGN KEY (keyword_id) REFERENCES keyword(keyword_id)
 );
 
@@ -216,5 +216,5 @@ CREATE TABLE game_series (
 
     PRIMARY KEY (series_id, game_id),
     FOREIGN KEY (series_id) REFERENCES series(series_id),
-    FOREIGN KEY (game_id) REFERENCES game(game_id)
+    FOREIGN KEY (game_id) REFERENCES games(game_id)
 );
