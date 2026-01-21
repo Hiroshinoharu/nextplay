@@ -218,3 +218,48 @@ func DeleteGame(id int) error {
 	}
 	return nil
 }
+
+func GetGameRelations(gameID int) ([]int64, []int64, []int64, []int64, []int64, error) {
+	platforms, err := fetchRelationIDs(`SELECT platform_id FROM game_platform WHERE game_id=$1`, gameID)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	keywords, err := fetchRelationIDs(`SELECT keyword_id FROM game_keywords WHERE game_id=$1`, gameID)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	franchises, err := fetchRelationIDs(`SELECT franchise_id FROM game_franchise WHERE game_id=$1`, gameID)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	companies, err := fetchRelationIDs(`SELECT company_id FROM game_companies WHERE game_id=$1`, gameID)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	series, err := fetchRelationIDs(`SELECT series_id FROM game_series WHERE game_id=$1`, gameID)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	return platforms, keywords, franchises, companies, series, nil
+}
+
+func fetchRelationIDs(query string, args ...interface{}) ([]int64, error) {
+	rows, err := DB.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return ids, nil
+}

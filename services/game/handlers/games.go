@@ -35,7 +35,17 @@ func GetGameByID(c *fiber.Ctx) error {
 	if game == nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Game not found"})
 	}
-	
+
+	platforms, keywords, franchises, companies, series, err := db.GetGameRelations(id)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	game.Platforms = platforms
+	game.Keywords = keywords
+	game.Franchises = franchises
+	game.Companies = companies
+	game.Series = series
+
 	return c.JSON(game)
 }
 

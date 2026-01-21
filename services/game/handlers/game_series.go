@@ -43,7 +43,7 @@ func GetGameSeries(c *fiber.Ctx) error {
 	// Return the list of series IDs as JSON
 	return c.JSON(fiber.Map{
 		"game_id":    id,
-		"series_ids": seriesIDs,
+		"series":     seriesIDs,
 	})
 }
 

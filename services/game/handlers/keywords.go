@@ -35,7 +35,7 @@ func GetGameKeywords(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"game_id":     gameID,
-		"keyword_ids": keywordIDs,
+		"keywords":    keywordIDs,
 	})
 }
 

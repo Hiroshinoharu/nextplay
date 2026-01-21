@@ -36,7 +36,7 @@ func GetGamePlatforms(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{
 		"game_id":      gameID,
-		"platform_ids": platformIDs,
+		"platforms":    platformIDs,
 	})
 }
 

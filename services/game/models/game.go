@@ -1,5 +1,7 @@
 package models
 
+import "encoding/json"
+
 type Game struct {
 	ID            int64  `json:"id"`
 	Name          string `json:"name"`
@@ -16,4 +18,25 @@ type Game struct {
 	Franchises []int64 `json:"franchises"`
 	Companies  []int64 `json:"companies"`
 	Series     []int64 `json:"series"`
+}
+
+func (g Game) MarshalJSON() ([]byte, error) {
+	type Alias Game
+	alias := Alias(g)
+	if alias.Platforms == nil {
+		alias.Platforms = []int64{}
+	}
+	if alias.Keywords == nil {
+		alias.Keywords = []int64{}
+	}
+	if alias.Franchises == nil {
+		alias.Franchises = []int64{}
+	}
+	if alias.Companies == nil {
+		alias.Companies = []int64{}
+	}
+	if alias.Series == nil {
+		alias.Series = []int64{}
+	}
+	return json.Marshal(alias)
 }
