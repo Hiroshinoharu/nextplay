@@ -18,6 +18,7 @@ import (
 type Defaults struct {
 	Port                  string
 	DatabaseURL           string
+	LocalDatabaseURL      string
 	FrontendURL           string
 	UserServiceURL        string
 	GameServiceURL        string
@@ -30,6 +31,7 @@ type Config struct {
 	Env                   string
 	Port                  string
 	DatabaseURL           string
+	LocalDatabaseURL      string
 	FrontendURL           string
 	UserServiceURL        string
 	GameServiceURL        string
@@ -63,6 +65,7 @@ func Load(defaults Defaults) (Config, error) {
 		Env:                   env,
 		Port:                  getEnvWithConfig("PORT", fileConfig, defaults.Port),
 		DatabaseURL:           getEnvWithConfig("DATABASE_URL", fileConfig, defaults.DatabaseURL),
+		LocalDatabaseURL:      getEnvWithConfig("LOCAL_DATABASE_URL", fileConfig, defaults.LocalDatabaseURL),
 		FrontendURL:           getEnvWithConfig("FRONTEND_URL", fileConfig, defaults.FrontendURL),
 		UserServiceURL:        getEnvWithConfig("USER_SERVICE_URL", fileConfig, defaults.UserServiceURL),
 		GameServiceURL:        getEnvWithConfig("GAME_SERVICE_URL", fileConfig, defaults.GameServiceURL),
