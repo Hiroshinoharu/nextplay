@@ -10,10 +10,28 @@ type Game struct {
 	Genres           []int  `json:"genres"`
 	Platforms        []int  `json:"platforms"`
 	Keywords         []int  `json:"keywords"`
+	CoverID          int    `json:"cover"`
+	InvolvedCompanies []int `json:"involved_companies"`
+	Artworks         []int  `json:"artworks"`
+	Screenshots      []int  `json:"screenshots"`
 }
 
 // named represents a generic named entity from IGDB
 type named struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
+}
+
+// InvolvedCompany represents an involved company entry in IGDB.
+type InvolvedCompany struct {
+	ID        int  `json:"id"`
+	CompanyID int  `json:"company"`
+	Publisher bool `json:"publisher"`
+	Developer bool `json:"developer"`
+}
+
+// cover represents a cover entry in IGDB.
+type cover struct {
+	ID      int    `json:"id"`
+	ImageID string `json:"image_id"`
 }

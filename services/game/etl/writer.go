@@ -43,7 +43,7 @@ func getOrCreateID(table, column, value string) (int, error) {
 	return inserted, nil
 }
 
-func upsertGame(game igdb.Game, genreNames map[int]string) (int, error) {
+func upsertGame(game igdb.Game, genreNames map[int]string, publishersByGame map[int]string, coverURLByGame map[int]string) (int, error) {
 	gameName := strings.TrimSpace(sanitizeText(game.Name))
 	if gameName == "" {
 		return 0, fmt.Errorf("game name empty after sanitize")
@@ -65,15 +65,31 @@ func upsertGame(game igdb.Game, genreNames map[int]string) (int, error) {
 		  )
 		LIMIT 1;
 	`
+	publishers := emptyToNull(publishersByGame[game.ID])
+	coverURL := emptyToNull(coverURLByGame[game.ID])
 	if err := db.DB.QueryRow(selectQuery, gameName, releaseDate).Scan(&existing); err == nil {
+		if publishers != nil || coverURL != nil {
+			_, err := db.DB.Exec(
+				`UPDATE games
+				 SET publishers = COALESCE($2, publishers),
+				     cover_image_url = COALESCE($3, cover_image_url)
+				 WHERE game_id = $1`,
+				existing,
+				publishers,
+				coverURL,
+			)
+			if err != nil {
+				return 0, err
+			}
+		}
 		return existing, nil
 	} else if err != sql.ErrNoRows {
 		return 0, err
 	}
 
 	insert := `
-		INSERT INTO games (game_name, game_description, release_date, genre, publishers, story)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO games (game_name, game_description, release_date, genre, publishers, story, cover_image_url)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING game_id;
 	`
 
@@ -84,8 +100,9 @@ func upsertGame(game igdb.Game, genreNames map[int]string) (int, error) {
 		emptyToNull(game.Summary),
 		releaseDate,
 		nullableNames(game.Genres, genreNames),
-		nil,
+		publishers,
 		emptyToNull(game.Storyline),
+		coverURL,
 	).Scan(&inserted); err != nil {
 		return 0, err
 	}

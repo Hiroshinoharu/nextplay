@@ -30,7 +30,7 @@ func (client Client) FetchGames(maxGames int) ([]Game, error) {
 			limit = maxGames - offset
 		}
 		query := fmt.Sprintf(
-			"fields name,summary,first_release_date,genres,platforms,keywords,storyline; limit %d; offset %d; where name != null;",
+			"fields name,summary,first_release_date,genres,platforms,keywords,storyline,cover,involved_companies,artworks,screenshots; limit %d; offset %d; where name != null;",
 			limit,
 			offset,
 		)
@@ -72,6 +72,60 @@ func (client Client) FetchNamed(endpoint string, ids []int) (map[int]string, err
 		for _, item := range named {
 			if strings.TrimSpace(item.Name) != "" {
 				result[item.ID] = item.Name
+			}
+		}
+	}
+	return result, nil
+}
+
+// FetchInvolvedCompanies retrieves involved companies by their IDs.
+func (client Client) FetchInvolvedCompanies(ids []int) (map[int]InvolvedCompany, error) {
+	if len(ids) == 0 {
+		return map[int]InvolvedCompany{}, nil
+	}
+
+	result := make(map[int]InvolvedCompany, len(ids))
+	for _, chunk := range chunkIDs(ids, 200) {
+		query := fmt.Sprintf("fields company,publisher,developer; where id = (%s); limit %d;", joinIDs(chunk), len(chunk))
+		payload, err := client.post("/involved_companies", query)
+		if err != nil {
+			return nil, err
+		}
+
+		var entries []InvolvedCompany
+		if err := json.Unmarshal(payload, &entries); err != nil {
+			return nil, err
+		}
+		for _, item := range entries {
+			if item.ID > 0 {
+				result[item.ID] = item
+			}
+		}
+	}
+	return result, nil
+}
+
+// FetchImageIDs retrieves image IDs for a given IGDB image endpoint.
+func (client Client) FetchImageIDs(endpoint string, ids []int) (map[int]string, error) {
+	if len(ids) == 0 {
+		return map[int]string{}, nil
+	}
+
+	result := make(map[int]string, len(ids))
+	for _, chunk := range chunkIDs(ids, 200) {
+		query := fmt.Sprintf("fields image_id; where id = (%s); limit %d;", joinIDs(chunk), len(chunk))
+		payload, err := client.post(endpoint, query)
+		if err != nil {
+			return nil, err
+		}
+
+		var covers []cover
+		if err := json.Unmarshal(payload, &covers); err != nil {
+			return nil, err
+		}
+		for _, item := range covers {
+			if item.ID > 0 && strings.TrimSpace(item.ImageID) != "" {
+				result[item.ID] = item.ImageID
 			}
 		}
 	}

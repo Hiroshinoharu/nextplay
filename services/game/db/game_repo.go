@@ -9,7 +9,7 @@ import (
 // GetAllGames retrieves all games from the database
 func GetAllGames() ([]models.Game, error) {
 	query := `
-		SELECT game_id, game_name, game_description, release_date, publishers, story
+		SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url
 		FROM games;
 	`
 
@@ -21,19 +21,51 @@ func GetAllGames() ([]models.Game, error) {
 
 	var games []models.Game
 
+	// Iterate over the rows and scan into Game structs
 	for rows.Next() {
 		var g models.Game
+		var description sql.NullString
+		var releaseDate sql.NullString
+		var genre sql.NullString
+		var publishers sql.NullString
+		var story sql.NullString
+		var coverImage []byte
 		err := rows.Scan(
 			&g.ID,
 			&g.Name,
-			&g.Description,
-			&g.ReleaseDate,
-			&g.Publishers,
-			&g.Story,
+			&description,
+			&releaseDate,
+			&genre,
+			&publishers,
+			&story,
+			&coverImage,
 		)
 		if err != nil {
 			return nil, err
 		}
+		if description.Valid {
+			g.Description = description.String
+		}
+		if releaseDate.Valid {
+			g.ReleaseDate = releaseDate.String
+		}
+		if genre.Valid {
+			g.Genre = genre.String
+		}
+		if publishers.Valid {
+			g.Publishers = publishers.String
+		}
+		if story.Valid {
+			g.Story = story.String
+		}
+		if len(coverImage) > 0 {
+			g.CoverImageURL = string(coverImage)
+		}
+		g.Platforms = []int64{}
+		g.Keywords = []int64{}
+		g.Franchises = []int64{}
+		g.Companies = []int64{}
+		g.Series = []int64{}
 		games = append(games, g)
 	}
 	return games, nil
@@ -42,20 +74,28 @@ func GetAllGames() ([]models.Game, error) {
 // GetGameByID retrieves a game by its ID
 func GetGameByID(id int) (*models.Game, error) {
 	query := `
-		SELECT game_id, game_name, game_description, release_date, publishers, story
+		SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url
 		FROM games
 		WHERE game_id = $1;
 	`
 	row := DB.QueryRow(query, id)
 
 	var g models.Game
+	var description sql.NullString
+	var releaseDate sql.NullString
+	var genre sql.NullString
+	var publishers sql.NullString
+	var story sql.NullString
+	var coverImage []byte
 	err := row.Scan(
 		&g.ID,
 		&g.Name,
-		&g.Description,
-		&g.ReleaseDate,
-		&g.Publishers,
-		&g.Story,
+		&description,
+		&releaseDate,
+		&genre,
+		&publishers,
+		&story,
+		&coverImage,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -64,13 +104,37 @@ func GetGameByID(id int) (*models.Game, error) {
 		return nil, err
 	}
 
+	if description.Valid {
+		g.Description = description.String
+	}
+	if releaseDate.Valid {
+		g.ReleaseDate = releaseDate.String
+	}
+	if genre.Valid {
+		g.Genre = genre.String
+	}
+	if publishers.Valid {
+		g.Publishers = publishers.String
+	}
+	if story.Valid {
+		g.Story = story.String
+	}
+	if len(coverImage) > 0 {
+		g.CoverImageURL = string(coverImage)
+	}
+	g.Platforms = []int64{}
+	g.Keywords = []int64{}
+	g.Franchises = []int64{}
+	g.Companies = []int64{}
+	g.Series = []int64{}
+
 	return &g, nil
 }
 
 // CreateGame inserts a new game into the database
 func CreateGame(g *models.Game) (int, error) {
 	query := `
-		INSERT INTO games (game_name, game_description, release_date, genre, publishers, story, cover_image)
+		INSERT INTO games (game_name, game_description, release_date, genre, publishers, story, cover_image_url)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING game_id;
 	`
@@ -103,7 +167,7 @@ func UpdateGame(id int, g *models.Game) error {
 			genre = $4,
 			publishers = $5,
 			story = $6,
-			cover_image = $7
+			cover_image_url = $7
 		WHERE game_id = $8;
 	`
 	result, err := DB.Exec(

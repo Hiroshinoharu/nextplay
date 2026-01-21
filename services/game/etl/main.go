@@ -38,16 +38,21 @@ func main() {
 		log.Fatal("IGDB_CLIENT_ID and IGDB_ACCESS_TOKEN must be set")
 	}
 
-	if err := db.Connect(cfg.DatabaseURL); err != nil {
+	dbURL := strings.TrimSpace(cfg.DatabaseURL)
+	if local := strings.TrimSpace(cfg.LocalDatabaseURL); local != "" {
+		dbURL = local
+	}
+	if err := db.Connect(dbURL); err != nil {
 		log.Fatal("Failed to connect to DB: ", err)
 	}
 
-	maxGames := 50
+	maxGames := 300
 	if raw := strings.TrimSpace(os.Getenv("IGDB_MAX_GAMES")); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
 			maxGames = parsed
 		}
 	}
+	log.Printf("Extracting %d games from IGDB", maxGames)
 
 	client := igdb.Client{
 		ClientID:    clientID,
@@ -63,6 +68,15 @@ func main() {
 	genreIDs := collectIDs(games, func(game igdb.Game) []int { return game.Genres })
 	platformIDs := collectIDs(games, func(game igdb.Game) []int { return game.Platforms })
 	keywordIDs := collectIDs(games, func(game igdb.Game) []int { return game.Keywords })
+	coverIDs := collectIDs(games, func(game igdb.Game) []int {
+		if game.CoverID > 0 {
+			return []int{game.CoverID}
+		}
+		return nil
+	})
+	involvedCompanyIDs := collectIDs(games, func(game igdb.Game) []int { return game.InvolvedCompanies })
+	artworkIDs := collectIDs(games, func(game igdb.Game) []int { return game.Artworks })
+	screenshotIDs := collectIDs(games, func(game igdb.Game) []int { return game.Screenshots })
 
 	genreNames, err := client.FetchNamed("/genres", genreIDs)
 	if err != nil {
@@ -76,6 +90,26 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to fetch keywords: ", err)
 	}
+	involvedCompanies, err := client.FetchInvolvedCompanies(involvedCompanyIDs)
+	if err != nil {
+		log.Fatal("Failed to fetch involved companies: ", err)
+	}
+	coverImageIDs, err := client.FetchImageIDs("/covers", coverIDs)
+	if err != nil {
+		log.Fatal("Failed to fetch covers: ", err)
+	}
+	artworkImageIDs, err := client.FetchImageIDs("/artworks", artworkIDs)
+	if err != nil {
+		log.Fatal("Failed to fetch artworks: ", err)
+	}
+	screenshotImageIDs, err := client.FetchImageIDs("/screenshots", screenshotIDs)
+	if err != nil {
+		log.Fatal("Failed to fetch screenshots: ", err)
+	}
+	companyNames, err := client.FetchNamed("/companies", collectCompanyIDs(involvedCompanies))
+	if err != nil {
+		log.Fatal("Failed to fetch companies: ", err)
+	}
 
 	platformDBIDs, err := ensureNamedRows("platform", "platform_name", platformNames)
 	if err != nil {
@@ -85,10 +119,13 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to upsert keywords: ", err)
 	}
+	publishersByGame := buildPublishersByGame(games, involvedCompanies, companyNames)
+	coverURLByGame := buildCoverURLsByGame(games, coverImageIDs, artworkImageIDs, screenshotImageIDs)
+	logMissingGameFields(games, publishersByGame, coverURLByGame, genreNames)
 
 	for _, game := range games {
 		// Upsert the game row itself
-		gameID, err := upsertGame(game, genreNames)
+		gameID, err := upsertGame(game, genreNames, publishersByGame, coverURLByGame)
 		if err != nil {
 			log.Printf("Skipping game %q: %v", game.Name, err)
 			continue
@@ -129,6 +166,7 @@ func main() {
 			}
 		}
 	}
+	log.Println("ETL process completed successfully")
 }
 
 // collectIDs extracts unique IDs from a slice of games using the provided getter function.
@@ -148,6 +186,143 @@ func collectIDs(games []igdb.Game, getter func(igdb.Game) []int) []int {
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+func collectCompanyIDs(involved map[int]igdb.InvolvedCompany) []int {
+	seen := make(map[int]struct{})
+	for _, item := range involved {
+		if item.CompanyID <= 0 {
+			continue
+		}
+		seen[item.CompanyID] = struct{}{}
+	}
+	ids := make([]int, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+func buildPublishersByGame(games []igdb.Game, involved map[int]igdb.InvolvedCompany, companyNames map[int]string) map[int]string {
+	out := make(map[int]string, len(games))
+	for _, game := range games {
+		if len(game.InvolvedCompanies) == 0 {
+			continue
+		}
+		seenPublishers := make(map[int]struct{})
+		seenDevelopers := make(map[int]struct{})
+		publishers := make([]string, 0, len(game.InvolvedCompanies))
+		developers := make([]string, 0, len(game.InvolvedCompanies))
+		for _, involvedID := range game.InvolvedCompanies {
+			entry, ok := involved[involvedID]
+			if !ok || entry.CompanyID <= 0 {
+				continue
+			}
+			name := strings.TrimSpace(sanitizeText(companyNames[entry.CompanyID]))
+			if name == "" {
+				continue
+			}
+			if entry.Publisher {
+				if _, ok := seenPublishers[entry.CompanyID]; !ok {
+					seenPublishers[entry.CompanyID] = struct{}{}
+					publishers = append(publishers, name)
+				}
+			}
+			if entry.Developer {
+				if _, ok := seenDevelopers[entry.CompanyID]; !ok {
+					seenDevelopers[entry.CompanyID] = struct{}{}
+					developers = append(developers, name)
+				}
+			}
+		}
+		if len(publishers) > 0 {
+			out[game.ID] = strings.Join(publishers, ",")
+		} else if len(developers) > 0 {
+			out[game.ID] = strings.Join(developers, ",")
+		}
+	}
+	return out
+}
+
+// buildCoverURLsByGame constructs cover image URLs for games based on their cover image IDs.
+func buildCoverURLsByGame(games []igdb.Game, coverImageIDs, artworkImageIDs, screenshotImageIDs map[int]string) map[int]string {
+	// Map of game ID to cover image URL
+	out := make(map[int]string, len(games))
+	for _, game := range games {
+		if game.CoverID > 0 {
+			if imageID := strings.TrimSpace(coverImageIDs[game.CoverID]); imageID != "" {
+				out[game.ID] = buildCoverURL(imageID)
+				continue
+			}
+		}
+		if imageID := firstImageID(game.Artworks, artworkImageIDs); imageID != "" {
+			out[game.ID] = buildCoverURL(imageID)
+			continue
+		}
+		if imageID := firstImageID(game.Screenshots, screenshotImageIDs); imageID != "" {
+			out[game.ID] = buildCoverURL(imageID)
+		}
+	}
+	return out
+}
+
+// buildCoverURL constructs the full URL for a cover image given its image ID.
+func buildCoverURL(imageID string) string {
+	return "https://images.igdb.com/igdb/image/upload/t_cover_big/" + imageID + ".jpg"
+}
+
+func firstImageID(ids []int, imageIDs map[int]string) string {
+	for _, id := range ids {
+		if imageID := strings.TrimSpace(imageIDs[id]); imageID != "" {
+			return imageID
+		}
+	}
+	return ""
+}
+
+// logMissingGameFields logs games that are missing critical fields like publishers, cover images, or genre names.
+func logMissingGameFields(games []igdb.Game, publishersByGame, coverURLByGame map[int]string, genreNames map[int]string) {
+	const sampleMax = 5
+	var missingPublishers []int
+	var missingCovers []int
+	var missingGenres []int
+	for _, game := range games {
+		if strings.TrimSpace(publishersByGame[game.ID]) == "" {
+			missingPublishers = append(missingPublishers, game.ID)
+		}
+		if strings.TrimSpace(coverURLByGame[game.ID]) == "" {
+			missingCovers = append(missingCovers, game.ID)
+		}
+		if !hasGenreNames(game.Genres, genreNames) {
+			missingGenres = append(missingGenres, game.ID)
+		}
+	}
+	log.Printf("ETL missing fields: publishers=%d, covers=%d, genres=%d", len(missingPublishers), len(missingCovers), len(missingGenres))
+	log.Printf("Sample missing publishers game IDs: %s", sampleIDs(missingPublishers, sampleMax))
+	log.Printf("Sample missing covers game IDs: %s", sampleIDs(missingCovers, sampleMax))
+	log.Printf("Sample missing genres game IDs: %s", sampleIDs(missingGenres, sampleMax))
+}
+
+func sampleIDs(ids []int, max int) string {
+	if len(ids) == 0 {
+		return "none"
+	}
+	if max <= 0 || len(ids) <= max {
+		return strings.Trim(strings.Join(strings.Fields(fmt.Sprint(ids)), ","), "[]")
+	}
+	return strings.Trim(strings.Join(strings.Fields(fmt.Sprint(ids[:max])), ","), "[]") + ",..."
+}
+
+func hasGenreNames(ids []int, genreNames map[int]string) bool {
+	if len(ids) == 0 || len(genreNames) == 0 {
+		return false
+	}
+	for _, id := range ids {
+		if name := strings.TrimSpace(sanitizeText(genreNames[id])); name != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // findEnvFile searches for a .env file starting from the current working directory
