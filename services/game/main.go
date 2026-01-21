@@ -2,8 +2,12 @@ package main
 
 import (
 	"log"
+	"os"
+	"path/filepath"
+	"runtime"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/maxceban/nextplay/services/game/db"
 	"github.com/maxceban/nextplay/services/game/routes"
 	"github.com/maxceban/nextplay/services/shared/config"
@@ -29,6 +33,27 @@ func main() {
 	}
 
 	app := fiber.New()
+
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowHeaders: "Content-Type, Authorization",
+	}))
+
+	_, currentFile, _, _ := runtime.Caller(0)
+	gameHTMLPath := filepath.Join(filepath.Dir(currentFile), "..", "..", "frontend", "game.html")
+	serveGameHTML := func(c *fiber.Ctx) error {
+		data, err := os.ReadFile(gameHTMLPath)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString("Failed to load game.html")
+		}
+		c.Type("html", "utf-8")
+		return c.Send(data)
+	}
+
+	app.Get("/", serveGameHTML)
+	app.Get("/game", serveGameHTML)
+	app.Get("/game/", serveGameHTML)
+	app.Get("/game.html", serveGameHTML)
 
 	app.Get("/health", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{

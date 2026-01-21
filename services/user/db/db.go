@@ -9,7 +9,7 @@ import (
 
 var DB *sql.DB
 
-func Connect(dsn string) error {
+func Failed to load game.htmlConnect(dsn string) error {
 	if dsn == "" {
 		return fmt.Errorf("DATABASE_URL not provided")
 	}
