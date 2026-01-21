@@ -13,7 +13,11 @@ import (
 func ensureNamedRows(table, column string, source map[int]string) (map[int]int, error) {
 	out := make(map[int]int, len(source))
 	for igdbID, name := range source {
-		dbID, err := getOrCreateID(table, column, name)
+		clean := strings.TrimSpace(sanitizeText(name))
+		if clean == "" {
+			continue
+		}
+		dbID, err := getOrCreateID(table, column, clean)
 		if err != nil {
 			return nil, err
 		}
@@ -40,6 +44,10 @@ func getOrCreateID(table, column, value string) (int, error) {
 }
 
 func upsertGame(game igdb.Game, genreNames map[int]string) (int, error) {
+	gameName := strings.TrimSpace(sanitizeText(game.Name))
+	if gameName == "" {
+		return 0, fmt.Errorf("game name empty after sanitize")
+	}
 	var releaseDate *time.Time
 	if game.FirstReleaseDate > 0 {
 		timestamp := time.Unix(game.FirstReleaseDate, 0).UTC()
@@ -57,7 +65,7 @@ func upsertGame(game igdb.Game, genreNames map[int]string) (int, error) {
 		  )
 		LIMIT 1;
 	`
-	if err := db.DB.QueryRow(selectQuery, game.Name, releaseDate).Scan(&existing); err == nil {
+	if err := db.DB.QueryRow(selectQuery, gameName, releaseDate).Scan(&existing); err == nil {
 		return existing, nil
 	} else if err != sql.ErrNoRows {
 		return 0, err
@@ -72,7 +80,7 @@ func upsertGame(game igdb.Game, genreNames map[int]string) (int, error) {
 	var inserted int
 	if err := db.DB.QueryRow(
 		insert,
-		game.Name,
+		gameName,
 		emptyToNull(game.Summary),
 		releaseDate,
 		nullableNames(game.Genres, genreNames),
@@ -109,7 +117,7 @@ func nullableNames(ids []int, names map[int]string) interface{} {
 	}
 	parts := make([]string, 0, len(ids))
 	for _, id := range ids {
-		if name := strings.TrimSpace(names[id]); name != "" {
+		if name := strings.TrimSpace(sanitizeText(names[id])); name != "" {
 			parts = append(parts, name)
 		}
 	}
@@ -120,9 +128,38 @@ func nullableNames(ids []int, names map[int]string) interface{} {
 }
 
 func emptyToNull(value string) interface{} {
-	value = strings.TrimSpace(value)
+	value = strings.TrimSpace(sanitizeText(value))
 	if value == "" {
 		return nil
 	}
 	return value
+}
+
+func sanitizeText(value string) string {
+	if value == "" {
+		return ""
+	}
+	return strings.Map(func(r rune) rune {
+		if r == 0 {
+			return -1
+		}
+		if r < 0x20 && r != '\n' && r != '\r' && r != '\t' {
+			return -1
+		}
+		if r == 0x7f {
+			return -1
+		}
+		return r
+	}, value)
+}
+
+func gameExists(gameID int) (bool, error) {
+	var exists int
+	if err := db.DB.QueryRow("SELECT 1 FROM games WHERE game_id = $1", gameID).Scan(&exists); err == nil {
+		return true, nil
+	} else if err == sql.ErrNoRows {
+		return false, nil
+	} else {
+		return false, err
+	}
 }

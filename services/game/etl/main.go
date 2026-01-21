@@ -16,11 +16,12 @@ import (
 	"github.com/maxceban/nextplay/services/shared/config"
 )
 
+// main is the entry point for the ETL process
 func main() {
 	envPath, err := findEnvFile("deploy/env/game.env")
 	if err != nil {
 		log.Println("No env file loaded:", err)
-	} else if err := godotenv.Load(envPath); err != nil {
+	} else if err := loadEnvFileNoOverwrite(envPath); err != nil {
 		log.Println("No env file loaded:", err)
 	}
 
@@ -86,30 +87,52 @@ func main() {
 	}
 
 	for _, game := range games {
+		// Upsert the game row itself
 		gameID, err := upsertGame(game, genreNames)
 		if err != nil {
 			log.Printf("Skipping game %q: %v", game.Name, err)
 			continue
 		}
+		if ok, err := gameExists(gameID); err != nil {
+			log.Printf("Skipping game %q: failed to verify game id %d: %v", game.Name, gameID, err)
+			continue
+		} else if !ok {
+			log.Printf("Skipping game %q: missing game row for id %d", game.Name, gameID)
+			continue
+		}
 
+		// Link platforms
 		for _, platformID := range game.Platforms {
 			if dbID, ok := platformDBIDs[platformID]; ok {
 				if err := ensureJoinRow("game_platform", "game_id", "platform_id", gameID, dbID); err != nil {
-					log.Printf("Failed to link game %q to platform: %v", game.Name, err)
+					exists, errCheck := gameExists(gameID)
+					if errCheck != nil {
+						log.Printf("Failed to link game %q to platform (game_id=%d, exists=unknown): %v", game.Name, gameID, err)
+					} else {
+						log.Printf("Failed to link game %q to platform (game_id=%d, exists=%t): %v", game.Name, gameID, exists, err)
+					}
 				}
 			}
 		}
 
+		// Link keywords
 		for _, keywordID := range game.Keywords {
 			if dbID, ok := keywordDBIDs[keywordID]; ok {
 				if err := ensureJoinRow("game_keywords", "game_id", "keyword_id", gameID, dbID); err != nil {
-					log.Printf("Failed to link game %q to keyword: %v", game.Name, err)
+					exists, errCheck := gameExists(gameID)
+					if errCheck != nil {
+						log.Printf("Failed to link game %q to keyword (game_id=%d, exists=unknown): %v", game.Name, gameID, err)
+					} else {
+						log.Printf("Failed to link game %q to keyword (game_id=%d, exists=%t): %v", game.Name, gameID, exists, err)
+					}
 				}
 			}
 		}
 	}
 }
 
+// collectIDs extracts unique IDs from a slice of games using the provided getter function.
+// It returns a slice of unique IDs.
 func collectIDs(games []igdb.Game, getter func(igdb.Game) []int) []int {
 	seen := make(map[int]struct{})
 	for _, game := range games {
@@ -127,6 +150,8 @@ func collectIDs(games []igdb.Game, getter func(igdb.Game) []int) []int {
 	return ids
 }
 
+// findEnvFile searches for a .env file starting from the current working directory
+// and moving up the directory tree until it finds the file or reaches the root.
 func findEnvFile(relativePath string) (string, error) {
 	start, err := os.Getwd()
 	if err != nil {
@@ -145,4 +170,20 @@ func findEnvFile(relativePath string) (string, error) {
 		dir = parent
 	}
 	return "", fmt.Errorf("env file not found from %s: %s", start, relativePath)
+}
+
+// loadEnvFileNoOverwrite loads environment variables from a .env file
+// without overwriting any variables that are already set in the environment.
+func loadEnvFileNoOverwrite(path string) error {
+	values, err := godotenv.Read(path)
+	if err != nil {
+		return err
+	}
+	for key, value := range values {
+		if _, exists := os.LookupEnv(key); exists {
+			continue
+		}
+		_ = os.Setenv(key, value)
+	}
+	return nil
 }

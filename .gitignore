@@ -75,3 +75,6 @@ coverage/
 
 # All env files
 deploy/env
+
+# Batch Scripts
+*.bat

@@ -7,7 +7,7 @@ require (
 	github.com/maxceban/nextplay/services/shared v0.0.0
 )
 
-require github.com/joho/godotenv v1.5.1 // indirect
+require github.com/joho/godotenv v1.5.1
 
 require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
