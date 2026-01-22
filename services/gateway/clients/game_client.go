@@ -120,6 +120,7 @@ func (gc *GameClient) GetGameKeywords(id string) (int, []byte, error) {
     return gc.doRequest(req)
 }
 
+// ---------- KEYWORDS ----------
 func (gc *GameClient) AddGameKeyword(id string, body []byte) (int, []byte, error) {
     url := fmt.Sprintf("%s/games/%s/keywords", gc.baseURL, id)
     req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
@@ -130,6 +131,7 @@ func (gc *GameClient) AddGameKeyword(id string, body []byte) (int, []byte, error
     return gc.doRequest(req)
 }
 
+// ---------- KEYWORDS ----------
 func (gc *GameClient) RemoveGameKeyword(id, keywordID string) (int, []byte, error) {
     url := fmt.Sprintf("%s/games/%s/keywords/%s", gc.baseURL, id, keywordID)
     req, err := http.NewRequest(http.MethodDelete, url, nil)
@@ -139,6 +141,7 @@ func (gc *GameClient) RemoveGameKeyword(id, keywordID string) (int, []byte, erro
     return gc.doRequest(req)
 }
 
+// ---------- COMPANIES ----------
 func (gc *GameClient) GetGameCompanies(id string) (int, []byte, error) {
     req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/games/%s/companies", gc.baseURL, id), nil)
     if err != nil {
@@ -147,6 +150,7 @@ func (gc *GameClient) GetGameCompanies(id string) (int, []byte, error) {
     return gc.doRequest(req)
 }
 
+// ---------- COMPANIES ----------
 func (gc *GameClient) AddGameCompany(id string, body []byte) (int, []byte, error) {
     url := fmt.Sprintf("%s/games/%s/companies", gc.baseURL, id)
     req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
@@ -157,6 +161,7 @@ func (gc *GameClient) AddGameCompany(id string, body []byte) (int, []byte, error
     return gc.doRequest(req)
 }
 
+// ---------- COMPANIES ----------
 func (gc *GameClient) RemoveGameCompany(id, companyID string) (int, []byte, error) {
     url := fmt.Sprintf("%s/games/%s/companies/%s", gc.baseURL, id, companyID)
     req, err := http.NewRequest(http.MethodDelete, url, nil)

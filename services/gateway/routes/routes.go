@@ -14,13 +14,25 @@ func SetUpRoutes(app *fiber.App) {
 	// --------------------------
 	users := api.Group("/users")
 	{
-		users.Get("/:id", handlers.GetUserByID)
-		users.Post("/", handlers.CreateUser)
+		users.Post("/register", handlers.RegisterUser)
 		users.Post("/login", handlers.LoginUser)
-		users.Get("/:id/preferences", handlers.GetUserPreferences)
+		users.Get("/:id", handlers.GetUserByID)
+		users.Put("/:id", handlers.UpdateUser)
+		users.Delete("/:id", handlers.DeleteUser)
+
 		users.Get("/:id/interactions", handlers.GetUserInteraction)
-		users.Post("/:id/preferences", handlers.CreateUserPreference)
 		users.Post("/:id/interactions", handlers.CreateUserInteraction)
+		users.Delete("/:id/interactions/:gameId", handlers.DeleteUserInteraction)
+
+		users.Get("/:id/keywords", handlers.GetUserKeywordPreferences)
+		users.Post("/:id/keywords", handlers.CreateUserKeywordPreference)
+		users.Put("/:id/keywords/:keywordId", handlers.UpdateUserKeywordPreference)
+		users.Delete("/:id/keywords/:keywordId", handlers.DeleteUserKeywordPreference)
+
+		users.Get("/:id/platforms", handlers.GetUserPlatformPreferences)
+		users.Post("/:id/platforms", handlers.CreateUserPlatformPreference)
+		users.Put("/:id/platforms/:platformId", handlers.UpdateUserPlatformPreference)
+		users.Delete("/:id/platforms/:platformId", handlers.DeleteUserPlatformPreference)
 	}
 
 	// --------------------------

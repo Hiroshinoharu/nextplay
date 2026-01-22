@@ -219,6 +219,7 @@ func DeleteGame(id int) error {
 	return nil
 }
 
+// GetGameRelations retrieves all related entity IDs for a given game
 func GetGameRelations(gameID int) ([]int64, []int64, []int64, []int64, []int64, error) {
 	platforms, err := fetchRelationIDs(`SELECT platform_id FROM game_platform WHERE game_id=$1`, gameID)
 	if err != nil {
@@ -243,6 +244,7 @@ func GetGameRelations(gameID int) ([]int64, []int64, []int64, []int64, []int64, 
 	return platforms, keywords, franchises, companies, series, nil
 }
 
+// Helper function to fetch relation IDs
 func fetchRelationIDs(query string, args ...interface{}) ([]int64, error) {
 	rows, err := DB.Query(query, args...)
 	if err != nil {

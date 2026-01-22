@@ -1,4 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import Button from './components/Button'
+import Card from './components/card'
+
+type GameItem = {
+  id: number
+  name: string
+  description?: string
+  release_date?: string
+  genre?: string
+  publishers?: string
+}
 
 type ResponseState = {
   status: number
@@ -34,7 +45,7 @@ function toHeaderText(headers: Headers): string {
 }
 
 function Game() {
-  const [baseUrl, setBaseUrl] = useState<string>('http://localhost:8081')
+  const [baseUrl, setBaseUrl] = useState<string>('http://localhost:8084')
   const [path, setPath] = useState<string>('/')
   const [method, setMethod] = useState<string>('GET')
   const [headers, setHeaders] = useState<string>(DEFAULT_HEADERS)
@@ -42,6 +53,14 @@ function Game() {
   const [response, setResponse] = useState<ResponseState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [games, setGames] = useState<GameItem[]>([])
+  const [gamesError, setGamesError] = useState<string | null>(null)
+  const [gamesLoading, setGamesLoading] = useState<boolean>(false)
+
+  const gamesUrl = useMemo(() => {
+    const trimmedBase = baseUrl.replace(/\/+$/, '')
+    return `${trimmedBase}/api/games`
+  }, [baseUrl])
 
   const fullUrl = useMemo(() => {
     if (path.startsWith('http://') || path.startsWith('https://')) {
@@ -52,6 +71,35 @@ function Game() {
     if (!trimmedBase) return trimmedPath
     return `${trimmedBase}${trimmedPath}`
   }, [baseUrl, path])
+
+  const loadGames = async () => {
+    setGamesLoading(true)
+    setGamesError(null)
+    try {
+      const responseValue = await fetch(gamesUrl)
+      if (!responseValue.ok) {
+        setGamesError(`Failed to load games: ${responseValue.status}`)
+        setGames([])
+        return
+      }
+      const data = (await responseValue.json()) as GameItem[]
+      if (!Array.isArray(data)) {
+        setGamesError('Unexpected response for /api/games')
+        setGames([])
+        return
+      }
+      setGames(data)
+    } catch (err) {
+      setGamesError(`${err}`)
+      setGames([])
+    } finally {
+      setGamesLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadGames()
+  }, [gamesUrl])
 
   const sendRequest = async () => {
     setIsLoading(true)
@@ -110,27 +158,85 @@ function Game() {
 
       <main className="mx-auto max-w-5xl px-4 py-8 space-y-6">
         <section className="rounded-xl border border-slate-800 bg-slate-950/50 p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Games</h2>
+              <p className="text-xs text-slate-400">{gamesUrl}</p>
+            </div>
+            <Button
+              onClick={loadGames}
+              disabled={gamesLoading}
+              label={gamesLoading ? 'Loading...' : 'Refresh'}
+              showIcon={false}
+            />
+          </div>
+
+          {gamesError && (
+            <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+              {gamesError}
+            </div>
+          )}
+
+          {!gamesError && games.length === 0 && !gamesLoading && (
+            <div className="text-sm text-slate-400">No games returned.</div>
+          )}
+
+          <div className="grid gap-6 md:grid-cols-2 justify-items-center">
+            {games.map(game => {
+              const descriptionLines = [
+                game.release_date ? `Release: ${game.release_date}` : 'Release: n/a',
+                game.genre ? `Genre: ${game.genre}` : null,
+                game.publishers ? `Publishers: ${game.publishers}` : null,
+                game.description ? `\n${game.description}` : null,
+              ].filter(Boolean)
+
+              return (
+                <Card
+                  key={game.id}
+                  title={
+                    <a
+                      href={`game.html?gameId=${encodeURIComponent(String(game.id))}`}
+                      className="card__link"
+                    >
+                      {game.name || 'Untitled'}
+                    </a>
+                  }
+                  description={descriptionLines.join('\n')}
+                />
+              )
+            })}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-800 bg-slate-950/50 p-5 space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setBaseUrl('http://localhost:8081')}
               className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-slate-200 hover:bg-slate-700"
             >
-              Game 8081
+              Gateway 8084
             </button>
             <button
               type="button"
-              onClick={() => setBaseUrl('http://localhost:8082')}
+              onClick={() => setPath('/api/games')}
               className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-slate-200 hover:bg-slate-700"
             >
-              Recommender 8082
+              /api/games
             </button>
             <button
               type="button"
-              onClick={() => setBaseUrl('http://localhost:8083')}
+              onClick={() => setPath('/api/recommend')}
               className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-slate-200 hover:bg-slate-700"
             >
-              User 8083
+              /api/recommend
+            </button>
+            <button
+              type="button"
+              onClick={() => setPath('/api/users')}
+              className="rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-slate-200 hover:bg-slate-700"
+            >
+              /api/users
             </button>
           </div>
 
@@ -140,7 +246,7 @@ function Game() {
               value={baseUrl}
               onChange={event => setBaseUrl(event.target.value)}
               className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
-              placeholder="http://localhost:8081"
+              placeholder="http://localhost:8084"
             />
           </div>
 

@@ -34,6 +34,7 @@ func (c *RecommenderClient) RecommendFromFeatures(req interface{}) ([]byte, erro
 	return io.ReadAll(resp.Body)
 }
 
+// RecommendForUser fetches recommendations for a specific user ID.
 func (c *RecommenderClient) RecommendForUser(userID string) ([]byte, error) {
     url := fmt.Sprintf("%s/recommend/user/%s", c.BaseURL, userID)
 
@@ -46,6 +47,7 @@ func (c *RecommenderClient) RecommendForUser(userID string) ([]byte, error) {
     return io.ReadAll(resp.Body)
 }
 
+// RecommendForItem fetches recommendations based on a specific item ID.
 func (c *RecommenderClient) RecommendForItem(itemID string) ([]byte, error) {
     url := fmt.Sprintf("%s/recommend/item/%s", c.BaseURL, itemID)
 

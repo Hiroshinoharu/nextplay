@@ -203,6 +203,8 @@ func collectCompanyIDs(involved map[int]igdb.InvolvedCompany) []int {
 	return ids
 }
 
+// buildPublishersByGame constructs a map of game IDs to publisher names
+// based on involved companies data.
 func buildPublishersByGame(games []igdb.Game, involved map[int]igdb.InvolvedCompany, companyNames map[int]string) map[int]string {
 	out := make(map[int]string, len(games))
 	for _, game := range games {
@@ -271,6 +273,7 @@ func buildCoverURL(imageID string) string {
 	return "https://images.igdb.com/igdb/image/upload/t_cover_big/" + imageID + ".jpg"
 }
 
+// firstImageID returns the first non-empty image ID from the provided list of IDs.
 func firstImageID(ids []int, imageIDs map[int]string) string {
 	for _, id := range ids {
 		if imageID := strings.TrimSpace(imageIDs[id]); imageID != "" {
@@ -303,7 +306,9 @@ func logMissingGameFields(games []igdb.Game, publishersByGame, coverURLByGame ma
 	log.Printf("Sample missing genres game IDs: %s", sampleIDs(missingGenres, sampleMax))
 }
 
+// sampleIDs returns a string representation of up to max IDs from the provided slice.
 func sampleIDs(ids []int, max int) string {
+	// Return a string representation of up to max IDs from the provided slice.
 	if len(ids) == 0 {
 		return "none"
 	}

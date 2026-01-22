@@ -10,6 +10,7 @@ import (
 	"github.com/maxceban/nextplay/services/game/etl/igdb"
 )
 
+// ensureNamedRows ensures that rows exist in a table for the given names and returns a map of source IDs to database IDs.
 func ensureNamedRows(table, column string, source map[int]string) (map[int]int, error) {
 	out := make(map[int]int, len(source))
 	for igdbID, name := range source {
@@ -26,6 +27,7 @@ func ensureNamedRows(table, column string, source map[int]string) (map[int]int, 
 	return out, nil
 }
 
+// getOrCreateID retrieves the ID for a given value in a table, or creates it if it doesn't exist.
 func getOrCreateID(table, column, value string) (int, error) {
 	query := fmt.Sprintf("SELECT %s_id FROM %s WHERE %s = $1 LIMIT 1", table, table, column)
 	var existing int
@@ -43,6 +45,7 @@ func getOrCreateID(table, column, value string) (int, error) {
 	return inserted, nil
 }
 
+// upsertGame inserts or updates a game record in the database and returns its ID.
 func upsertGame(game igdb.Game, genreNames map[int]string, publishersByGame map[int]string, coverURLByGame map[int]string) (int, error) {
 	gameName := strings.TrimSpace(sanitizeText(game.Name))
 	if gameName == "" {
@@ -109,6 +112,7 @@ func upsertGame(game igdb.Game, genreNames map[int]string, publishersByGame map[
 	return inserted, nil
 }
 
+// ensureJoinRow ensures that a row exists in a join table for the given left and right IDs.
 func ensureJoinRow(table, leftCol, rightCol string, leftID, rightID int) error {
 	query := fmt.Sprintf(
 		"SELECT 1 FROM %s WHERE %s = $1 AND %s = $2 LIMIT 1",
@@ -128,6 +132,7 @@ func ensureJoinRow(table, leftCol, rightCol string, leftID, rightID int) error {
 	return err
 }
 
+// nullableNames returns a comma-separated string of names for the given IDs.
 func nullableNames(ids []int, names map[int]string) interface{} {
 	if len(ids) == 0 || len(names) == 0 {
 		return nil
@@ -152,6 +157,7 @@ func emptyToNull(value string) interface{} {
 	return value
 }
 
+// sanitizeText removes control characters from the input string
 func sanitizeText(value string) string {
 	if value == "" {
 		return ""
@@ -170,6 +176,7 @@ func sanitizeText(value string) string {
 	}, value)
 }
 
+// gameExists checks if a game with the given ID exists in the database
 func gameExists(gameID int) (bool, error) {
 	var exists int
 	if err := db.DB.QueryRow("SELECT 1 FROM games WHERE game_id = $1", gameID).Scan(&exists); err == nil {

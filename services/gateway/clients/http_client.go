@@ -18,9 +18,12 @@ var (
 )
 
 // Base URLs for different services 
-func doGet(url string) (map[string]interface{}, error) {
-	// Perform the HTTP GET request
-	resp, err := http.Get(url)
+func doGet(url string) (interface{}, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := HttpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -30,9 +33,9 @@ func doGet(url string) (map[string]interface{}, error) {
 	// Read the response body
 	body, _ := io.ReadAll(resp.Body)
 
-	// Unmarshal the response into a map
-	var data map[string]interface{}
-	json.Unmarshal(body, &data)
+	// Unmarshal the response into a generic container
+	var data interface{}
+	_ = json.Unmarshal(body, &data)
 
 	// Check for HTTP error status codes
 	if resp.StatusCode >= 400 {
@@ -44,9 +47,13 @@ func doGet(url string) (map[string]interface{}, error) {
 }
 
 // Helper function to perform POST requests 
-func doPost(url string, body []byte) (map[string]interface{}, error) {
-	// Perform the HTTP POST request
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
+func doPost(url string, body []byte) (interface{}, error) {
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := HttpClient.Do(req)
 	// Handle errors and read response
 	if err != nil {
 		return nil, err
@@ -58,9 +65,9 @@ func doPost(url string, body []byte) (map[string]interface{}, error) {
 	// Read the response body
 	raw, _ := io.ReadAll(resp.Body)
 
-	// Unmarshal the response into a map
-	var data map[string]interface{}
-	json.Unmarshal(raw, &data)
+	// Unmarshal the response into a generic container
+	var data interface{}
+	_ = json.Unmarshal(raw, &data)
 
 	// Check for HTTP error status codes
 	if resp.StatusCode >= 400 {
@@ -68,5 +75,48 @@ func doPost(url string, body []byte) (map[string]interface{}, error) {
 	}
 
 	// Return the unmarshaled data and no error
+	return data, nil
+}
+
+// Helper function to perform PUT requests
+func doPut(url string, body []byte) (interface{}, error) {
+	req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := HttpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	raw, _ := io.ReadAll(resp.Body)
+	var data interface{}
+	_ = json.Unmarshal(raw, &data)
+	if resp.StatusCode >= 400 {
+		return nil, errors.New(string(raw))
+	}
+	return data, nil
+}
+
+// Helper function to perform DELETE requests
+func doDelete(url string) (interface{}, error) {
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := HttpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	raw, _ := io.ReadAll(resp.Body)
+	var data interface{}
+	_ = json.Unmarshal(raw, &data)
+	if resp.StatusCode >= 400 {
+		return nil, errors.New(string(raw))
+	}
 	return data, nil
 }
