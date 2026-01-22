@@ -120,3 +120,27 @@ func doDelete(url string) (interface{}, error) {
 	}
 	return data, nil
 }
+
+// Helper function to perform GET requests returning raw response data
+func doGetRaw(url string) (int, []byte, error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return 0, nil, err
+	}
+	resp, err := HttpClient.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, nil, err
+	}
+	return resp.StatusCode, data, nil
+}
+
+// GetRaw exposes raw GET for handlers that need status passthrough
+func GetRaw(url string) (int, []byte, error) {
+	return doGetRaw(url)
+}

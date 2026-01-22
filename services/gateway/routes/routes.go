@@ -10,6 +10,18 @@ func SetUpRoutes(app *fiber.App) {
 	api := app.Group("/api")
 
 	// --------------------------
+	// HEALTH ROUTES
+	// --------------------------
+	health := api.Group("/health")
+	{
+		health.Get("/", handlers.GetAllHealth)
+		health.Get("/gateway", handlers.GetGatewayHealth)
+		health.Get("/user", handlers.GetUserHealth)
+		health.Get("/game", handlers.GetGameHealth)
+		health.Get("/recommender", handlers.GetRecommenderHealth)
+	}
+
+	// --------------------------
 	// USER ROUTES
 	// --------------------------
 	users := api.Group("/users")
