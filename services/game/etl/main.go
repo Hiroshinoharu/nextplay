@@ -38,6 +38,7 @@ func main() {
 		log.Fatal("IGDB_CLIENT_ID and IGDB_ACCESS_TOKEN must be set")
 	}
 
+	// Connect to the database
 	dbURL := strings.TrimSpace(cfg.DatabaseURL)
 	if local := strings.TrimSpace(cfg.LocalDatabaseURL); local != "" {
 		dbURL = local
@@ -74,6 +75,7 @@ func main() {
 		}
 		return nil
 	})
+	
 	involvedCompanyIDs := collectIDs(games, func(game igdb.Game) []int { return game.InvolvedCompanies })
 	artworkIDs := collectIDs(games, func(game igdb.Game) []int { return game.Artworks })
 	screenshotIDs := collectIDs(games, func(game igdb.Game) []int { return game.Screenshots })
