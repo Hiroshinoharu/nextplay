@@ -172,13 +172,13 @@ const StyledWrapper = styled.div`
     --bg-color: #fff;
     --bg-color-alt: #666;
     --main-color: #323232;
-      /* display: flex; */
-      /* flex-direction: column; */
-      /* align-items: center; */
+    min-height: 60vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   /* switch card */
   .switch {
-    transform: translateY(-200px);
     position: relative;
     display: flex;
     flex-direction: column;

@@ -69,6 +69,11 @@ This setup validates the overall architecture and deployment pipeline before add
 
 **Status:** Basic structure in place, endpoints to be implemented.
 
+**Auth (JWT):**
+- Set `JWT_SECRET` for the user service.
+- `POST /users/login` and `POST /users/register` return a `token`.
+- Pass `Authorization: Bearer <token>` for `/users/:id` and all `/users/:id/*` routes.
+
 ### 🛡️ API Gateway
 **Purpose:** Routes requests between frontend and backend microservices. The gateway handles incoming API requests and forwards them to the appropriate microservice it is done via REST calls.
 

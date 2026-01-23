@@ -48,7 +48,9 @@ type HealthResponse = {
   >
 }
 
+// Base URL for API requests, trimmed of trailing slashes
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:8084').replace(/\/+$/, '')
+// Key for storing auth user in localStorage
 const AUTH_STORAGE_KEY = 'nextplay_user'
 
 const SERVICE_CARDS: ServiceCard[] = [

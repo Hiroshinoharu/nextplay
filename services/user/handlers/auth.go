@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/maxceban/nextplay/services/user/auth"
 	"github.com/maxceban/nextplay/services/user/db"
 	"github.com/maxceban/nextplay/services/user/models"
 )
@@ -34,13 +35,18 @@ func Register(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database not initialized"})
 	}
 
+	hashedPassword, err := auth.HashPassword(req.Password)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to secure password"})
+	}
+
 	// Insert new user into the database
 	var id int64
 	var steamLinked bool
-	err := db.DB.QueryRow(
+	err = db.DB.QueryRow(
 		"INSERT INTO app_user (username, password, email) VALUES ($1, $2, $3) RETURNING user_id, steam_linked",
 		req.Username,
-		req.Password,
+		hashedPassword,
 		req.Email,
 	).Scan(&id, &steamLinked)
 	if err != nil {
@@ -54,8 +60,18 @@ func Register(c *fiber.Ctx) error {
 		Email:       req.Email,
 		SteamLinked: steamLinked,
 	}
-	// Return the created user
-	return c.Status(fiber.StatusCreated).JSON(user)
+	token, err := auth.CreateToken(user.ID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create token"})
+	}
+
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		"id":           user.ID,
+		"username":     user.Username,
+		"email":        user.Email,
+		"steam_linked": user.SteamLinked,
+		"token":        token,
+	})
 }
 
 // Login handles POST /auth/login requests
@@ -87,21 +103,20 @@ func Login(c *fiber.Ctx) error {
 
 	// Authenticate user
 	var user models.User
+	var storedPassword string
 	var err error
 	// Authenticate user
 	if req.Username != "" {
 		err = db.DB.QueryRow(
-			"SELECT user_id, username, email, steam_linked FROM app_user WHERE username = $1 AND password = $2",
+			"SELECT user_id, username, email, password, steam_linked FROM app_user WHERE username = $1",
 			req.Username,
-			req.Password,
-		).Scan(&user.ID, &user.Username, &user.Email, &user.SteamLinked)
+		).Scan(&user.ID, &user.Username, &user.Email, &storedPassword, &user.SteamLinked)
 	} else {
 		// Authenticate using email
 		err = db.DB.QueryRow(
-			"SELECT user_id, username, email, steam_linked FROM app_user WHERE email = $1 AND password = $2",
+			"SELECT user_id, username, email, password, steam_linked FROM app_user WHERE email = $1",
 			req.Email,
-			req.Password,
-		).Scan(&user.ID, &user.Username, &user.Email, &user.SteamLinked)
+		).Scan(&user.ID, &user.Username, &user.Email, &storedPassword, &user.SteamLinked)
 	}
 	// Handle authentication result
 	if err == sql.ErrNoRows {
@@ -112,6 +127,31 @@ func Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to authenticate user"})
 	}
 
+	ok, needsUpgrade, err := auth.VerifyPassword(req.Password, storedPassword)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to authenticate user"})
+	}
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid credentials"})
+	}
+
+	if needsUpgrade {
+		if newHash, err := auth.HashPassword(req.Password); err == nil {
+			_, _ = db.DB.Exec("UPDATE app_user SET password = $1 WHERE user_id = $2", newHash, user.ID)
+		}
+	}
+
 	// Return authenticated user
-	return c.JSON(user)
+	token, err := auth.CreateToken(user.ID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create token"})
+	}
+
+	return c.JSON(fiber.Map{
+		"id":           user.ID,
+		"username":     user.Username,
+		"email":        user.Email,
+		"steam_linked": user.SteamLinked,
+		"token":        token,
+	})
 }

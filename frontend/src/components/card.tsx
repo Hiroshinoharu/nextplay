@@ -6,6 +6,8 @@ type CardProps = {
   description?: ReactNode;
   icon?: ReactNode;
   variant?: 'poster' | 'info';
+  onClick?: () => void;
+  ariaLabel?: string;
 };
 
 const DEFAULT_TITLE = 'Clair Obscur: Expedition 33';
@@ -17,10 +19,19 @@ const Card = ({
   description = DEFAULT_DESCRIPTION,
   icon,
   variant = 'poster',
+  onClick,
+  ariaLabel,
 }: CardProps) => {
+  const Component = onClick ? 'button' : 'div';
+  const clickableClass = onClick ? 'card--clickable' : '';
   return (
     <StyledWrapper>
-      <div className={`card card--${variant}`}>
+      <Component
+        className={`card card--${variant} ${clickableClass}`}
+        onClick={onClick}
+        type={onClick ? 'button' : undefined}
+        aria-label={ariaLabel}
+      >
         {icon ?? (
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
             <path d="M20 5H4V19L13.2923 9.70649C13.6828 9.31595 14.3159 9.31591 14.7065 9.70641L20 15.0104V5ZM2 3.9934C2 3.44476 2.45531 3 2.9918 3H21.0082C21.556 3 22 3.44495 22 3.9934V20.0066C22 20.5552 21.5447 21 21.0082 21H2.9918C2.44405 21 2 20.5551 2 20.0066V3.9934ZM8 11C6.89543 11 6 10.1046 6 9C6 7.89543 6.89543 7 8 7C9.10457 7 10 7.89543 10 9C10 10.1046 9.10457 11 8 11Z" />
@@ -30,7 +41,7 @@ const Card = ({
           <p className="card__title">{title}</p>
           {description && <div className="card__description">{description}</div>}
         </div>
-      </div>
+      </Component>
     </StyledWrapper>
   );
 }
@@ -44,6 +55,15 @@ const StyledWrapper = styled.div`
     justify-content: center;
     overflow: hidden;
     transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: none;
+    padding: 0;
+    text-align: left;
+    background: none;
+    cursor: default;
+  }
+
+  .card--clickable {
+    cursor: pointer;
   }
 
   .card--poster {
@@ -56,6 +76,11 @@ const StyledWrapper = styled.div`
   .card--poster:hover {
     transform: translateY(-6px) scale(1.04);
     box-shadow: 0 18px 40px rgba(7, 12, 16, 0.75);
+  }
+
+  .card--clickable:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 3px;
   }
 
   .card--poster svg {
