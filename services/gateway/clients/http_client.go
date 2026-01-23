@@ -18,10 +18,13 @@ var (
 )
 
 // Base URLs for different services 
-func doGet(url string) (interface{}, error) {
+func doGet(url string, headers map[string]string) (interface{}, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
+	}
+	for key, value := range headers {
+		req.Header.Set(key, value)
 	}
 	resp, err := HttpClient.Do(req)
 	if err != nil {
@@ -47,12 +50,15 @@ func doGet(url string) (interface{}, error) {
 }
 
 // Helper function to perform POST requests 
-func doPost(url string, body []byte) (interface{}, error) {
+func doPost(url string, body []byte, headers map[string]string) (interface{}, error) {
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
 	resp, err := HttpClient.Do(req)
 	// Handle errors and read response
 	if err != nil {
@@ -79,12 +85,15 @@ func doPost(url string, body []byte) (interface{}, error) {
 }
 
 // Helper function to perform PUT requests
-func doPut(url string, body []byte) (interface{}, error) {
+func doPut(url string, body []byte, headers map[string]string) (interface{}, error) {
 	req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
 	resp, err := HttpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -101,10 +110,13 @@ func doPut(url string, body []byte) (interface{}, error) {
 }
 
 // Helper function to perform DELETE requests
-func doDelete(url string) (interface{}, error) {
+func doDelete(url string, headers map[string]string) (interface{}, error) {
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return nil, err
+	}
+	for key, value := range headers {
+		req.Header.Set(key, value)
 	}
 	resp, err := HttpClient.Do(req)
 	if err != nil {

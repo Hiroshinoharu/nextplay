@@ -5,12 +5,10 @@ import (
 	"github.com/maxceban/nextplay/services/gateway/clients"
 )
 
-// Initialize user client
-var userClient = clients.NewUserClient()
-
 // GetUserByID handles GET /api/users/:id
 func GetUserByID(c *fiber.Ctx) error {
 	id := c.Params("id")
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.GetUserByID(id)
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
@@ -20,6 +18,7 @@ func GetUserByID(c *fiber.Ctx) error {
 
 // RegisterUser handles POST /api/users/register
 func RegisterUser(c *fiber.Ctx) error {
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.RegisterUser(c.Body())
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
@@ -29,6 +28,7 @@ func RegisterUser(c *fiber.Ctx) error {
 
 // LoginUser handles POST /api/users/login
 func LoginUser(c *fiber.Ctx) error {
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.LoginUser(c.Body())
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
@@ -39,6 +39,7 @@ func LoginUser(c *fiber.Ctx) error {
 // UpdateUser handles PUT /api/users/:id
 func UpdateUser(c *fiber.Ctx) error {
 	id := c.Params("id")
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.UpdateUser(id, c.Body())
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
@@ -49,6 +50,7 @@ func UpdateUser(c *fiber.Ctx) error {
 // DeleteUser handles DELETE /api/users/:id
 func DeleteUser(c *fiber.Ctx) error {
 	id := c.Params("id")
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.DeleteUser(id)
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
@@ -59,6 +61,7 @@ func DeleteUser(c *fiber.Ctx) error {
 // GetUserInteraction handles GET /api/users/:id/interactions
 func GetUserInteraction(c *fiber.Ctx) error {
 	id := c.Params("id")
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.GetUserInteraction(id)
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
@@ -69,6 +72,7 @@ func GetUserInteraction(c *fiber.Ctx) error {
 // CreateUserInteraction handles POST /api/users/:id/interactions
 func CreateUserInteraction(c *fiber.Ctx) error {
 	id := c.Params("id")
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.CreateUserInteraction(id, c.Body())
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
@@ -80,6 +84,7 @@ func CreateUserInteraction(c *fiber.Ctx) error {
 func DeleteUserInteraction(c *fiber.Ctx) error {
 	id := c.Params("id")
 	gameID := c.Params("gameId")
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.DeleteUserInteraction(id, gameID)
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
@@ -90,6 +95,7 @@ func DeleteUserInteraction(c *fiber.Ctx) error {
 // GetUserKeywordPreferences handles GET /api/users/:id/keywords
 func GetUserKeywordPreferences(c *fiber.Ctx) error {
 	id := c.Params("id")
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.GetUserKeywordPreferences(id)
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
@@ -100,6 +106,7 @@ func GetUserKeywordPreferences(c *fiber.Ctx) error {
 // CreateUserKeywordPreference handles POST /api/users/:id/keywords
 func CreateUserKeywordPreference(c *fiber.Ctx) error {
 	id := c.Params("id")
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.CreateUserKeywordPreference(id, c.Body())
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
@@ -111,6 +118,7 @@ func CreateUserKeywordPreference(c *fiber.Ctx) error {
 func UpdateUserKeywordPreference(c *fiber.Ctx) error {
 	id := c.Params("id")
 	keywordID := c.Params("keywordId")
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.UpdateUserKeywordPreference(id, keywordID, c.Body())
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
@@ -122,6 +130,7 @@ func UpdateUserKeywordPreference(c *fiber.Ctx) error {
 func DeleteUserKeywordPreference(c *fiber.Ctx) error {
 	id := c.Params("id")
 	keywordID := c.Params("keywordId")
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.DeleteUserKeywordPreference(id, keywordID)
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
@@ -132,6 +141,7 @@ func DeleteUserKeywordPreference(c *fiber.Ctx) error {
 // GetUserPlatformPreferences handles GET /api/users/:id/platforms
 func GetUserPlatformPreferences(c *fiber.Ctx) error {
 	id := c.Params("id")
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.GetUserPlatformPreferences(id)
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
@@ -142,6 +152,7 @@ func GetUserPlatformPreferences(c *fiber.Ctx) error {
 // CreateUserPlatformPreference handles POST /api/users/:id/platforms
 func CreateUserPlatformPreference(c *fiber.Ctx) error {
 	id := c.Params("id")
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.CreateUserPlatformPreference(id, c.Body())
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
@@ -153,6 +164,7 @@ func CreateUserPlatformPreference(c *fiber.Ctx) error {
 func UpdateUserPlatformPreference(c *fiber.Ctx) error {
 	id := c.Params("id")
 	platformID := c.Params("platformId")
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.UpdateUserPlatformPreference(id, platformID, c.Body())
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
@@ -164,6 +176,7 @@ func UpdateUserPlatformPreference(c *fiber.Ctx) error {
 func DeleteUserPlatformPreference(c *fiber.Ctx) error {
 	id := c.Params("id")
 	platformID := c.Params("platformId")
+	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.DeleteUserPlatformPreference(id, platformID)
 	if err != nil {
 		return c.Status(502).JSON(fiber.Map{"error": err.Error()})

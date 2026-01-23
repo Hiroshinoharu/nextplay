@@ -13,12 +13,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Argon2id parameters for password hashing 
 const (
-	argonTime    = 1
-	argonMemory  = 64 * 1024
-	argonThreads = 4
-	argonKeyLen  = 32
-	saltLen      = 16
+	argonTime    = 1 // Number of iterations
+	argonMemory  = 64 * 1024 // 64 MB
+	argonThreads = 4 // Number of parallelism threads
+	argonKeyLen  = 32 // Length of the generated key
+	saltLen      = 16 // Length of the random salt
 )
 
 // HashPassword hashes the given password using Argon2id algorithm
@@ -88,16 +89,20 @@ func verifyBcrypt(password, stored string) (bool, error) {
 // verifyArgon2 checks an Argon2id hashed password
 func verifyArgon2(password, stored string) (bool, error) {
 	pepper := strings.TrimSpace(os.Getenv("PASSWORD_PEPPER"))
+	
+	// Append pepper if set
 	pw := password
 	if pepper != "" {
 		pw = pw + pepper
 	}
-
+	
+	// Split the stored hash into its components
 	parts := strings.Split(stored, "$")
 	if len(parts) != 6 {
 		return false, errors.New("invalid argon2 hash")
 	}
 
+	// Parse parameters
 	var mem uint32
 	var time uint32
 	var threads uint8
@@ -105,15 +110,19 @@ func verifyArgon2(password, stored string) (bool, error) {
 		return false, errors.New("invalid argon2 params")
 	}
 
+	// Decode salt
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
 		return false, errors.New("invalid argon2 salt")
 	}
+
+	// Decode hash
 	hash, err := base64.RawStdEncoding.DecodeString(parts[5])
 	if err != nil {
 		return false, errors.New("invalid argon2 hash")
 	}
 
+	// Compute the hash with the same parameters and compare 
 	calculated := argon2.IDKey([]byte(pw), salt, time, mem, threads, uint32(len(hash)))
 	if subtle.ConstantTimeCompare(hash, calculated) != 1 {
 		return false, nil

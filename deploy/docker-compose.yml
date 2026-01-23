@@ -32,6 +32,8 @@ services:
       dockerfile: services/user/Dockerfile # Build Dockerfile located in services/user
     ports:
       - "8083:8083"
+    env_file:
+      - env/user.env
     environment:
       CONFIG_FILE: /config/config.yaml
       PORT: "8083"

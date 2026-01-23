@@ -33,11 +33,13 @@ func CreateToken(userID int64) (string, error) {
 	}
 
 	now := time.Now()
+	// Define the token claims
 	claims := jwt.RegisteredClaims{
 		Subject:   strconv.FormatInt(userID, 10),
 		IssuedAt:  jwt.NewNumericDate(now),
 		ExpiresAt: jwt.NewNumericDate(now.Add(tokenTTL)),
 	}
+	// Create the token with claims and sign it using HS256 algorithm 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(key)
 }
