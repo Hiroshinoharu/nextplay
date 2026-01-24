@@ -14,6 +14,7 @@ type Game struct {
 	InvolvedCompanies []int `json:"involved_companies"`
 	Artworks         []int  `json:"artworks"`
 	Screenshots      []int  `json:"screenshots"`
+	Videos           []int  `json:"videos"`
 }
 
 // named represents a generic named entity from IGDB
@@ -34,4 +35,11 @@ type InvolvedCompany struct {
 type cover struct {
 	ID      int    `json:"id"`
 	ImageID string `json:"image_id"`
+}
+
+// GameVideo represents a video entry (trailer) in IGDB.
+type GameVideo struct {
+	ID      int    `json:"id"`
+	Name    string `json:"name"`
+	VideoID string `json:"video_id"`
 }

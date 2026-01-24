@@ -29,7 +29,7 @@ func GetAllGames() ([]models.Game, error) {
 		var genre sql.NullString
 		var publishers sql.NullString
 		var story sql.NullString
-		var coverImage []byte
+		var coverImage sql.NullString
 		err := rows.Scan(
 			&g.ID,
 			&g.Name,
@@ -58,9 +58,14 @@ func GetAllGames() ([]models.Game, error) {
 		if story.Valid {
 			g.Story = story.String
 		}
-		if len(coverImage) > 0 {
-			g.CoverImageURL = string(coverImage)
+		if coverImage.Valid {
+			g.CoverImageURL = coverImage.String
 		}
+		media, err := GetGameMedia(int(g.ID))
+		if err != nil {
+			return nil, err
+		}
+		g.Media = media
 		g.Platforms = []int64{}
 		g.Keywords = []int64{}
 		g.Franchises = []int64{}
@@ -86,7 +91,7 @@ func GetGameByID(id int) (*models.Game, error) {
 	var genre sql.NullString
 	var publishers sql.NullString
 	var story sql.NullString
-	var coverImage []byte
+	var coverImage sql.NullString
 	err := row.Scan(
 		&g.ID,
 		&g.Name,
@@ -119,9 +124,10 @@ func GetGameByID(id int) (*models.Game, error) {
 	if story.Valid {
 		g.Story = story.String
 	}
-	if len(coverImage) > 0 {
-		g.CoverImageURL = string(coverImage)
+	if coverImage.Valid {
+		g.CoverImageURL = coverImage.String
 	}
+	g.Media = []models.GameMedia{}
 	g.Platforms = []int64{}
 	g.Keywords = []int64{}
 	g.Franchises = []int64{}
@@ -217,6 +223,42 @@ func DeleteGame(id int) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+// GetGameMedia retrieves media rows for a given game.
+func GetGameMedia(gameID int) ([]models.GameMedia, error) {
+	rows, err := DB.Query(
+		`SELECT igdb_id, media_type, url, sort_order
+		 FROM game_media
+		 WHERE game_id = $1
+		 ORDER BY media_type, sort_order, igdb_id`,
+		gameID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	media := make([]models.GameMedia, 0)
+	for rows.Next() {
+		var item models.GameMedia
+		var igdbID sql.NullInt64
+		var sortOrder sql.NullInt64
+		if err := rows.Scan(&igdbID, &item.MediaType, &item.URL, &sortOrder); err != nil {
+			return nil, err
+		}
+		if igdbID.Valid {
+			item.IGDBID = igdbID.Int64
+		}
+		if sortOrder.Valid {
+			item.SortOrder = int(sortOrder.Int64)
+		}
+		media = append(media, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return media, nil
 }
 
 // GetGameRelations retrieves all related entity IDs for a given game

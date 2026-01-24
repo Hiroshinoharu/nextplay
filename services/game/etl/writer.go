@@ -1,141 +1,242 @@
 package main
 
 import (
-	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
+	"github.com/lib/pq"
 	"github.com/maxceban/nextplay/services/game/db"
-	"github.com/maxceban/nextplay/services/game/etl/igdb"
 )
 
-// ensureNamedRows ensures that rows exist in a table for the given names and returns a map of source IDs to database IDs.
-func ensureNamedRows(table, column string, source map[int]string) (map[int]int, error) {
+// upsertNamedRows bulk upserts rows with igdb_id and returns a map of igdb_id -> db_id.
+func upsertNamedRows(table, column string, source map[int]string) (map[int]int, error) {
 	out := make(map[int]int, len(source))
+	if len(source) == 0 {
+		return out, nil
+	}
+
+	ids := make([]int, 0, len(source))
+	names := make([]string, 0, len(source))
 	for igdbID, name := range source {
 		clean := strings.TrimSpace(sanitizeText(name))
 		if clean == "" {
 			continue
 		}
-		dbID, err := getOrCreateID(table, column, clean)
-		if err != nil {
+		ids = append(ids, igdbID)
+		names = append(names, clean)
+	}
+	if len(ids) == 0 {
+		return out, nil
+	}
+
+	idColumn := fmt.Sprintf("%s_id", table)
+	query := fmt.Sprintf(
+		`INSERT INTO %s (igdb_id, %s)
+		 SELECT * FROM UNNEST($1::int[], $2::text[])
+		 ON CONFLICT (igdb_id) DO UPDATE
+		 SET %s = EXCLUDED.%s
+		 RETURNING igdb_id, %s`,
+		table,
+		column,
+		column,
+		column,
+		idColumn,
+	)
+
+	rows, err := db.DB.Query(query, pq.Array(ids), pq.Array(names))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var igdbID, dbID int
+		if err := rows.Scan(&igdbID, &dbID); err != nil {
 			return nil, err
 		}
 		out[igdbID] = dbID
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
-// getOrCreateID retrieves the ID for a given value in a table, or creates it if it doesn't exist.
-func getOrCreateID(table, column, value string) (int, error) {
-	query := fmt.Sprintf("SELECT %s_id FROM %s WHERE %s = $1 LIMIT 1", table, table, column)
-	var existing int
-	if err := db.DB.QueryRow(query, value).Scan(&existing); err == nil {
-		return existing, nil
-	} else if err != sql.ErrNoRows {
-		return 0, err
-	}
-
-	insert := fmt.Sprintf("INSERT INTO %s (%s) VALUES ($1) RETURNING %s_id", table, column, table)
-	var inserted int
-	if err := db.DB.QueryRow(insert, value).Scan(&inserted); err != nil {
-		return 0, err
-	}
-	return inserted, nil
+type gameUpsertRow struct {
+	IGDBID        int     `json:"igdb_id"`
+	Name          string  `json:"game_name"`
+	Description   *string `json:"game_description"`
+	ReleaseDate   *string `json:"release_date"`
+	Genre         *string `json:"genre"`
+	Publishers    *string `json:"publishers"`
+	Story         *string `json:"story"`
+	CoverImageURL *string `json:"cover_image_url"`
 }
 
-// upsertGame inserts or updates a game record in the database and returns its ID.
-func upsertGame(game igdb.Game, genreNames map[int]string, publishersByGame map[int]string, coverURLByGame map[int]string) (int, error) {
-	gameName := strings.TrimSpace(sanitizeText(game.Name))
-	if gameName == "" {
-		return 0, fmt.Errorf("game name empty after sanitize")
-	}
-	var releaseDate *time.Time
-	if game.FirstReleaseDate > 0 {
-		timestamp := time.Unix(game.FirstReleaseDate, 0).UTC()
-		releaseDate = &timestamp
+// batchUpsertGames upserts games in a single statement and returns igdb_id -> game_id.
+func batchUpsertGames(rows []gameUpsertRow) (map[int]int, error) {
+	out := make(map[int]int, len(rows))
+	if len(rows) == 0 {
+		return out, nil
 	}
 
-	var existing int
-	selectQuery := `
-		SELECT game_id
-		FROM games
-		WHERE game_name = $1
-		  AND (
-			  ($2::date IS NULL AND release_date IS NULL)
-			  OR release_date = $2::date
-		  )
-		LIMIT 1;
-	`
-	publishers := emptyToNull(publishersByGame[game.ID])
-	coverURL := emptyToNull(coverURLByGame[game.ID])
-	if err := db.DB.QueryRow(selectQuery, gameName, releaseDate).Scan(&existing); err == nil {
-		if publishers != nil || coverURL != nil {
-			_, err := db.DB.Exec(
-				`UPDATE games
-				 SET publishers = COALESCE($2, publishers),
-				     cover_image_url = COALESCE($3, cover_image_url)
-				 WHERE game_id = $1`,
-				existing,
-				publishers,
-				coverURL,
+	payload, err := json.Marshal(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	query := `
+		WITH data AS (
+			SELECT * FROM jsonb_to_recordset($1::jsonb) AS x(
+				igdb_id int,
+				game_name text,
+				game_description text,
+				release_date date,
+				genre text,
+				publishers text,
+				story text,
+				cover_image_url text
 			)
-			if err != nil {
-				return 0, err
-			}
-		}
-		return existing, nil
-	} else if err != sql.ErrNoRows {
-		return 0, err
-	}
-
-	insert := `
-		INSERT INTO games (game_name, game_description, release_date, genre, publishers, story, cover_image_url)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING game_id;
+		)
+		INSERT INTO games (
+			igdb_id,
+			game_name,
+			game_description,
+			release_date,
+			genre,
+			publishers,
+			story,
+			cover_image_url
+		)
+		SELECT
+			igdb_id,
+			game_name,
+			game_description,
+			release_date,
+			genre,
+			publishers,
+			story,
+			cover_image_url
+		FROM data
+		ON CONFLICT (igdb_id) DO UPDATE
+		SET game_name = EXCLUDED.game_name,
+		    game_description = COALESCE(EXCLUDED.game_description, games.game_description),
+		    release_date = COALESCE(EXCLUDED.release_date, games.release_date),
+		    genre = COALESCE(EXCLUDED.genre, games.genre),
+		    publishers = COALESCE(EXCLUDED.publishers, games.publishers),
+		    story = COALESCE(EXCLUDED.story, games.story),
+		    cover_image_url = COALESCE(EXCLUDED.cover_image_url, games.cover_image_url)
+		RETURNING igdb_id, game_id;
 	`
 
-	var inserted int
-	if err := db.DB.QueryRow(
-		insert,
-		gameName,
-		emptyToNull(game.Summary),
-		releaseDate,
-		nullableNames(game.Genres, genreNames),
-		publishers,
-		emptyToNull(game.Storyline),
-		coverURL,
-	).Scan(&inserted); err != nil {
-		return 0, err
+	rowsResult, err := db.DB.Query(query, payload)
+	if err != nil {
+		return nil, err
 	}
-	return inserted, nil
+	defer rowsResult.Close()
+
+	for rowsResult.Next() {
+		var igdbID, gameID int
+		if err := rowsResult.Scan(&igdbID, &gameID); err != nil {
+			return nil, err
+		}
+		out[igdbID] = gameID
+	}
+	if err := rowsResult.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
-// ensureJoinRow ensures that a row exists in a join table for the given left and right IDs.
-func ensureJoinRow(table, leftCol, rightCol string, leftID, rightID int) error {
+// bulkInsertJoinPairs inserts many join rows in a single statement.
+func bulkInsertJoinPairs(table, leftCol, rightCol string, leftIDs, rightIDs []int) error {
+	if len(leftIDs) == 0 || len(rightIDs) == 0 || len(leftIDs) != len(rightIDs) {
+		return nil
+	}
 	query := fmt.Sprintf(
-		"SELECT 1 FROM %s WHERE %s = $1 AND %s = $2 LIMIT 1",
+		`INSERT INTO %s (%s, %s)
+		 SELECT * FROM UNNEST($1::int[], $2::int[])
+		 ON CONFLICT DO NOTHING`,
 		table,
 		leftCol,
 		rightCol,
 	)
-	var exists int
-	if err := db.DB.QueryRow(query, leftID, rightID).Scan(&exists); err == nil {
-		return nil
-	} else if err != sql.ErrNoRows {
-		return err
-	}
-
-	insert := fmt.Sprintf("INSERT INTO %s (%s, %s) VALUES ($1, $2)", table, leftCol, rightCol)
-	_, err := db.DB.Exec(insert, leftID, rightID)
+	_, err := db.DB.Exec(query, pq.Array(leftIDs), pq.Array(rightIDs))
 	return err
 }
 
-// nullableNames returns a comma-separated string of names for the given IDs.
-func nullableNames(ids []int, names map[int]string) interface{} {
-	if len(ids) == 0 || len(names) == 0 {
+// bulkInsertGameMedia inserts media rows in a single statement, skipping existing rows.
+func bulkInsertGameMedia(gameIDs, igdbIDs []int, mediaTypes, urls []string, sortOrders []int) error {
+	if len(gameIDs) == 0 {
 		return nil
+	}
+	if len(gameIDs) != len(igdbIDs) || len(gameIDs) != len(mediaTypes) || len(gameIDs) != len(urls) || len(gameIDs) != len(sortOrders) {
+		return fmt.Errorf("media slice length mismatch")
+	}
+
+	query := `
+		WITH input AS (
+			SELECT *
+			FROM UNNEST($1::int[], $2::int[], $3::text[], $4::text[], $5::int[])
+				AS u(game_id, igdb_id, media_type, url, sort_order)
+		),
+		dedup AS (
+			SELECT DISTINCT ON (game_id, media_type, igdb_id)
+				game_id, igdb_id, media_type, url, sort_order
+			FROM input
+			ORDER BY game_id, media_type, igdb_id, sort_order
+		)
+		INSERT INTO game_media (game_id, igdb_id, media_type, url, sort_order)
+		SELECT d.game_id, d.igdb_id, d.media_type, d.url, d.sort_order
+		FROM dedup d
+		LEFT JOIN game_media gm
+			ON gm.game_id = d.game_id
+		   AND gm.media_type = d.media_type
+		   AND gm.igdb_id = d.igdb_id
+		WHERE gm.media_id IS NULL
+	`
+
+	_, err := db.DB.Exec(query, pq.Array(gameIDs), pq.Array(igdbIDs), pq.Array(mediaTypes), pq.Array(urls), pq.Array(sortOrders))
+	return err
+}
+
+// bulkInsertGameCompaniesPairs inserts company roles for many games at once.
+func bulkInsertGameCompaniesPairs(gameIDs, companyIDs []int, isDevelopers, isPublishers []bool) error {
+	if len(gameIDs) == 0 || len(companyIDs) == 0 {
+		return nil
+	}
+	if len(gameIDs) != len(companyIDs) || len(gameIDs) != len(isDevelopers) || len(gameIDs) != len(isPublishers) {
+		return fmt.Errorf("company join slice length mismatch")
+	}
+
+	query := `
+		INSERT INTO game_companies (
+			game_id,
+			company_id,
+			is_developer,
+			is_publisher,
+			is_supporting_developer,
+			is_porting_developer
+		)
+		SELECT * FROM UNNEST($1::int[], $2::int[], $3::bool[], $4::bool[], $5::bool[], $6::bool[])
+		ON CONFLICT (game_id, company_id) DO UPDATE
+		SET is_developer = EXCLUDED.is_developer,
+		    is_publisher = EXCLUDED.is_publisher,
+		    is_supporting_developer = EXCLUDED.is_supporting_developer,
+		    is_porting_developer = EXCLUDED.is_porting_developer
+	`
+
+	falses := make([]bool, len(gameIDs))
+	_, err := db.DB.Exec(query, pq.Array(gameIDs), pq.Array(companyIDs), pq.Array(isDevelopers), pq.Array(isPublishers), pq.Array(falses), pq.Array(falses))
+	return err
+}
+
+
+
+func joinNames(ids []int, names map[int]string) string {
+	if len(ids) == 0 || len(names) == 0 {
+		return ""
 	}
 	parts := make([]string, 0, len(ids))
 	for _, id := range ids {
@@ -143,18 +244,15 @@ func nullableNames(ids []int, names map[int]string) interface{} {
 			parts = append(parts, name)
 		}
 	}
-	if len(parts) == 0 {
-		return nil
-	}
 	return strings.Join(parts, ",")
 }
 
-func emptyToNull(value string) interface{} {
-	value = strings.TrimSpace(sanitizeText(value))
-	if value == "" {
+func nullableString(value string) *string {
+	clean := strings.TrimSpace(sanitizeText(value))
+	if clean == "" {
 		return nil
 	}
-	return value
+	return &clean
 }
 
 // sanitizeText removes control characters from the input string
@@ -174,16 +272,4 @@ func sanitizeText(value string) string {
 		}
 		return r
 	}, value)
-}
-
-// gameExists checks if a game with the given ID exists in the database
-func gameExists(gameID int) (bool, error) {
-	var exists int
-	if err := db.DB.QueryRow("SELECT 1 FROM games WHERE game_id = $1", gameID).Scan(&exists); err == nil {
-		return true, nil
-	} else if err == sql.ErrNoRows {
-		return false, nil
-	} else {
-		return false, err
-	}
 }

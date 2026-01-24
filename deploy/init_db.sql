@@ -5,6 +5,8 @@
 -- ============================================================
 
 DROP TABLE IF EXISTS game_series CASCADE;
+DROP TABLE IF EXISTS game_media CASCADE;
+DROP TABLE IF EXISTS game_genre CASCADE;
 DROP TABLE IF EXISTS game_keywords CASCADE;
 DROP TABLE IF EXISTS game_franchise CASCADE;
 DROP TABLE IF EXISTS game_platform CASCADE;
@@ -14,6 +16,7 @@ DROP TABLE IF EXISTS user_keyword_preferences CASCADE;
 DROP TABLE IF EXISTS user_interactions CASCADE;
 DROP TABLE IF EXISTS app_user CASCADE;
 DROP TABLE IF EXISTS keyword CASCADE;
+DROP TABLE IF EXISTS genre CASCADE;
 DROP TABLE IF EXISTS games CASCADE;
 DROP TABLE IF EXISTS series CASCADE;
 DROP TABLE IF EXISTS platform CASCADE;
@@ -27,6 +30,8 @@ DROP TABLE IF EXISTS company CASCADE;
 -- ============================================================
 CREATE TABLE company (
     company_id        SERIAL PRIMARY KEY,
+    igdb_id           INT UNIQUE,
+    company_name      TEXT NOT NULL,
     company_logo      BYTEA,          -- image bytes for logo
     company_description TEXT,          -- overview of company
     country           TEXT,            -- studio origin
@@ -41,6 +46,7 @@ CREATE TABLE company (
 -- ============================================================
 CREATE TABLE franchise (
     franchise_id SERIAL PRIMARY KEY,
+    igdb_id      INT UNIQUE,
     name         TEXT
 );
 
@@ -50,9 +56,10 @@ CREATE TABLE franchise (
 -- ============================================================
 CREATE TABLE platform (
     platform_id   SERIAL PRIMARY KEY,
+    igdb_id       INT UNIQUE,
     platform_name TEXT,
     manufacturer  TEXT,
-    icon_url      BYTEA,       -- optional icon
+    icon_url      TEXT,       -- optional icon URL
     description   TEXT,
     product_url   TEXT
 );
@@ -63,7 +70,18 @@ CREATE TABLE platform (
 -- ============================================================
 CREATE TABLE series (
     series_id SERIAL PRIMARY KEY,
+    igdb_id   INT UNIQUE,
     name      TEXT
+);
+
+-- ============================================================
+-- TABLE: genre
+-- Purpose: IGDB genres
+-- ============================================================
+CREATE TABLE genre (
+    genre_id   SERIAL PRIMARY KEY,
+    igdb_id    INT UNIQUE,
+    genre_name TEXT
 );
 
 -- ============================================================
@@ -72,12 +90,13 @@ CREATE TABLE series (
 -- ============================================================
 CREATE TABLE games (
     game_id          SERIAL PRIMARY KEY,
+    igdb_id          INT UNIQUE,
     game_name        TEXT,
     game_description TEXT,
     release_date     DATE,
     genre            TEXT,        -- JSON array recommended later
     publishers       TEXT,
-    cover_image_url  BYTEA,       -- image bytes
+    cover_image_url  TEXT,       -- image URL
     story            TEXT
 );
 
@@ -87,6 +106,7 @@ CREATE TABLE games (
 -- ============================================================
 CREATE TABLE keyword (
     keyword_id   SERIAL PRIMARY KEY,
+    igdb_id      INT UNIQUE,
     keyword_name TEXT
 );
 
@@ -181,6 +201,19 @@ CREATE TABLE game_platform (
 );
 
 -- ============================================================
+-- TABLE: game_genre
+-- Purpose: Many-to-many table linking games and genres
+-- ============================================================
+CREATE TABLE game_genre (
+    game_id  INT NOT NULL,
+    genre_id INT NOT NULL,
+
+    PRIMARY KEY (game_id, genre_id),
+    FOREIGN KEY (game_id) REFERENCES games(game_id),
+    FOREIGN KEY (genre_id) REFERENCES genre(genre_id)
+);
+
+-- ============================================================
 -- TABLE: game_franchise
 -- Purpose: Many-to-many table linking games to franchises
 -- ============================================================
@@ -204,6 +237,21 @@ CREATE TABLE game_keywords (
     PRIMARY KEY (game_id, keyword_id),
     FOREIGN KEY (game_id) REFERENCES games(game_id),
     FOREIGN KEY (keyword_id) REFERENCES keyword(keyword_id)
+);
+
+-- ============================================================
+-- TABLE: game_media
+-- Purpose: Stores screenshots, artworks, trailers, etc.
+-- ============================================================
+CREATE TABLE game_media (
+    media_id   SERIAL PRIMARY KEY,
+    game_id    INT NOT NULL,
+    igdb_id    INT,
+    media_type TEXT NOT NULL, -- screenshot | artwork | trailer
+    url        TEXT NOT NULL,
+    sort_order INT,
+
+    FOREIGN KEY (game_id) REFERENCES games(game_id)
 );
 
 -- ============================================================

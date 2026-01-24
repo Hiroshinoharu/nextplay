@@ -30,7 +30,7 @@ func (client Client) FetchGames(maxGames int) ([]Game, error) {
 			limit = maxGames - offset
 		}
 		query := fmt.Sprintf(
-			"fields name,summary,first_release_date,genres,platforms,keywords,storyline,cover,involved_companies,artworks,screenshots; limit %d; offset %d; where name != null;",
+			"fields name,summary,first_release_date,genres,platforms,keywords,storyline,cover,involved_companies,artworks,screenshots,videos; limit %d; offset %d; where name != null;",
 			limit,
 			offset,
 		)
@@ -132,6 +132,34 @@ func (client Client) FetchImageIDs(endpoint string, ids []int) (map[int]string, 
 	return result, nil
 }
 
+// FetchGameVideos retrieves game video entries by their IDs.
+func (client Client) FetchGameVideos(ids []int) (map[int]GameVideo, error) {
+	if len(ids) == 0 {
+		return map[int]GameVideo{}, nil
+	}
+
+	result := make(map[int]GameVideo, len(ids))
+	for _, chunk := range chunkIDs(ids, 200) {
+		query := fmt.Sprintf("fields name,video_id; where id = (%s); limit %d;", joinIDs(chunk), len(chunk))
+		payload, err := client.post("/game_videos", query)
+		if err != nil {
+			return nil, err
+		}
+
+		var videos []GameVideo
+		if err := json.Unmarshal(payload, &videos); err != nil {
+			return nil, err
+		}
+		for _, item := range videos {
+			if item.ID > 0 && strings.TrimSpace(item.VideoID) != "" {
+				result[item.ID] = item
+			}
+		}
+	}
+	return result, nil
+}
+
+// Helper to perform POST requests to IGDB API
 func (client Client) post(endpoint, body string) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodPost, igdbBaseURL+endpoint, bytes.NewBufferString(body))
 	if err != nil {

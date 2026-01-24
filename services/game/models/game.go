@@ -11,6 +11,7 @@ type Game struct {
 	Publishers    string `json:"publishers"`
 	CoverImageURL string `json:"cover_image"`
 	Story         string `json:"story"`
+	Media         []GameMedia `json:"media"`
 
 	// Relationship lists (IDs only)
 	Platforms  []int64 `json:"platforms"`
@@ -18,6 +19,13 @@ type Game struct {
 	Franchises []int64 `json:"franchises"`
 	Companies  []int64 `json:"companies"`
 	Series     []int64 `json:"series"`
+}
+
+type GameMedia struct {
+	IGDBID    int64  `json:"igdb_id"`
+	MediaType string `json:"media_type"`
+	URL       string `json:"url"`
+	SortOrder int    `json:"sort_order"`
 }
 
 func (g Game) MarshalJSON() ([]byte, error) {
@@ -37,6 +45,9 @@ func (g Game) MarshalJSON() ([]byte, error) {
 	}
 	if alias.Series == nil {
 		alias.Series = []int64{}
+	}
+	if alias.Media == nil {
+		alias.Media = []GameMedia{}
 	}
 	return json.Marshal(alias)
 }
