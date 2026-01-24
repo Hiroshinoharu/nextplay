@@ -69,6 +69,8 @@ func main() {
 	genreIDs := collectIDs(games, func(game igdb.Game) []int { return game.Genres })
 	platformIDs := collectIDs(games, func(game igdb.Game) []int { return game.Platforms })
 	keywordIDs := collectIDs(games, func(game igdb.Game) []int { return game.Keywords })
+	
+	// Collect cover IDs
 	coverIDs := collectIDs(games, func(game igdb.Game) []int {
 		if game.CoverID > 0 {
 			return []int{game.CoverID}
@@ -76,6 +78,7 @@ func main() {
 		return nil
 	})
 	
+	// Collect involved company IDs
 	involvedCompanyIDs := collectIDs(games, func(game igdb.Game) []int { return game.InvolvedCompanies })
 	artworkIDs := collectIDs(games, func(game igdb.Game) []int { return game.Artworks })
 	screenshotIDs := collectIDs(games, func(game igdb.Game) []int { return game.Screenshots })
@@ -134,13 +137,18 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to upsert companies: ", err)
 	}
+
+	// Build auxiliary data
 	publishersByGame := buildPublishersByGame(games, involvedCompanies, companyNames)
 	coverURLByGame := buildCoverURLsByGame(games, coverImageIDs, artworkImageIDs, screenshotImageIDs)
 	logMissingGameFields(games, publishersByGame, coverURLByGame, genreNames)
 
+	// Prepare game upsert rows
 	gameRows := make([]gameUpsertRow, 0, len(games))
 	gameRowIndex := make(map[int]int, len(games))
 	duplicateRows := 0
+	
+	// mergeRow merges two gameUpsertRow entries, preferring non-empty fields from the incoming row.
 	mergeRow := func(existing, incoming gameUpsertRow) gameUpsertRow {
 		if existing.Name == "" && incoming.Name != "" {
 			existing.Name = incoming.Name
@@ -196,15 +204,18 @@ func main() {
 		gameRows = append(gameRows, row)
 	}
 
+	// Log deduplication info
 	if duplicateRows > 0 {
 		log.Printf("Deduplicated %d duplicate game rows by igdb_id", duplicateRows)
 	}
 
+	// Bulk upsert games
 	gameIDByIGDB, err := batchUpsertGames(gameRows)
 	if err != nil {
 		log.Fatal("Failed to bulk upsert games: ", err)
 	}
 
+	// Prepare join and media insertions
 	platformLeft := make([]int, 0, len(games)*4)
 	platformRight := make([]int, 0, len(games)*4)
 	keywordLeft := make([]int, 0, len(games)*6)

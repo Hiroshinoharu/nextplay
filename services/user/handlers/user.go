@@ -83,10 +83,27 @@ func DeleteUser(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database not initialized"})
 	}
 
-	_, err := db.DB.Exec(
-		"DELETE FROM app_user WHERE user_id = $1",
+	var deletedID int64
+	err := db.DB.QueryRow(
+		`WITH deleted_interactions AS (
+			DELETE FROM user_interactions WHERE user_id = $1
+		),
+		deleted_keywords AS (
+			DELETE FROM user_keyword_preferences WHERE user_id = $1
+		),
+		deleted_platforms AS (
+			DELETE FROM user_platform_preferences WHERE user_id = $1
+		),
+		deleted_user AS (
+			DELETE FROM app_user WHERE user_id = $1
+			RETURNING user_id
+		)
+		SELECT user_id FROM deleted_user`,
 		id,
-	)
+	).Scan(&deletedID)
+	if err == sql.ErrNoRows {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
+	}
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete user"})
 	}

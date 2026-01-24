@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // IGDB API base URL
@@ -161,28 +162,76 @@ func (client Client) FetchGameVideos(ids []int) (map[int]GameVideo, error) {
 
 // Helper to perform POST requests to IGDB API
 func (client Client) post(endpoint, body string) ([]byte, error) {
-	req, err := http.NewRequest(http.MethodPost, igdbBaseURL+endpoint, bytes.NewBufferString(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Client-ID", client.ClientID)
-	req.Header.Set("Authorization", "Bearer "+client.AccessToken)
-	req.Header.Set("Content-Type", "text/plain")
+	const maxRetries = 4
+	backoff := 250 * time.Millisecond
 
-	resp, err := client.HTTPClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		req, err := http.NewRequest(http.MethodPost, igdbBaseURL+endpoint, bytes.NewBufferString(body))
+		if err != nil {
+			return nil, err
+		}
 
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+		// Set required headers
+		req.Header.Set("Client-ID", client.ClientID)
+		req.Header.Set("Authorization", "Bearer "+client.AccessToken)
+		req.Header.Set("Content-Type", "text/plain")
+
+		// Execute the request
+		resp, err := client.HTTPClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		// Read and close the response body
+		respBody, readErr := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+
+		// Handle rate limiting
+		if resp.StatusCode == http.StatusTooManyRequests {
+			if attempt == maxRetries {
+				return nil, fmt.Errorf("igdb error: %s", strings.TrimSpace(string(respBody)))
+			}
+			// Determine wait t
+			// Time before retrying
+			delay := backoff
+			if retryAfter := strings.TrimSpace(resp.Header.Get("Retry-After")); retryAfter != "" {
+				if seconds, err := strconv.Atoi(retryAfter); err == nil && seconds > 0 {
+					delay = time.Duration(seconds) * time.Second
+				} else if when, err := http.ParseTime(retryAfter); err == nil {
+					if until := time.Until(when); until > 0 {
+						delay = until
+					}
+				}
+			} else if reset := strings.TrimSpace(resp.Header.Get("X-RateLimit-Reset")); reset != "" {
+				if resetAt, err := strconv.ParseInt(reset, 10, 64); err == nil && resetAt > 0 {
+					var resetTime time.Time
+					if resetAt > 1_000_000_000_000 {
+						resetTime = time.UnixMilli(resetAt)
+					} else {
+						resetTime = time.Unix(resetAt, 0)
+					}
+					if until := time.Until(resetTime); until > 0 {
+						delay = until
+					}
+				}
+			}
+			time.Sleep(delay)
+			backoff *= 2
+			if backoff > 5*time.Second {
+				backoff = 5 * time.Second
+			}
+			continue
+		}
+
+		if resp.StatusCode >= 300 {
+			return nil, fmt.Errorf("igdb error: %s", strings.TrimSpace(string(respBody)))
+		}
+		return respBody, nil
 	}
-	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("igdb error: %s", strings.TrimSpace(string(respBody)))
-	}
-	return respBody, nil
+
+	return nil, fmt.Errorf("igdb error: exhausted retries")
 }
 
 // chunkIDs splits a slice of integers into chunks of specified size
