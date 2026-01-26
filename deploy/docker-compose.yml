@@ -72,26 +72,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-  
-  #-------------------------------------------------------
-  # GAME ETL SERVICE (Go)
-  #-------------------------------------------------------
-  game-etl:
-    build:
-      context: ..
-      dockerfile: services/game/Dockerfile
-    env_file:
-      - env/game.env
-    environment:
-      CONFIG_FILE: /config/config.yaml
-    volumes:
-      - ./config/config.yaml:/config/config.yaml:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command: ["go", "run", "./etl"]
-    profiles: ["etl"]
-    restart: "no"
+
   # -------------------------------------------------------
   #  RECOMMENDER SERVICE (Python FastAPI)
   # -------------------------------------------------------

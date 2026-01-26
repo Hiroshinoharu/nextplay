@@ -6,20 +6,23 @@ import (
 	"github.com/maxceban/nextplay/services/game/models"
 )
 
-// GetAllGames retrieves all games from the database
-func GetAllGames() ([]models.Game, error) {
+// GetGames retrieves a page of games from the database.
+// Use includeMedia for detail-heavy responses; it is off by default for speed.
+func GetGames(limit, offset int, includeMedia bool) ([]models.Game, error) {
 	query := `
 		SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url
-		FROM games;
+		FROM games
+		ORDER BY game_id
+		LIMIT $1 OFFSET $2;
 	`
 
-	rows, err := DB.Query(query)
+	rows, err := DB.Query(query, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var games []models.Game
+	games := make([]models.Game, 0, limit)
 
 	// Iterate over the rows and scan into Game structs
 	for rows.Next() {
@@ -61,11 +64,15 @@ func GetAllGames() ([]models.Game, error) {
 		if coverImage.Valid {
 			g.CoverImageURL = coverImage.String
 		}
-		media, err := GetGameMedia(int(g.ID))
-		if err != nil {
-			return nil, err
+		if includeMedia {
+			media, err := GetGameMedia(int(g.ID))
+			if err != nil {
+				return nil, err
+			}
+			g.Media = media
+		} else {
+			g.Media = []models.GameMedia{}
 		}
-		g.Media = media
 		g.Platforms = []int64{}
 		g.Keywords = []int64{}
 		g.Franchises = []int64{}
@@ -74,6 +81,11 @@ func GetAllGames() ([]models.Game, error) {
 		games = append(games, g)
 	}
 	return games, nil
+}
+
+// GetAllGames returns a default-sized page for backward compatibility.
+func GetAllGames() ([]models.Game, error) {
+	return GetGames(50, 0, false)
 }
 
 // GetGameByID retrieves a game by its ID
