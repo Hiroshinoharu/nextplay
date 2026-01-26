@@ -9,9 +9,22 @@ import (
 	"github.com/maxceban/nextplay/services/game/models"
 )
 
-// GET /api/games - retrieves all games
+// GET /api/games - retrieves a paged list of games
 func GetAllGames(c *fiber.Ctx) error {
-	games, err := db.GetAllGames()
+	limit := c.QueryInt("limit", 50)
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	offset := c.QueryInt("offset", 0)
+	if offset < 0 {
+		offset = 0
+	}
+	includeMedia := c.Query("include_media") == "true" || c.Query("include_media") == "1"
+
+	games, err := db.GetGames(limit, offset, includeMedia)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
