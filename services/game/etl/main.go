@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -18,6 +20,12 @@ import (
 
 // main is the entry point for the ETL process
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func run() error {
 	envPath, err := findEnvFile("deploy/env/game.env")
 	if err != nil {
 		log.Println("No env file loaded:", err)
@@ -29,13 +37,13 @@ func main() {
 		DatabaseURL: "postgres://nextplay:nextplay@localhost:5432/nextplay?sslmode=disable",
 	})
 	if err != nil {
-		log.Fatal("Failed to load config: ", err)
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
 	clientID := strings.TrimSpace(os.Getenv("IGDB_CLIENT_ID"))
 	accessToken := strings.TrimSpace(os.Getenv("IGDB_ACCESS_TOKEN"))
 	if clientID == "" || accessToken == "" {
-		log.Fatal("IGDB_CLIENT_ID and IGDB_ACCESS_TOKEN must be set")
+		return errors.New("IGDB_CLIENT_ID and IGDB_ACCESS_TOKEN must be set")
 	}
 
 	// Connect to the database
@@ -44,12 +52,15 @@ func main() {
 		dbURL = local
 	}
 	if err := db.Connect(dbURL); err != nil {
-		log.Fatal("Failed to connect to DB: ", err)
+		return fmt.Errorf("failed to connect to DB: %w", err)
 	}
 
 	maxGames := 300
 	if raw := strings.TrimSpace(os.Getenv("IGDB_MAX_GAMES")); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			log.Printf("Invalid IGDB_MAX_GAMES=%q, using default %d", raw, maxGames)
+		} else {
 			maxGames = parsed
 		}
 	}
@@ -63,13 +74,13 @@ func main() {
 
 	games, err := client.FetchGames(maxGames)
 	if err != nil {
-		log.Fatal("Failed to fetch games: ", err)
+		return fmt.Errorf("failed to fetch games: %w", err)
 	}
 
 	genreIDs := collectIDs(games, func(game igdb.Game) []int { return game.Genres })
 	platformIDs := collectIDs(games, func(game igdb.Game) []int { return game.Platforms })
 	keywordIDs := collectIDs(games, func(game igdb.Game) []int { return game.Keywords })
-	
+
 	// Collect cover IDs
 	coverIDs := collectIDs(games, func(game igdb.Game) []int {
 		if game.CoverID > 0 {
@@ -77,65 +88,140 @@ func main() {
 		}
 		return nil
 	})
-	
+
 	// Collect involved company IDs
 	involvedCompanyIDs := collectIDs(games, func(game igdb.Game) []int { return game.InvolvedCompanies })
 	artworkIDs := collectIDs(games, func(game igdb.Game) []int { return game.Artworks })
 	screenshotIDs := collectIDs(games, func(game igdb.Game) []int { return game.Screenshots })
 	videoIDs := collectIDs(games, func(game igdb.Game) []int { return game.Videos })
 
-	genreNames, err := client.FetchNamed("/genres", genreIDs)
-	if err != nil {
-		log.Fatal("Failed to fetch genres: ", err)
-	}
-	platformNames, err := client.FetchNamed("/platforms", platformIDs)
-	if err != nil {
-		log.Fatal("Failed to fetch platforms: ", err)
-	}
-	keywordNames, err := client.FetchNamed("/keywords", keywordIDs)
-	if err != nil {
-		log.Fatal("Failed to fetch keywords: ", err)
-	}
-	involvedCompanies, err := client.FetchInvolvedCompanies(involvedCompanyIDs)
-	if err != nil {
-		log.Fatal("Failed to fetch involved companies: ", err)
-	}
-	coverImageIDs, err := client.FetchImageIDs("/covers", coverIDs)
-	if err != nil {
-		log.Fatal("Failed to fetch covers: ", err)
-	}
-	artworkImageIDs, err := client.FetchImageIDs("/artworks", artworkIDs)
-	if err != nil {
-		log.Fatal("Failed to fetch artworks: ", err)
-	}
-	screenshotImageIDs, err := client.FetchImageIDs("/screenshots", screenshotIDs)
-	if err != nil {
-		log.Fatal("Failed to fetch screenshots: ", err)
-	}
-	videoEntries, err := client.FetchGameVideos(videoIDs)
-	if err != nil {
-		log.Fatal("Failed to fetch videos: ", err)
-	}
-	companyNames, err := client.FetchNamed("/companies", collectCompanyIDs(involvedCompanies))
-	if err != nil {
-		log.Fatal("Failed to fetch companies: ", err)
+	genreNames := map[int]string{}
+	platformNames := map[int]string{}
+	keywordNames := map[int]string{}
+	involvedCompanies := map[int]igdb.InvolvedCompany{}
+	coverImageIDs := map[int]string{}
+	artworkImageIDs := map[int]string{}
+	screenshotImageIDs := map[int]string{}
+	videoEntries := map[int]igdb.GameVideo{}
+
+	var fetchErr error
+	var fetchMu sync.Mutex
+	setFetchErr := func(context string, err error) {
+		if err == nil {
+			return
+		}
+		fetchMu.Lock()
+		if fetchErr == nil {
+			fetchErr = fmt.Errorf("%s: %w", context, err)
+		}
+		fetchMu.Unlock()
 	}
 
-	platformDBIDs, err := upsertNamedRows("platform", "platform_name", platformNames)
-	if err != nil {
-		log.Fatal("Failed to upsert platforms: ", err)
+	var wg sync.WaitGroup
+	fetch := func(name string, fn func() error) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := fn(); err != nil {
+				setFetchErr(name, err)
+			}
+		}()
 	}
-	keywordDBIDs, err := upsertNamedRows("keyword", "keyword_name", keywordNames)
-	if err != nil {
-		log.Fatal("Failed to upsert keywords: ", err)
+
+	if len(genreIDs) > 0 {
+		fetch("fetch genres", func() error {
+			var err error
+			genreNames, err = client.FetchNamed("/genres", genreIDs)
+			return err
+		})
 	}
-	genreDBIDs, err := upsertNamedRows("genre", "genre_name", genreNames)
-	if err != nil {
-		log.Fatal("Failed to upsert genres: ", err)
+	if len(platformIDs) > 0 {
+		fetch("fetch platforms", func() error {
+			var err error
+			platformNames, err = client.FetchNamed("/platforms", platformIDs)
+			return err
+		})
 	}
-	companyDBIDs, err := upsertNamedRows("company", "company_name", companyNames)
+	if len(keywordIDs) > 0 {
+		fetch("fetch keywords", func() error {
+			var err error
+			keywordNames, err = client.FetchNamed("/keywords", keywordIDs)
+			return err
+		})
+	}
+	if len(involvedCompanyIDs) > 0 {
+		fetch("fetch involved companies", func() error {
+			var err error
+			involvedCompanies, err = client.FetchInvolvedCompanies(involvedCompanyIDs)
+			return err
+		})
+	}
+	if len(coverIDs) > 0 {
+		fetch("fetch covers", func() error {
+			var err error
+			coverImageIDs, err = client.FetchImageIDs("/covers", coverIDs)
+			return err
+		})
+	}
+	if len(artworkIDs) > 0 {
+		fetch("fetch artworks", func() error {
+			var err error
+			artworkImageIDs, err = client.FetchImageIDs("/artworks", artworkIDs)
+			return err
+		})
+	}
+	if len(screenshotIDs) > 0 {
+		fetch("fetch screenshots", func() error {
+			var err error
+			screenshotImageIDs, err = client.FetchImageIDs("/screenshots", screenshotIDs)
+			return err
+		})
+	}
+	if len(videoIDs) > 0 {
+		fetch("fetch videos", func() error {
+			var err error
+			videoEntries, err = client.FetchGameVideos(videoIDs)
+			return err
+		})
+	}
+
+	wg.Wait()
+	if fetchErr != nil {
+		return fetchErr
+	}
+
+	companyNames, err := client.FetchNamed("/companies", collectCompanyIDs(involvedCompanies))
 	if err != nil {
-		log.Fatal("Failed to upsert companies: ", err)
+		return fmt.Errorf("failed to fetch companies: %w", err)
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if committed {
+			return
+		}
+		_ = tx.Rollback()
+	}()
+
+	platformDBIDs, err := upsertNamedRows(tx, "platform", "platform_name", platformNames)
+	if err != nil {
+		return fmt.Errorf("failed to upsert platforms: %w", err)
+	}
+	keywordDBIDs, err := upsertNamedRows(tx, "keyword", "keyword_name", keywordNames)
+	if err != nil {
+		return fmt.Errorf("failed to upsert keywords: %w", err)
+	}
+	genreDBIDs, err := upsertNamedRows(tx, "genre", "genre_name", genreNames)
+	if err != nil {
+		return fmt.Errorf("failed to upsert genres: %w", err)
+	}
+	companyDBIDs, err := upsertNamedRows(tx, "company", "company_name", companyNames)
+	if err != nil {
+		return fmt.Errorf("failed to upsert companies: %w", err)
 	}
 
 	// Build auxiliary data
@@ -147,7 +233,7 @@ func main() {
 	gameRows := make([]gameUpsertRow, 0, len(games))
 	gameRowIndex := make(map[int]int, len(games))
 	duplicateRows := 0
-	
+
 	// mergeRow merges two gameUpsertRow entries, preferring non-empty fields from the incoming row.
 	mergeRow := func(existing, incoming gameUpsertRow) gameUpsertRow {
 		if existing.Name == "" && incoming.Name != "" {
@@ -210,9 +296,9 @@ func main() {
 	}
 
 	// Bulk upsert games
-	gameIDByIGDB, err := batchUpsertGames(gameRows)
+	gameIDByIGDB, err := batchUpsertGames(tx, gameRows)
 	if err != nil {
-		log.Fatal("Failed to bulk upsert games: ", err)
+		return fmt.Errorf("failed to bulk upsert games: %w", err)
 	}
 
 	// Prepare join and media insertions
@@ -350,25 +436,28 @@ func main() {
 	}
 
 	// Bulk insert joins and media
-	if err := bulkInsertJoinPairs("game_platform", "game_id", "platform_id", platformLeft, platformRight); err != nil {
-		log.Printf("Failed to bulk link platforms: %v", err)
+	if err := bulkInsertJoinPairs(tx, "game_platform", "game_id", "platform_id", platformLeft, platformRight); err != nil {
+		return fmt.Errorf("failed to bulk link platforms: %w", err)
 	}
-	// Bulk insert joins and media
-	if err := bulkInsertJoinPairs("game_keywords", "game_id", "keyword_id", keywordLeft, keywordRight); err != nil {
-		log.Printf("Failed to bulk link keywords: %v", err)
+	if err := bulkInsertJoinPairs(tx, "game_keywords", "game_id", "keyword_id", keywordLeft, keywordRight); err != nil {
+		return fmt.Errorf("failed to bulk link keywords: %w", err)
 	}
-	// Bulk insert joins and media
-	if err := bulkInsertJoinPairs("game_genre", "game_id", "genre_id", genreLeft, genreRight); err != nil {
-		log.Printf("Failed to bulk link genres: %v", err)
+	if err := bulkInsertJoinPairs(tx, "game_genre", "game_id", "genre_id", genreLeft, genreRight); err != nil {
+		return fmt.Errorf("failed to bulk link genres: %w", err)
 	}
-	// Bulk insert joins and media
-	if err := bulkInsertGameCompaniesPairs(companyGameIDs, companyIDs, companyIsDeveloper, companyIsPublisher); err != nil {
-		log.Printf("Failed to bulk link companies: %v", err)
+	if err := bulkInsertGameCompaniesPairs(tx, companyGameIDs, companyIDs, companyIsDeveloper, companyIsPublisher); err != nil {
+		return fmt.Errorf("failed to bulk link companies: %w", err)
 	}
-	if err := bulkInsertGameMedia(mediaGameIDs, mediaIgdbIDs, mediaTypes, mediaURLs, mediaSortOrders); err != nil {
-		log.Printf("Failed to bulk insert media: %v", err)
+	if err := bulkInsertGameMedia(tx, mediaGameIDs, mediaIgdbIDs, mediaTypes, mediaURLs, mediaSortOrders); err != nil {
+		return fmt.Errorf("failed to bulk insert media: %w", err)
 	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	committed = true
 	log.Println("ETL process completed successfully")
+	return nil
 }
 
 // collectIDs extracts unique IDs from a slice of games using the provided getter function.

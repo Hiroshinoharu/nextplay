@@ -1,16 +1,23 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/lib/pq"
-	"github.com/maxceban/nextplay/services/game/db"
 )
 
+// DBTX exposes the query methods needed by the ETL writers.
+// *sql.DB and *sql.Tx both satisfy this interface.
+type DBTX interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	Query(query string, args ...any) (*sql.Rows, error)
+}
+
 // upsertNamedRows bulk upserts rows with igdb_id and returns a map of igdb_id -> db_id.
-func upsertNamedRows(table, column string, source map[int]string) (map[int]int, error) {
+func upsertNamedRows(tx DBTX, table, column string, source map[int]string) (map[int]int, error) {
 	out := make(map[int]int, len(source))
 	if len(source) == 0 {
 		return out, nil
@@ -44,7 +51,7 @@ func upsertNamedRows(table, column string, source map[int]string) (map[int]int, 
 		idColumn,
 	)
 
-	rows, err := db.DB.Query(query, pq.Array(ids), pq.Array(names))
+	rows, err := tx.Query(query, pq.Array(ids), pq.Array(names))
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +82,7 @@ type gameUpsertRow struct {
 }
 
 // batchUpsertGames upserts games in a single statement and returns igdb_id -> game_id.
-func batchUpsertGames(rows []gameUpsertRow) (map[int]int, error) {
+func batchUpsertGames(tx DBTX, rows []gameUpsertRow) (map[int]int, error) {
 	out := make(map[int]int, len(rows))
 	if len(rows) == 0 {
 		return out, nil
@@ -130,7 +137,7 @@ func batchUpsertGames(rows []gameUpsertRow) (map[int]int, error) {
 		RETURNING igdb_id, game_id;
 	`
 
-	rowsResult, err := db.DB.Query(query, payload)
+	rowsResult, err := tx.Query(query, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +157,7 @@ func batchUpsertGames(rows []gameUpsertRow) (map[int]int, error) {
 }
 
 // bulkInsertJoinPairs inserts many join rows in a single statement.
-func bulkInsertJoinPairs(table, leftCol, rightCol string, leftIDs, rightIDs []int) error {
+func bulkInsertJoinPairs(tx DBTX, table, leftCol, rightCol string, leftIDs, rightIDs []int) error {
 	if len(leftIDs) == 0 || len(rightIDs) == 0 || len(leftIDs) != len(rightIDs) {
 		return nil
 	}
@@ -162,12 +169,12 @@ func bulkInsertJoinPairs(table, leftCol, rightCol string, leftIDs, rightIDs []in
 		leftCol,
 		rightCol,
 	)
-	_, err := db.DB.Exec(query, pq.Array(leftIDs), pq.Array(rightIDs))
+	_, err := tx.Exec(query, pq.Array(leftIDs), pq.Array(rightIDs))
 	return err
 }
 
 // bulkInsertGameMedia inserts media rows in a single statement, skipping existing rows.
-func bulkInsertGameMedia(gameIDs, igdbIDs []int, mediaTypes, urls []string, sortOrders []int) error {
+func bulkInsertGameMedia(tx DBTX, gameIDs, igdbIDs []int, mediaTypes, urls []string, sortOrders []int) error {
 	if len(gameIDs) == 0 {
 		return nil
 	}
@@ -197,12 +204,12 @@ func bulkInsertGameMedia(gameIDs, igdbIDs []int, mediaTypes, urls []string, sort
 		WHERE gm.media_id IS NULL
 	`
 
-	_, err := db.DB.Exec(query, pq.Array(gameIDs), pq.Array(igdbIDs), pq.Array(mediaTypes), pq.Array(urls), pq.Array(sortOrders))
+	_, err := tx.Exec(query, pq.Array(gameIDs), pq.Array(igdbIDs), pq.Array(mediaTypes), pq.Array(urls), pq.Array(sortOrders))
 	return err
 }
 
 // bulkInsertGameCompaniesPairs inserts company roles for many games at once.
-func bulkInsertGameCompaniesPairs(gameIDs, companyIDs []int, isDevelopers, isPublishers []bool) error {
+func bulkInsertGameCompaniesPairs(tx DBTX, gameIDs, companyIDs []int, isDevelopers, isPublishers []bool) error {
 	if len(gameIDs) == 0 || len(companyIDs) == 0 {
 		return nil
 	}
@@ -228,11 +235,9 @@ func bulkInsertGameCompaniesPairs(gameIDs, companyIDs []int, isDevelopers, isPub
 	`
 
 	falses := make([]bool, len(gameIDs))
-	_, err := db.DB.Exec(query, pq.Array(gameIDs), pq.Array(companyIDs), pq.Array(isDevelopers), pq.Array(isPublishers), pq.Array(falses), pq.Array(falses))
+	_, err := tx.Exec(query, pq.Array(gameIDs), pq.Array(companyIDs), pq.Array(isDevelopers), pq.Array(isPublishers), pq.Array(falses), pq.Array(falses))
 	return err
 }
-
-
 
 func joinNames(ids []int, names map[int]string) string {
 	if len(ids) == 0 || len(names) == 0 {
