@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,11 +20,48 @@ type Client struct {
 	ClientID    string
 	AccessToken string
 	HTTPClient  *http.Client
+
+	// Optional throttling controls to avoid IGDB rate limiting.
+	MaxConcurrent int
+	MinInterval   time.Duration
+
+	limiterOnce sync.Once
+	semaphore   chan struct{}
+	ticker      *time.Ticker
 }
 
+func (client *Client) initLimiter() {
+	maxConcurrent := client.MaxConcurrent
+	if maxConcurrent <= 0 {
+		maxConcurrent = 2
+	}
+	minInterval := client.MinInterval
+	if minInterval <= 0 {
+		minInterval = 250 * time.Millisecond
+	}
+	client.semaphore = make(chan struct{}, maxConcurrent)
+	if minInterval > 0 {
+		client.ticker = time.NewTicker(minInterval)
+	}
+}
+
+func (client *Client) acquire() func() {
+	client.limiterOnce.Do(client.initLimiter)
+	if client.semaphore != nil {
+		client.semaphore <- struct{}{}
+	}
+	if client.ticker != nil {
+		<-client.ticker.C
+	}
+	return func() {
+		if client.semaphore != nil {
+			<-client.semaphore
+		}
+	}
+}
 
 // FetchGames retrieves a list of games from IGDB up to the specified maximum number
-func (client Client) FetchGames(maxGames int) ([]Game, error) {
+func (client *Client) FetchGames(maxGames int) ([]Game, error) {
 	var games []Game
 	limit := 50
 	for offset := 0; offset < maxGames; offset += limit {
@@ -53,7 +91,7 @@ func (client Client) FetchGames(maxGames int) ([]Game, error) {
 }
 
 // FetchNamed retrieves named entities (like genres, platforms, keywords) by their IDs
-func (client Client) FetchNamed(endpoint string, ids []int) (map[int]string, error) {
+func (client *Client) FetchNamed(endpoint string, ids []int) (map[int]string, error) {
 	if len(ids) == 0 {
 		return map[int]string{}, nil
 	}
@@ -80,7 +118,7 @@ func (client Client) FetchNamed(endpoint string, ids []int) (map[int]string, err
 }
 
 // FetchInvolvedCompanies retrieves involved companies by their IDs.
-func (client Client) FetchInvolvedCompanies(ids []int) (map[int]InvolvedCompany, error) {
+func (client *Client) FetchInvolvedCompanies(ids []int) (map[int]InvolvedCompany, error) {
 	if len(ids) == 0 {
 		return map[int]InvolvedCompany{}, nil
 	}
@@ -107,7 +145,7 @@ func (client Client) FetchInvolvedCompanies(ids []int) (map[int]InvolvedCompany,
 }
 
 // FetchImageIDs retrieves image IDs for a given IGDB image endpoint.
-func (client Client) FetchImageIDs(endpoint string, ids []int) (map[int]string, error) {
+func (client *Client) FetchImageIDs(endpoint string, ids []int) (map[int]string, error) {
 	if len(ids) == 0 {
 		return map[int]string{}, nil
 	}
@@ -134,7 +172,7 @@ func (client Client) FetchImageIDs(endpoint string, ids []int) (map[int]string, 
 }
 
 // FetchGameVideos retrieves game video entries by their IDs.
-func (client Client) FetchGameVideos(ids []int) (map[int]GameVideo, error) {
+func (client *Client) FetchGameVideos(ids []int) (map[int]GameVideo, error) {
 	if len(ids) == 0 {
 		return map[int]GameVideo{}, nil
 	}
@@ -161,9 +199,13 @@ func (client Client) FetchGameVideos(ids []int) (map[int]GameVideo, error) {
 }
 
 // Helper to perform POST requests to IGDB API
-func (client Client) post(endpoint, body string) ([]byte, error) {
+func (client *Client) post(endpoint, body string) ([]byte, error) {
 	const maxRetries = 4
 	backoff := 250 * time.Millisecond
+	httpClient := client.HTTPClient
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		req, err := http.NewRequest(http.MethodPost, igdbBaseURL+endpoint, bytes.NewBufferString(body))
@@ -177,7 +219,9 @@ func (client Client) post(endpoint, body string) ([]byte, error) {
 		req.Header.Set("Content-Type", "text/plain")
 
 		// Execute the request
-		resp, err := client.HTTPClient.Do(req)
+		release := client.acquire()
+		resp, err := httpClient.Do(req)
+		release()
 		if err != nil {
 			return nil, err
 		}

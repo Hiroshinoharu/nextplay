@@ -66,10 +66,33 @@ func run() error {
 	}
 	log.Printf("Extracting %d games from IGDB", maxGames)
 
+	rps := 4
+	if raw := strings.TrimSpace(os.Getenv("IGDB_RPS")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			log.Printf("Invalid IGDB_RPS=%q, using default %d", raw, rps)
+		} else {
+			rps = parsed
+		}
+	}
+	maxConcurrent := 2
+	if raw := strings.TrimSpace(os.Getenv("IGDB_MAX_CONCURRENT")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			log.Printf("Invalid IGDB_MAX_CONCURRENT=%q, using default %d", raw, maxConcurrent)
+		} else {
+			maxConcurrent = parsed
+		}
+	}
+	minInterval := time.Second / time.Duration(rps)
+	log.Printf("IGDB rate limit: %d rps, max concurrent=%d", rps, maxConcurrent)
+
 	client := igdb.Client{
-		ClientID:    clientID,
-		AccessToken: accessToken,
-		HTTPClient:  &http.Client{Timeout: 30 * time.Second},
+		ClientID:      clientID,
+		AccessToken:   accessToken,
+		HTTPClient:    &http.Client{Timeout: 30 * time.Second},
+		MaxConcurrent: maxConcurrent,
+		MinInterval:   minInterval,
 	}
 
 	games, err := client.FetchGames(maxGames)
