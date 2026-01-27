@@ -7,20 +7,24 @@ import (
 	"github.com/maxceban/nextplay/services/game/db"
 )
 
+// GetGameCompanies retrieves companies associated with a specific game
 func GetGameCompanies(c *fiber.Ctx) error {
 	idParam := c.Params("id")
 
+	// Convert game ID from string to integer
 	gameID, err := strconv.Atoi(idParam)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid game ID"})
 	}
 
+	// Query the database for companies associated with the game
 	rows, err := db.DB.Query(`SELECT * FROM game_companies WHERE game_id=$1`, gameID)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	defer rows.Close()
 
+	// Define a struct to hold company data
 	type gameCompany struct {
 		GameID                int  `json:"game_id"`
 		CompanyID             int  `json:"company_id"`
@@ -30,6 +34,7 @@ func GetGameCompanies(c *fiber.Ctx) error {
 		IsPortingDeveloper    bool `json:"is_porting_developer"`
 	}
 
+	// Collect companies
 	companies := make([]gameCompany, 0)
 	for rows.Next() {
 		var company gameCompany
@@ -45,19 +50,25 @@ func GetGameCompanies(c *fiber.Ctx) error {
 		}
 		companies = append(companies, company)
 	}
+	// Check for errors from iterating over rows
 	if err := rows.Err(); err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	// Return the list of companies as JSON
 	return c.JSON(fiber.Map{
 		"game_id":   gameID,
 		"companies": companies,
 	})
 }
 
+// AddGameCompany associates a company with a specific game
 func AddGameCompany(c *fiber.Ctx) error {
+	
+	// Get game ID from URL parameters
 	idParam := c.Params("id")
 
+	// Convert game ID from string to integer
 	gameID, err := strconv.Atoi(idParam)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid game ID"})

@@ -25,6 +25,7 @@ type Client struct {
 	MaxConcurrent int
 	MinInterval   time.Duration
 
+	// internal fields for rate limiting
 	limiterOnce sync.Once
 	semaphore   chan struct{}
 	ticker      *time.Ticker

@@ -25,6 +25,7 @@ func main() {
 	}
 }
 
+// run executes the ETL process: it loads configuration, connects to the database,
 func run() error {
 	envPath, err := findEnvFile("deploy/env/game.env")
 	if err != nil {
@@ -84,9 +85,12 @@ func run() error {
 			maxConcurrent = parsed
 		}
 	}
+
+	// Initialize IGDB client with rate limiting settings
 	minInterval := time.Second / time.Duration(rps)
 	log.Printf("IGDB rate limit: %d rps, max concurrent=%d", rps, maxConcurrent)
 
+	// Create IGDB client struct
 	client := igdb.Client{
 		ClientID:      clientID,
 		AccessToken:   accessToken,
@@ -95,11 +99,13 @@ func run() error {
 		MinInterval:   minInterval,
 	}
 
+	// Fetch games
 	games, err := client.FetchGames(maxGames)
 	if err != nil {
 		return fmt.Errorf("failed to fetch games: %w", err)
 	}
 
+	// Gather auxiliary IDs
 	genreIDs := collectIDs(games, func(game igdb.Game) []int { return game.Genres })
 	platformIDs := collectIDs(games, func(game igdb.Game) []int { return game.Platforms })
 	keywordIDs := collectIDs(games, func(game igdb.Game) []int { return game.Keywords })
@@ -127,12 +133,17 @@ func run() error {
 	screenshotImageIDs := map[int]string{}
 	videoEntries := map[int]igdb.GameVideo{}
 
+	// Fetch auxiliary data concurrently
 	var fetchErr error
+	// Mutex to protect fetchErr writes (Mutex is more efficient than RWMutex here since writes are rare)
 	var fetchMu sync.Mutex
+	// setFetchErr sets the fetchErr if it is not already set
 	setFetchErr := func(context string, err error) {
+		// Early exit if no error
 		if err == nil {
 			return
 		}
+		// Protect concurrent access to fetchErr
 		fetchMu.Lock()
 		if fetchErr == nil {
 			fetchErr = fmt.Errorf("%s: %w", context, err)
@@ -140,9 +151,12 @@ func run() error {
 		fetchMu.Unlock()
 	}
 
+	// Use WaitGroup to wait for all fetches to complete
 	var wg sync.WaitGroup
+	// fetch starts a goroutine to execute the provided function and track its completion
 	fetch := func(name string, fn func() error) {
 		wg.Add(1)
+		// The goroutine executes the fetch function and captures any error
 		go func() {
 			defer wg.Done()
 			if err := fn(); err != nil {
@@ -151,6 +165,7 @@ func run() error {
 		}()
 	}
 
+	// Start fetching auxiliary data
 	if len(genreIDs) > 0 {
 		fetch("fetch genres", func() error {
 			var err error
@@ -158,6 +173,7 @@ func run() error {
 			return err
 		})
 	}
+	// Start fetching auxiliary data
 	if len(platformIDs) > 0 {
 		fetch("fetch platforms", func() error {
 			var err error
@@ -165,6 +181,7 @@ func run() error {
 			return err
 		})
 	}
+	// Start fetching auxiliary data
 	if len(keywordIDs) > 0 {
 		fetch("fetch keywords", func() error {
 			var err error
@@ -172,6 +189,7 @@ func run() error {
 			return err
 		})
 	}
+	// Start fetching auxiliary data
 	if len(involvedCompanyIDs) > 0 {
 		fetch("fetch involved companies", func() error {
 			var err error
@@ -179,6 +197,7 @@ func run() error {
 			return err
 		})
 	}
+	// Start fetching auxiliary data
 	if len(coverIDs) > 0 {
 		fetch("fetch covers", func() error {
 			var err error
@@ -186,6 +205,7 @@ func run() error {
 			return err
 		})
 	}
+	// Start fetching auxiliary data
 	if len(artworkIDs) > 0 {
 		fetch("fetch artworks", func() error {
 			var err error
@@ -193,6 +213,7 @@ func run() error {
 			return err
 		})
 	}
+	// Start fetching auxiliary data
 	if len(screenshotIDs) > 0 {
 		fetch("fetch screenshots", func() error {
 			var err error
@@ -200,6 +221,7 @@ func run() error {
 			return err
 		})
 	}
+	// Start fetching auxiliary data
 	if len(videoIDs) > 0 {
 		fetch("fetch videos", func() error {
 			var err error
@@ -208,21 +230,27 @@ func run() error {
 		})
 	}
 
+	// Wait for all fetches to complete
 	wg.Wait()
+	// Check if any fetch resulted in an error
 	if fetchErr != nil {
 		return fetchErr
 	}
 
+	// Begin database transaction
 	companyNames, err := client.FetchNamed("/companies", collectCompanyIDs(involvedCompanies))
 	if err != nil {
 		return fmt.Errorf("failed to fetch companies: %w", err)
 	}
 
+	// Begin transaction
 	tx, err := db.DB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
+	// Ensure transaction rollback on error
 	committed := false
+	// defer rollback if not committed
 	defer func() {
 		if committed {
 			return
@@ -230,6 +258,7 @@ func run() error {
 		_ = tx.Rollback()
 	}()
 
+	// Upsert auxiliary data
 	platformDBIDs, err := upsertNamedRows(tx, "platform", "platform_name", platformNames)
 	if err != nil {
 		return fmt.Errorf("failed to upsert platforms: %w", err)
@@ -282,6 +311,7 @@ func run() error {
 		}
 		return existing
 	}
+	// Build upsert rows, deduplicating by IGDB ID
 	for _, game := range games {
 		gameName := strings.TrimSpace(sanitizeText(game.Name))
 		if game.ID <= 0 || gameName == "" {
@@ -415,10 +445,12 @@ func run() error {
 			if !ok || entry.CompanyID <= 0 {
 				continue
 			}
+			// Find the DB company_id
 			dbID, ok := companyDBIDs[entry.CompanyID]
 			if !ok {
 				continue
 			}
+			// Avoid duplicate entries
 			key := [2]int{gameID, dbID}
 			if idx, exists := companyIndex[key]; exists {
 				if entry.Developer && !companyIsDeveloper[idx] {
@@ -429,6 +461,7 @@ func run() error {
 				}
 				continue
 			}
+			// New entry
 			companyIndex[key] = len(companyGameIDs)
 			companyGameIDs = append(companyGameIDs, gameID)
 			companyIDs = append(companyIDs, dbID)
@@ -475,9 +508,11 @@ func run() error {
 		return fmt.Errorf("failed to bulk insert media: %w", err)
 	}
 
+	// Commit the transaction
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
+	// Mark as committed
 	committed = true
 	log.Println("ETL process completed successfully")
 	return nil
@@ -486,6 +521,7 @@ func run() error {
 // collectIDs extracts unique IDs from a slice of games using the provided getter function.
 // It returns a slice of unique IDs.
 func collectIDs(games []igdb.Game, getter func(igdb.Game) []int) []int {
+	// Keeps track of intial ids
 	seen := make(map[int]struct{})
 	for _, game := range games {
 		for _, id := range getter(game) {
@@ -495,10 +531,14 @@ func collectIDs(games []igdb.Game, getter func(igdb.Game) []int) []int {
 			seen[id] = struct{}{}
 		}
 	}
+
+	// Convert the set of seen IDs to a slice
 	ids := make([]int, 0, len(seen))
 	for id := range seen {
 		ids = append(ids, id)
 	}
+
+	// Return the collected unique IDs
 	return ids
 }
 
