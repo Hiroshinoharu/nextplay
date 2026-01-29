@@ -141,13 +141,15 @@
 
 .hero__input {
   flex: 1;
-  min-width: 240px;
-  padding: 16px 20px;
+  width: min(180px, 100%);
+  min-width: 0;
+  max-width: 180px;
+  padding: 8px 10px;
   border-radius: 12px;
   border: none;
   background: rgba(255, 255, 255, 0.9);
   color: #0b141a;
-  font-size: 15px;
+  font-size: 12px;
 }
 
 .hero__button {
@@ -155,19 +157,20 @@
   color: #0b141a;
   border: none;
   border-radius: 999px;
-  padding: 16px 24px;
+  padding: 8px 12px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
   transition: background 0.2s ease, box-shadow 0.2s ease;
+  font-size: 12px;
 }
 
 .hero__button span {
   display: inline-flex;
-  width: 30px;
-  height: 30px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: #0b141a;
   color: #c7f000;
