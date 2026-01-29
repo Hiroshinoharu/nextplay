@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import Button from './components/Button'
 import Card from './components/card'
 
+// Define the structure of a game item based on expected API response fields
 type GameItem = {
   id: number
   name: string
@@ -17,14 +18,17 @@ type GameItem = {
   trailer_url?: string
 }
 
+// Determine the default base URL for the API from environment variables or fallback to localhost
 const DEFAULT_BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:8084').replace(/\/+$/, '')
 
+// Normalize cover image URLs to ensure they are absolute and use HTTPS
 const normalizeCoverUrl = (url?: string) => {
   if (!url) return null
   if (url.startsWith('//')) return `https:${url}`
   return url
 }
 
+// Parse release date strings into Date objects, returning null for invalid or missing dates
 const parseReleaseDate = (value?: string) => {
   if (!value) return null
   const parsed = new Date(value)
@@ -32,7 +36,9 @@ const parseReleaseDate = (value?: string) => {
   return parsed
 }
 
+// Convert standard YouTube URLs into embed URLs for iframe usage
 const toEmbedUrl = (value: string) => {
+  // Handle various YouTube URL formats
   if (!value) return null
   if (value.includes('youtube.com/watch')) {
     try {
@@ -43,6 +49,7 @@ const toEmbedUrl = (value: string) => {
       return value
     }
   }
+  // Shortened youtube links
   if (value.includes('youtu.be/')) {
     const id = value.split('youtu.be/')[1]?.split(/[?&]/)[0]
     return id ? `https://www.youtube.com/embed/${id}` : value
@@ -50,6 +57,7 @@ const toEmbedUrl = (value: string) => {
   return value
 }
 
+// Styles for horizontal scrolling rows and card items
 const horizontalRowStyle: CSSProperties = {
   display: 'flex',
   flexWrap: 'nowrap',
@@ -59,10 +67,12 @@ const horizontalRowStyle: CSSProperties = {
   paddingRight: '0.5rem',
 }
 
+// Individual card item style
 const cardItemStyle: CSSProperties = {
   flex: '0 0 200px',
 }
 
+// Style for ranking numbers on top of cards
 const rankStyle: CSSProperties = {
   position: 'absolute',
   left: '-0.5rem',
@@ -72,8 +82,11 @@ const rankStyle: CSSProperties = {
   color: '#475569',
 }
 
+// Main Game component handling game list and detail views
 function Game() {
+  // Router and state hooks
   const navigate = useNavigate()
+  // Get gameId from URL parameters
   const { gameId } = useParams()
   const [baseUrl] = useState<string>(DEFAULT_BASE_URL)
   const [error] = useState<string | null>(null)
@@ -85,17 +98,21 @@ function Game() {
   const [selectedGameLoading, setSelectedGameLoading] = useState<boolean>(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
+  // Determine if a valid gameId is present
   const parsedGameId = gameId ? Number(gameId) : null
   const hasGameId = parsedGameId !== null && !Number.isNaN(parsedGameId)
 
+  // Construct the games API URL using the base URL and memoization
   const gamesUrl = useMemo(() => {
     const trimmedBase = baseUrl.replace(/\/+$/, '')
     return `${trimmedBase}/api/games`
   }, [baseUrl])
 
+  // Function to load the list of games from the API
   const loadGames = async () => {
     setGamesLoading(true)
     setGamesError(null)
+    
     try {
       const responseValue = await fetch(gamesUrl)
       if (!responseValue.ok) {
@@ -119,6 +136,7 @@ function Game() {
   }
 
   useEffect(() => {
+    // Load the list of games when the gamesUrl changes
     loadGames()
   }, [gamesUrl])
 
@@ -548,7 +566,8 @@ function Game() {
         </section>
 
       </main>
-
+      
+      // Toast message for errors
       {toastMessage && (
         <div className="fixed right-4 top-4 z-50 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-100 shadow-lg">
           {toastMessage}

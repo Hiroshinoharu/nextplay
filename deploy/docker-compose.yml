@@ -13,6 +13,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro # Initialize DB with schema
+      - ./migrations:/docker-entrypoint-initdb.d/migrations/migrate_igdb_db.sql:ro # Run migrations on first startup
     ports:
       - "5432:5432" # Expose DB so you can connect from your host (DBeaver, psql, etc.)
     # Healthcheck ensures Postgres is fully ready before other services start
