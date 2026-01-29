@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Route, Routes, useNavigate } from 'react-router-dom'
 import './App.css'
 import Button from './components/Button'
@@ -92,6 +92,8 @@ type HomeProps = {
 const Home = ({ authUser, onSignOut }: HomeProps) => {
   // Define service cards for the home page
   const navigate = useNavigate()
+  const cardsRef = useRef<HTMLDivElement | null>(null)
+  const [activeDot, setActiveDot] = useState(0)
 
   // List of popular games to display as placeholders
   const popularGames = [
@@ -116,6 +118,50 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
         'https://www.halopedia.org/Special:FilePath/Fortnite-Stuff.jpg',
     },
   ]
+
+  const getCardMetrics = () => {
+    const container = cardsRef.current
+    if (!container) return null
+    const firstCard = container.querySelector<HTMLElement>('.popular__card')
+    if (!firstCard) return null
+    const styles = window.getComputedStyle(container)
+    const gapValue = styles.columnGap || styles.gap || '0'
+    const gap = Number.parseFloat(gapValue) || 0
+    const cardWidth = firstCard.getBoundingClientRect().width
+    return { container, cardWidth, gap }
+  }
+
+  const updateActiveDot = useCallback(() => {
+    const metrics = getCardMetrics()
+    if (!metrics) return
+    const { container, cardWidth, gap } = metrics
+    const step = cardWidth + gap
+    if (step === 0) return
+    const index = Math.round(container.scrollLeft / step)
+    const clamped = Math.max(0, Math.min(popularGames.length - 1, index))
+    setActiveDot(clamped)
+  }, [popularGames.length])
+
+  useEffect(() => {
+    const container = cardsRef.current
+    if (!container) return
+    let rafId = 0
+    const onScroll = () => {
+      if (rafId) return
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0
+        updateActiveDot()
+      })
+    }
+    updateActiveDot()
+    container.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', updateActiveDot)
+    return () => {
+      container.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', updateActiveDot)
+      if (rafId) window.cancelAnimationFrame(rafId)
+    }
+  }, [updateActiveDot])
 
   return (
     <div className="landing">
@@ -164,7 +210,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
             <button className="popular__arrow" type="button" aria-label="Previous games">
               &#8592;
             </button>
-            <div className="popular__cards">
+            <div className="popular__cards" ref={cardsRef}>
               {popularGames.map((game) => (
                 <div key={game.title} className="popular__card">
                   <img
@@ -179,6 +225,25 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
             <button className="popular__arrow" type="button" aria-label="Next games">
               &#8594;
             </button>
+          </div>
+          <div className="popular__dots">
+            {popularGames.map((game, index) => (
+              <button
+                type="button"
+                key={game.title}
+                className={`popular__dot${index === activeDot ? ' active' : ''}`}
+                aria-label={`Go to ${game.title}`}
+                onClick={() => {
+                  const metrics = getCardMetrics()
+                  if (!metrics) return
+                  const { container, cardWidth, gap } = metrics
+                  container.scrollTo({
+                    left: index * (cardWidth + gap),
+                    behavior: 'smooth',
+                  })
+                }}
+              />
+            ))}
           </div>
         </section>
         <footer className="landing__footer">
