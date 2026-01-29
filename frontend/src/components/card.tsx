@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import styled from 'styled-components';
 
+// Props for Card Component
 type CardProps = {
   title?: ReactNode;
   description?: ReactNode;
@@ -10,10 +11,11 @@ type CardProps = {
   ariaLabel?: string;
 };
 
-const DEFAULT_TITLE = 'Clair Obscur: Expedition 33';
+const DEFAULT_TITLE = 'Loreum Ipsum';
 const DEFAULT_DESCRIPTION =
-  'Lead the members of Expedition 33 on their quest to destroy the Paintress so that she can never paint death again. Explore a world of wonders inspired by Belle Époque France and battle unique enemies in this turn-based RPG with real-time mechanics.';
+  'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.';
 
+// Card Component
 const Card = ({
   title = DEFAULT_TITLE,
   description = DEFAULT_DESCRIPTION,

@@ -88,7 +88,9 @@ const Form = ({ apiBaseUrl, onAuthSuccess }: AuthFormProps) => {
   };
 
   return (
+    // Styled Wrapper for the Form Component
     <StyledWrapper>
+      {/* Form Wrapper */}
       <div className="wrapper">
         <div className="card-switch">
           <label className="switch">
@@ -164,6 +166,7 @@ const Form = ({ apiBaseUrl, onAuthSuccess }: AuthFormProps) => {
   );
 }
 
+// Styled Wrapper for the Form Component
 const StyledWrapper = styled.div`
   .wrapper {
     --input-focus: #2d8cf0;

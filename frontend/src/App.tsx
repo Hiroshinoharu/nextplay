@@ -5,22 +5,13 @@ import Button from './components/Button'
 import Card from './components/card'
 import Form from './components/Form'
 import Game from './game'
-
-type ServiceKey = 'health' | 'game' | 'recommender' | 'user'
+import logoUrl from './assets/logo.png'
 
 type AuthUser = {
   id?: number
   username?: string
   email?: string
   steam_linked?: boolean
-}
-
-type ServiceCard = {
-  key: ServiceKey
-  name: string
-  description: string
-  path?: string
-  url?: string
 }
 
 type HealthStatus = 'idle' | 'loading' | 'ok' | 'error'
@@ -50,38 +41,10 @@ type HealthResponse = {
 
 // Base URL for API requests, trimmed of trailing slashes
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:8084').replace(/\/+$/, '')
+
 // Key for storing auth user in localStorage
 const AUTH_STORAGE_KEY = 'nextplay_user'
 
-const SERVICE_CARDS: ServiceCard[] = [
-  {
-    key: 'health',
-    name: 'System Health',
-    description: 'Check gateway + service status.',
-    path: '/health',
-    url: `${API_BASE_URL}/api/health`,
-  },
-  {
-    key: 'game',
-    name: 'Game Service',
-    description: 'Browse and manage game data.',
-    path: '/games',
-    url: `${API_BASE_URL}/api/games`,
-  },
-  {
-    key: 'user',
-    name: 'User Service',
-    description: 'User profiles and authentication.',
-    path: '/user',
-    url: `${API_BASE_URL}/api/users`,
-  },
-  {
-    key: 'recommender',
-    name: 'Recommender Service',
-    description: 'Get personalized recommendations.',
-    url: `${API_BASE_URL}/api/recommend`,
-  },
-]
 
 const HEALTH_SERVICE_LABELS: Record<string, string> = {
   gateway: 'Gateway',
@@ -90,6 +53,7 @@ const HEALTH_SERVICE_LABELS: Record<string, string> = {
   recommender: 'Recommender Service',
 }
 
+// Coerce unknown payload into AuthUser or null
 const coerceAuthUser = (payload: unknown): AuthUser | null => {
   if (!payload || typeof payload !== 'object') return null
   const data = payload as Record<string, unknown>
@@ -126,173 +90,247 @@ type HomeProps = {
 }
 
 const Home = ({ authUser, onSignOut }: HomeProps) => {
+  // Define service cards for the home page
   const navigate = useNavigate()
 
+  // List of popular games to display as placeholders
+  const popularGames = [
+    {
+      title: 'The Legend of Zelda: Breath of the Wild',
+      image:
+        'https://en.wikipedia.org/wiki/Special:FilePath/The_Legend_of_Zelda_Breath_of_the_Wild.jpg',
+    },
+    {
+      title: 'Super Mario Odyssey',
+      image:
+        'https://www.mariowiki.com/Special:FilePath/Super-mario-odyssey.jpg',
+    },
+    {
+      title: 'Minecraft',
+      image:
+        'https://en.wikipedia.org/wiki/Special:FilePath/Minecraft_cover.png',
+    },
+    {
+      title: 'Fortnite',
+      image:
+        'https://www.halopedia.org/Special:FilePath/Fortnite-Stuff.jpg',
+    },
+  ]
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <nav className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <h2 className="text-lg font-semibold">NextPlay</h2>
-          <div className="flex items-center gap-3">
-            <span className="text-xs uppercase tracking-widest text-slate-400">Service Console</span>
-            {authUser ? (
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span>
-                  Signed in as {authUser.username ?? authUser.email ?? 'User'}
-                  {authUser.id !== undefined ? ` (ID: ${authUser.id})` : ''}
-                </span>
-                <button
-                  type="button"
-                  onClick={onSignOut}
-                  className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-500 hover:border-slate-300"
-                >
-                  Sign out
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => navigate('/user')}
-                className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-500 hover:border-slate-300"
-              >
-                Sign in
-              </button>
-            )}
+    <div className="landing">
+      <div className="landing__container">
+        <nav className="landing__nav">
+          <div className="landing__logo" onClick={() => navigate('/')}>
+            <img src={logoUrl} alt="NextPlay Logo" width={128} height={128} />
           </div>
-        </div>
-      </nav>
-
-      <main className="mx-auto flex max-w-5xl flex-col gap-8 px-6 py-10">
-        <header className="space-y-3">
-          <h1 className="text-3xl font-semibold text-slate-900">Welcome</h1>
-          <p className="text-base text-slate-600">Quick links to your local services.</p>
-        </header>
-
-        <section className="grid gap-4 md:grid-cols-2">
-          {SERVICE_CARDS.map(service =>
-            service.path ? (
-              <button
-                key={service.key}
-                type="button"
-                onClick={() => navigate(service.path!)}
-                className="text-left rounded-xl border border-slate-200 bg-white p-5 transition hover:border-slate-300 hover:shadow-sm"
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-medium text-slate-900">{service.name}</h3>
-                  <span className="text-xs text-slate-400">Open</span>
-                </div>
-                <p className="mt-2 text-sm text-slate-600">{service.description}</p>
-                <p className="mt-3 text-xs text-slate-400">In-app view</p>
+          <div>
+            <div className="landing__nav-actions">
+              {authUser ? (
+                <button type="button" onClick={onSignOut}>
+                  Sign Out
+                </button>
+              ) : (
+                <>
+                  <button type="button" onClick={() => navigate('/user')}>
+                    Sign Up
+                  </button>
+                  <button type="button" onClick={() => navigate('/user')}>
+                    Log In
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </nav>
+        
+        <section className = "hero">
+          <div>
+            <h1 className="hero__title">Welcome Games Find You</h1>
+            <h2 className="hero__subtitle">Discover. Play. Repeat.</h2>
+          </div>
+          <p className="hero__description">Enter your email to find what to play</p>
+          <form className="hero__form" action="">
+              <input className="hero__input" type="email" placeholder="Enter your email" required />
+              <button className="hero__button" type="button">
+                Continue<span>&#8594;</span>
               </button>
-            ) : (
-              <a
-                key={service.key}
-                href={service.url}
-                className="rounded-xl border border-slate-200 bg-white p-5 transition hover:border-slate-300 hover:shadow-sm"
-              >
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-medium text-slate-900">{service.name}</h3>
-                  <span className="text-xs text-slate-400">Open</span>
-                </div>
-                <p className="mt-2 text-sm text-slate-600">{service.description}</p>
-                <p className="mt-3 text-xs text-slate-400">{service.url}</p>
-              </a>
-            ),
-          )}
+          </form>
         </section>
-      </main>
+        
+        <section className="popular">
+          <h3 className="popular__title">Most Popular Games: 2025</h3>
+          <div className="popular__carousel">
+            <button className="popular__arrow" type="button" aria-label="Previous games">
+              &#8592;
+            </button>
+            <div className="popular__cards">
+              {popularGames.map((game) => (
+                <div key={game.title} className="popular__card">
+                  <img
+                    src={game.image}
+                    alt={game.title}
+                    className="popular__card-image"
+                  />
+                  <p className="popular__card-title">{game.title}</p>
+                </div>
+              ))}
+            </div>
+            <button className="popular__arrow" type="button" aria-label="Next games">
+              &#8594;
+            </button>
+          </div>
+        </section>
+        <footer className="landing__footer">
+          <div className="landing__footer-grid">
+            <div className="landing__footer-brand">
+              <div className="landing__logo">
+                <img src={logoUrl} alt="NextPlay Logo" width={56} height={56} />
+                <span>NextPlay</span>
+              </div>
+              <p>
+                Find your next obsession with curated picks, social play, and smart
+                recommendations.
+              </p>
+            </div>
+            <div className="landing__footer-section">
+              <h4>Product</h4>
+              <ul>
+                <li>Discover</li>
+                <li>Collections</li>
+                <li>Party Finder</li>
+                <li>Wishlist</li>
+              </ul>
+            </div>
+            <div className="landing__footer-section">
+              <h4>Company</h4>
+              <ul>
+                <li>About</li>
+                <li>Careers</li>
+                <li>Press</li>
+                <li>Contact</li>
+              </ul>
+            </div>
+            <div className="landing__footer-section">
+              <h4>Resources</h4>
+              <ul>
+                <li>Help Center</li>
+                <li>Community</li>
+                <li>Developers</li>
+                <li>Status</li>
+              </ul>
+            </div>
+            <div className="landing__footer-section">
+              <h4>Stay in the loop</h4>
+              <p>Weekly drops, co-op nights, and hot releases.</p>
+              <div className="landing__footer-form">
+                <input type="email" placeholder="you@email.com" aria-label="Email address" />
+                <button type="button">Subscribe</button>
+              </div>
+            </div>
+          </div>
+          <div className="landing__footer-bottom">
+            <span>© 2026 NextPlay. All rights reserved.</span>
+            <div className="landing__footer-links">
+              <span>Privacy</span>
+              <span>Terms</span>
+              <span>Cookies</span>
+            </div>
+          </div>
+        </footer>
+      </div>
     </div>
   )
 }
 
-type UserAccessProps = {
-  authUser: AuthUser | null
+      type UserAccessProps = {
+        authUser: AuthUser | null
   onAuthSuccess: (payload: unknown) => void
   onSignOut: () => void
 }
 
-const UserAccess = ({ authUser, onAuthSuccess, onSignOut }: UserAccessProps) => {
+      const UserAccess = ({authUser, onAuthSuccess, onSignOut}: UserAccessProps) => {
   const navigate = useNavigate()
 
-  return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-        <div>
-          <h1 className="text-xl font-semibold">User Access</h1>
-          <p className="text-xs text-slate-400">Login or create an account</p>
+      return (
+      <div className="min-h-screen bg-slate-900 text-slate-100">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
+          <div>
+            <h1 className="text-xl font-semibold">User Access</h1>
+            <p className="text-xs text-slate-400">Login or create an account</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {authUser && (
+              <button
+                type="button"
+                onClick={onSignOut}
+                className="rounded-lg border border-rose-500/60 px-3 py-2 text-xs font-semibold text-rose-200 hover:border-rose-400"
+              >
+                Sign out
+              </button>
+            )}
+            <Button label="Back to services" showIcon={false} onClick={() => navigate('/')} />
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {authUser && (
-            <button
-              type="button"
-              onClick={onSignOut}
-              className="rounded-lg border border-rose-500/60 px-3 py-2 text-xs font-semibold text-rose-200 hover:border-rose-400"
-            >
-              Sign out
-            </button>
-          )}
-          <Button label="Back to services" showIcon={false} onClick={() => navigate('/')} />
-        </div>
-      </div>
-      <div className="mx-auto flex max-w-5xl justify-center px-4 py-10">
-        <div className="space-y-6">
-          {authUser && (
-            <div className="rounded-lg border border-emerald-400/50 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-              <div className="font-semibold">Signed in</div>
-              <div className="mt-1 text-xs text-emerald-100/80">
-                {authUser.username ?? authUser.email ?? 'User'}{' '}
-                {authUser.id !== undefined ? `(ID: ${authUser.id})` : '(ID unavailable)'}
+        <div className="mx-auto flex max-w-5xl justify-center px-4 py-10">
+          <div className="space-y-6">
+            {authUser && (
+              <div className="rounded-lg border border-emerald-400/50 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+                <div className="font-semibold">Signed in</div>
+                <div className="mt-1 text-xs text-emerald-100/80">
+                  {authUser.username ?? authUser.email ?? 'User'}{' '}
+                  {authUser.id !== undefined ? `(ID: ${authUser.id})` : '(ID unavailable)'}
+                </div>
               </div>
-            </div>
-          )}
-          <Form apiBaseUrl={API_BASE_URL} onAuthSuccess={onAuthSuccess} />
+            )}
+            <Form apiBaseUrl={API_BASE_URL} onAuthSuccess={onAuthSuccess} />
+          </div>
         </div>
       </div>
-    </div>
-  )
+      )
 }
 
 const HealthPage = () => {
   const navigate = useNavigate()
-  const [healthChecks, setHealthChecks] = useState<HealthCheck[]>([])
-  const [healthUpdatedAt, setHealthUpdatedAt] = useState<string | null>(null)
-  const [healthLoading, setHealthLoading] = useState<boolean>(false)
-  const [healthError, setHealthError] = useState<string | null>(null)
-  const [overallOk, setOverallOk] = useState<boolean | null>(null)
+      const [healthChecks, setHealthChecks] = useState<HealthCheck[]>([])
+      const [healthUpdatedAt, setHealthUpdatedAt] = useState<string | null>(null)
+      const [healthLoading, setHealthLoading] = useState<boolean>(false)
+        const [healthError, setHealthError] = useState<string | null>(null)
+        const [overallOk, setOverallOk] = useState<boolean | null>(null)
 
   const formatDetail = (detail: unknown): string | undefined => {
     if (detail === null || detail === undefined) return undefined
-    if (typeof detail === 'string') return detail
-    if (typeof detail === 'object') {
+        if (typeof detail === 'string') return detail
+        if (typeof detail === 'object') {
       return Object.entries(detail as Record<string, unknown>)
         .map(([key, value]) => `${key}: ${String(value)}`)
         .join('\n')
     }
-    return String(detail)
+        return String(detail)
   }
 
   const loadHealth = useCallback(async () => {
-    setHealthLoading(true)
+          setHealthLoading(true)
     setHealthError(null)
-    try {
+        try {
       const response = await fetch(`${API_BASE_URL}/api/health`)
-      const text = await response.text()
-      let data: HealthResponse | null = null
-      try {
-        data = JSON.parse(text) as HealthResponse
-      } catch {
-        data = null
-      }
+        const text = await response.text()
+        let data: HealthResponse | null = null
+        try {
+          data = JSON.parse(text) as HealthResponse
+        } catch {
+          data = null
+        }
 
-      if (!data || typeof data !== 'object') {
-        setHealthError('Unexpected response from /api/health')
+        if (!data || typeof data !== 'object') {
+          setHealthError('Unexpected response from /api/health')
         setHealthChecks([])
         setOverallOk(null)
         return
       }
 
-      const services = data.services ?? {}
-      const checkedAt = data.checked_at
+        const services = data.services ?? { }
+        const checkedAt = data.checked_at
         ? new Date(data.checked_at).toLocaleTimeString()
         : new Date().toLocaleTimeString()
 
@@ -303,134 +341,134 @@ const HealthPage = () => {
         return {
           key,
           name: HEALTH_SERVICE_LABELS[key] ?? key,
-          status: service ? status : 'error',
-          httpStatus: service?.http_status,
-          detail: detail ?? (service ? undefined : 'No data returned'),
-          checkedAt,
+        status: service ? status : 'error',
+        httpStatus: service?.http_status,
+        detail: detail ?? (service ? undefined : 'No data returned'),
+        checkedAt,
         }
       })
 
-      setHealthChecks(checks)
-      setHealthUpdatedAt(checkedAt)
-      setOverallOk(typeof data.ok === 'boolean' ? data.ok : null)
+        setHealthChecks(checks)
+        setHealthUpdatedAt(checkedAt)
+        setOverallOk(typeof data.ok === 'boolean' ? data.ok : null)
     } catch (err) {
-      setHealthError(String(err))
+          setHealthError(String(err))
       setHealthChecks([])
-      setOverallOk(null)
+        setOverallOk(null)
     } finally {
-      setHealthLoading(false)
-    }
+          setHealthLoading(false)
+        }
   }, [])
 
   useEffect(() => {
-    loadHealth()
-  }, [loadHealth])
+          loadHealth()
+        }, [loadHealth])
 
-  return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-        <div>
-          <h1 className="text-xl font-semibold">System Health</h1>
-          <p className="text-xs text-slate-400">
-            {healthUpdatedAt ? `Last checked ${healthUpdatedAt}` : 'Run a check to see status.'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={loadHealth}
-            disabled={healthLoading}
-            label={healthLoading ? 'Checking...' : 'Refresh'}
-            showIcon={false}
-          />
-          <Button label="Back to services" showIcon={false} onClick={() => navigate('/')} />
-        </div>
-      </div>
-      <main className="mx-auto max-w-5xl px-4 py-8 space-y-6">
-        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-          <span>Aggregate: {overallOk === null ? 'unknown' : overallOk ? 'healthy' : 'issues detected'}</span>
-          <span>Endpoint: {API_BASE_URL}/api/health</span>
-        </div>
-
-        {healthError && (
-          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-            {healthError}
-          </div>
-        )}
-
-        <div className="grid gap-6 md:grid-cols-2 justify-items-center">
-          {healthChecks.map(check => {
-            const descriptionLines = [
-              check.status === 'loading' ? 'Status: checking...' : `Status: ${check.status}`,
-              check.httpStatus ? `HTTP: ${check.httpStatus}` : null,
-              check.detail ? `Details: ${check.detail}` : null,
-              check.checkedAt ? `Checked: ${check.checkedAt}` : null,
-            ].filter(Boolean)
-
-            return (
-              <Card
-                key={check.key}
-                title={check.name}
-                description={descriptionLines.join('\n')}
-                variant="info"
+        return (
+        <div className="min-h-screen bg-slate-900 text-slate-100">
+          <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
+            <div>
+              <h1 className="text-xl font-semibold">System Health</h1>
+              <p className="text-xs text-slate-400">
+                {healthUpdatedAt ? `Last checked ${healthUpdatedAt}` : 'Run a check to see status.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={loadHealth}
+                disabled={healthLoading}
+                label={healthLoading ? 'Checking...' : 'Refresh'}
+                showIcon={false}
               />
-            )
-          })}
+              <Button label="Back to services" showIcon={false} onClick={() => navigate('/')} />
+            </div>
+          </div>
+          <main className="mx-auto max-w-5xl px-4 py-8 space-y-6">
+            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+              <span>Aggregate: {overallOk === null ? 'unknown' : overallOk ? 'healthy' : 'issues detected'}</span>
+              <span>Endpoint: {API_BASE_URL}/api/health</span>
+            </div>
+
+            {healthError && (
+              <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                {healthError}
+              </div>
+            )}
+
+            <div className="grid gap-6 md:grid-cols-2 justify-items-center">
+              {healthChecks.map(check => {
+                const descriptionLines = [
+                  check.status === 'loading' ? 'Status: checking...' : `Status: ${check.status}`,
+                  check.httpStatus ? `HTTP: ${check.httpStatus}` : null,
+                  check.detail ? `Details: ${check.detail}` : null,
+                  check.checkedAt ? `Checked: ${check.checkedAt}` : null,
+                ].filter(Boolean)
+
+                return (
+                  <Card
+                    key={check.key}
+                    title={check.name}
+                    description={descriptionLines.join('\n')}
+                    variant="info"
+                  />
+                )
+              })}
+            </div>
+          </main>
         </div>
-      </main>
-    </div>
-  )
+        )
 }
 
-function App() {
+        function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY)
-      if (stored) {
+        if (stored) {
         const parsed = JSON.parse(stored) as AuthUser
         setAuthUser(parsed)
       }
     } catch {
-      setAuthUser(null)
-    }
+          setAuthUser(null)
+        }
   }, [])
 
   const handleAuthSuccess = (payload: unknown) => {
     const user = coerceAuthUser(payload)
-    if (!user) return
-    setAuthUser(user)
-    try {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user))
-    } catch {
-      // Ignore storage errors (e.g., private mode)
-    }
+        if (!user) return
+        setAuthUser(user)
+        try {
+          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user))
+        } catch {
+          // Ignore storage errors (e.g., private mode)
+        }
   }
 
   const handleSignOut = () => {
-    setAuthUser(null)
+          setAuthUser(null)
     try {
-      localStorage.removeItem(AUTH_STORAGE_KEY)
-    } catch {
-      // Ignore storage errors
-    }
+          localStorage.removeItem(AUTH_STORAGE_KEY)
+        } catch {
+          // Ignore storage errors
+        }
   }
 
-  return (
-    <Routes>
-      <Route path="/" element={<Home authUser={authUser} onSignOut={handleSignOut} />} />
-      <Route path="/games" element={<Game />} />
-      <Route path="/games/:gameId" element={<Game />} />
-      <Route
-        path="/user"
-        element={
-          <UserAccess authUser={authUser} onAuthSuccess={handleAuthSuccess} onSignOut={handleSignOut} />
-        }
-      />
-      <Route path="/health" element={<HealthPage />} />
-      <Route path="*" element={<Home authUser={authUser} onSignOut={handleSignOut} />} />
-    </Routes>
-  )
+        return (
+        <Routes>
+          <Route path="/" element={<Home authUser={authUser} onSignOut={handleSignOut} />} />
+          <Route path="/games" element={<Game />} />
+          <Route path="/games/:gameId" element={<Game />} />
+          <Route
+            path="/user"
+            element={
+              <UserAccess authUser={authUser} onAuthSuccess={handleAuthSuccess} onSignOut={handleSignOut} />
+            }
+          />
+          <Route path="/health" element={<HealthPage />} />
+          <Route path="*" element={<Home authUser={authUser} onSignOut={handleSignOut} />} />
+        </Routes>
+        )
 }
 
-export default App
+        export default App
