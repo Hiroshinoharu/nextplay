@@ -7,7 +7,12 @@ type AuthFormProps = {
 };
 
 const Form = ({ apiBaseUrl, onAuthSuccess }: AuthFormProps) => {
-  const baseUrl = (apiBaseUrl ?? import.meta.env.VITE_API_URL ?? 'http://localhost:8084').replace(/\/+$/, '');
+  const rawBaseUrl = (apiBaseUrl ?? import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '');
+  const apiRoot = rawBaseUrl.endsWith('/api') ? rawBaseUrl.slice(0, -4) : rawBaseUrl;
+  const apiUrl = (path: string) => {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return `${apiRoot}/api${normalizedPath}`;
+  };
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [signupName, setSignupName] = useState('');
@@ -34,7 +39,7 @@ const Form = ({ apiBaseUrl, onAuthSuccess }: AuthFormProps) => {
 
     setIsLoading(true);
     try {
-      const response = await fetch(`${baseUrl}/api/users/login`, {
+      const response = await fetch(apiUrl('/users/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -64,7 +69,7 @@ const Form = ({ apiBaseUrl, onAuthSuccess }: AuthFormProps) => {
 
     setIsLoading(true);
     try {
-      const response = await fetch(`${baseUrl}/api/users/register`, {
+      const response = await fetch(apiUrl('/users/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

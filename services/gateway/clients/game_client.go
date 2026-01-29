@@ -55,6 +55,18 @@ func (gc *GameClient) GetAllGames(query string) (int, []byte, error) {
 	return gc.doRequest(req)
 }
 
+func (gc *GameClient) GetPopularGames(query string) (int, []byte, error) {
+	url := gc.baseURL + "/games/popular"
+	if query != "" {
+		url += "?" + query
+	}
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return 0, nil, err
+	}
+	return gc.doRequest(req)
+}
+
 func (gc *GameClient) GetGameByID(id string) (int, []byte, error) {
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/games/%s", gc.baseURL, id), nil)
 	if err != nil {

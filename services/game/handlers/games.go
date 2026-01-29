@@ -31,6 +31,20 @@ func GetAllGames(c *fiber.Ctx) error {
 	return c.JSON(games)
 }
 
+// GET /api/games/popular - retrieves top games based on interactions for a given year
+func GetPopularGames(c *fiber.Ctx) error {
+	year := c.QueryInt("year", 0)
+	limit := c.QueryInt("limit", 4)
+	if limit > 16 {
+		limit = 16
+	}
+	games, err := db.GetPopularGames(year, limit)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(games)
+}
+
 // GET /api/games/:id - retrieves a game by ID
 func GetGameByID(c *fiber.Ctx) error {
 	idParam := c.Params("id")

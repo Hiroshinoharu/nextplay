@@ -7,6 +7,7 @@ import Form from './components/Form'
 import Game from './game'
 import logoUrl from './assets/logo.png'
 
+// Types for authenticated user
 type AuthUser = {
   id?: number
   username?: string
@@ -14,8 +15,10 @@ type AuthUser = {
   steam_linked?: boolean
 }
 
+// Types for health check statuses
 type HealthStatus = 'idle' | 'loading' | 'ok' | 'error'
 
+// Type for individual health check
 type HealthCheck = {
   key: string
   name: string
@@ -39,8 +42,25 @@ type HealthResponse = {
   >
 }
 
+type PopularGame = {
+  id: number
+  title: string
+  image: string
+}
+
+type PopularGameResponse = {
+  id: number
+  name: string
+  cover_image?: string
+}
+
 // Base URL for API requests, trimmed of trailing slashes
-const API_BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:8084').replace(/\/+$/, '')
+const RAW_API_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '')
+const API_ROOT = RAW_API_BASE_URL.endsWith('/api') ? RAW_API_BASE_URL.slice(0, -4) : RAW_API_BASE_URL
+const apiUrl = (path: string) => {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${API_ROOT}/api${normalizedPath}`
+}
 
 // Key for storing auth user in localStorage
 const AUTH_STORAGE_KEY = 'nextplay_user'
@@ -94,30 +114,60 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
   const navigate = useNavigate()
   const cardsRef = useRef<HTMLDivElement | null>(null)
   const [activeDot, setActiveDot] = useState(0)
+  const pageSize = 4
+  const pageCountTarget = 4
+  const totalLimit = pageCountTarget * 4
+  const touchStartXRef = useRef<number | null>(null)
+  const touchLastXRef = useRef<number | null>(null)
+  const swipeHandledRef = useRef(false)
+  const [popularGames, setPopularGames] = useState<PopularGame[]>([])
+  const [popularLoading, setPopularLoading] = useState(false)
+  const [popularError, setPopularError] = useState<string | null>(null)
 
-  // List of popular games to display as placeholders
-  const popularGames = [
-    {
-      title: 'The Legend of Zelda: Breath of the Wild',
-      image:
-        'https://en.wikipedia.org/wiki/Special:FilePath/The_Legend_of_Zelda_Breath_of_the_Wild.jpg',
-    },
-    {
-      title: 'Super Mario Odyssey',
-      image:
-        'https://www.mariowiki.com/Special:FilePath/Super-mario-odyssey.jpg',
-    },
-    {
-      title: 'Minecraft',
-      image:
-        'https://en.wikipedia.org/wiki/Special:FilePath/Minecraft_cover.png',
-    },
-    {
-      title: 'Fortnite',
-      image:
-        'https://www.halopedia.org/Special:FilePath/Fortnite-Stuff.jpg',
-    },
-  ]
+  useEffect(() => {
+    const controller = new AbortController()
+    const loadPopularGames = async () => {
+      setPopularLoading(true)
+      setPopularError(null)
+      try {
+        const cacheBust = Date.now()
+        const response = await fetch(
+          `${apiUrl('/games/popular')}?year=2025&limit=${totalLimit}&t=${cacheBust}`,
+          {
+            signal: controller.signal,
+          }
+        )
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`Failed to load popular games (${response.status}) ${errorText}`)
+        }
+        const data = (await response.json()) as PopularGameResponse[]
+        if (!Array.isArray(data)) {
+          throw new Error('Unexpected response shape for popular games')
+        }
+        const normalized = data.map(game => {
+          const rawImage = game.cover_image ?? ''
+          const image = rawImage.startsWith('//') ? `https:${rawImage}` : rawImage || '/landing-bg.webp'
+          return {
+            id: game.id,
+            title: game.name,
+            image,
+          }
+        })
+        setPopularGames(normalized.slice(0, totalLimit))
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          setPopularError(err instanceof Error ? err.message : String(err))
+        }
+      } finally {
+        setPopularLoading(false)
+      }
+    }
+
+    loadPopularGames()
+    return () => controller.abort()
+  }, [totalLimit])
+
 
   const getCardMetrics = () => {
     const container = cardsRef.current
@@ -128,19 +178,81 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
     const gapValue = styles.columnGap || styles.gap || '0'
     const gap = Number.parseFloat(gapValue) || 0
     const cardWidth = firstCard.getBoundingClientRect().width
-    return { container, cardWidth, gap }
+    const containerWidth = container.getBoundingClientRect().width
+    return { container, cardWidth, gap, containerWidth }
   }
 
   const updateActiveDot = useCallback(() => {
+    if (popularGames.length === 0) return
     const metrics = getCardMetrics()
     if (!metrics) return
-    const { container, cardWidth, gap } = metrics
+    const { container, cardWidth, gap, containerWidth } = metrics
     const step = cardWidth + gap
     if (step === 0) return
-    const index = Math.round(container.scrollLeft / step)
-    const clamped = Math.max(0, Math.min(popularGames.length - 1, index))
+    const pageStep = Math.max(containerWidth, step * pageSize)
+    const index = Math.round(container.scrollLeft / pageStep)
+    const pageCount = Math.max(1, Math.ceil(popularGames.length / pageSize))
+    const clamped = Math.max(0, Math.min(pageCount - 1, index))
     setActiveDot(clamped)
-  }, [popularGames.length])
+  }, [popularGames.length, pageSize])
+
+  const scrollToPage = useCallback((index: number) => {
+    const metrics = getCardMetrics()
+    if (!metrics) return
+    const { container, cardWidth, gap, containerWidth } = metrics
+    const step = cardWidth + gap
+    if (step === 0) return
+    const pageStep = Math.max(containerWidth, step * pageSize)
+    container.scrollTo({
+      left: index * pageStep,
+      behavior: 'smooth',
+    })
+  }, [pageSize])
+
+  useEffect(() => {
+    if (popularGames.length === 0) return
+    setActiveDot(0)
+    scrollToPage(0)
+  }, [popularGames.length, scrollToPage])
+
+  const shiftPage = useCallback((direction: -1 | 1) => {
+    const pageCount = Math.max(1, Math.ceil(popularGames.length / pageSize))
+    if (pageCount <= 1) return
+    let nextIndex = activeDot + direction
+    if (nextIndex < 0) {
+      nextIndex = pageCount - 1
+    } else if (nextIndex >= pageCount) {
+      nextIndex = 0
+    }
+    setActiveDot(nextIndex)
+    scrollToPage(nextIndex)
+  }, [activeDot, pageSize, popularGames.length, scrollToPage])
+
+  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0]
+    touchStartXRef.current = touch.clientX
+    touchLastXRef.current = touch.clientX
+    swipeHandledRef.current = false
+  }
+
+  const handleTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0]
+    touchLastXRef.current = touch.clientX
+  }
+
+  const handleTouchEnd = () => {
+    const startX = touchStartXRef.current
+    const lastX = touchLastXRef.current
+    touchStartXRef.current = null
+    touchLastXRef.current = null
+    if (swipeHandledRef.current) return
+    if (startX === null || lastX === null) return
+    const delta = lastX - startX
+    const threshold = 40
+    if (Math.abs(delta) < threshold) return
+    swipeHandledRef.current = true
+    shiftPage(delta < 0 ? 1 : -1)
+  }
 
   useEffect(() => {
     const container = cardsRef.current
@@ -155,9 +267,14 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
     }
     updateActiveDot()
     container.addEventListener('scroll', onScroll, { passive: true })
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault()
+    }
+    container.addEventListener('wheel', onWheel, { passive: false })
     window.addEventListener('resize', updateActiveDot)
     return () => {
       container.removeEventListener('scroll', onScroll)
+      container.removeEventListener('wheel', onWheel)
       window.removeEventListener('resize', updateActiveDot)
       if (rafId) window.cancelAnimationFrame(rafId)
     }
@@ -206,45 +323,85 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
         
         <section className="popular">
           <h3 className="popular__title">Most Popular Games: 2025</h3>
-          <div className="popular__carousel">
-            <button className="popular__arrow" type="button" aria-label="Previous games">
-              &#8592;
-            </button>
-            <div className="popular__cards" ref={cardsRef}>
-              {popularGames.map((game) => (
-                <div key={game.title} className="popular__card">
-                  <img
-                    src={game.image}
-                    alt={game.title}
-                    className="popular__card-image"
-                  />
-                  <p className="popular__card-title">{game.title}</p>
+          {popularError ? (
+            <p className="popular__status">Unable to load popular games: {popularError}</p>
+          ) : popularLoading ? (
+            <p className="popular__status">Loading popular games...</p>
+          ) : popularGames.length === 0 ? (
+            <p className="popular__status">No popular games found yet.</p>
+          ) : (
+            <>
+              <div className="popular__carousel">
+                <button
+                  className="popular__arrow"
+                  type="button"
+                  aria-label="Previous games"
+                  onClick={() => shiftPage(-1)}
+                >
+                  &#8592;
+                </button>
+                <div
+                  className="popular__cards"
+                  ref={cardsRef}
+                  tabIndex={0}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  onKeyDown={(event) => {
+                    if (event.key === 'ArrowLeft') {
+                      event.preventDefault()
+                      shiftPage(-1)
+                    }
+                    if (event.key === 'ArrowRight') {
+                      event.preventDefault()
+                      shiftPage(1)
+                    }
+                  }}
+                >
+                  {popularGames.map((game) => (
+                    <div key={game.id} className="popular__card">
+                      <img
+                        src={game.image}
+                        alt={game.title}
+                        className="popular__card-image"
+                        loading="lazy"
+                        onError={(event) => {
+                          const target = event.currentTarget
+                          target.onerror = null
+                          target.src = '/landing-bg.webp'
+                        }}
+                      />
+                      <p className="popular__card-title">{game.title}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <button className="popular__arrow" type="button" aria-label="Next games">
-              &#8594;
-            </button>
-          </div>
-          <div className="popular__dots">
-            {popularGames.map((game, index) => (
-              <button
-                type="button"
-                key={game.title}
-                className={`popular__dot${index === activeDot ? ' active' : ''}`}
-                aria-label={`Go to ${game.title}`}
-                onClick={() => {
-                  const metrics = getCardMetrics()
-                  if (!metrics) return
-                  const { container, cardWidth, gap } = metrics
-                  container.scrollTo({
-                    left: index * (cardWidth + gap),
-                    behavior: 'smooth',
-                  })
-                }}
-              />
-            ))}
-          </div>
+                <button
+                  className="popular__arrow"
+                  type="button"
+                  aria-label="Next games"
+                  onClick={() => shiftPage(1)}
+                >
+                  &#8594;
+                </button>
+              </div>
+              {popularGames.length > 1 && (
+                <div className="popular__dots">
+                  {Array.from({ length: Math.ceil(popularGames.length / pageSize) }).map((_, index) => (
+                    <button
+                      type="button"
+                      key={`popular-page-${index + 1}`}
+                      className={`popular__dot${index === activeDot ? ' active' : ''}`}
+                      aria-label={`Go to page ${index + 1}`}
+                      onClick={() => {
+                        setActiveDot(index)
+                        scrollToPage(index)
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </section>
         <footer className="landing__footer">
           <div className="landing__footer-grid">
@@ -348,7 +505,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
                 </div>
               </div>
             )}
-            <Form apiBaseUrl={API_BASE_URL} onAuthSuccess={onAuthSuccess} />
+            <Form apiBaseUrl={API_ROOT} onAuthSuccess={onAuthSuccess} />
           </div>
         </div>
       </div>
@@ -378,7 +535,7 @@ const HealthPage = () => {
           setHealthLoading(true)
     setHealthError(null)
         try {
-      const response = await fetch(`${API_BASE_URL}/api/health`)
+      const response = await fetch(apiUrl('/health'))
         const text = await response.text()
         let data: HealthResponse | null = null
         try {
@@ -451,7 +608,7 @@ const HealthPage = () => {
           <main className="mx-auto max-w-5xl px-4 py-8 space-y-6">
             <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
               <span>Aggregate: {overallOk === null ? 'unknown' : overallOk ? 'healthy' : 'issues detected'}</span>
-              <span>Endpoint: {API_BASE_URL}/api/health</span>
+              <span>Endpoint: {apiUrl('/health')}</span>
             </div>
 
             {healthError && (

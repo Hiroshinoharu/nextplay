@@ -83,6 +83,98 @@ func GetGames(limit, offset int, includeMedia bool) ([]models.Game, error) {
 	return games, nil
 }
 
+// GetPopularGames returns highest-rated games for a given release year based on user ratings.
+func GetPopularGames(year, limit int) ([]models.Game, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	query := `
+		SELECT
+			g.game_id,
+			g.game_name,
+			g.game_description,
+			g.release_date,
+			g.genre,
+			g.publishers,
+			g.story,
+			g.cover_image_url
+		FROM games g
+		LEFT JOIN user_interactions ui
+			ON ui.game_id = g.game_id
+		WHERE ($1 = 0 OR EXTRACT(YEAR FROM g.release_date) = $1)
+		GROUP BY g.game_id
+		ORDER BY
+			COALESCE(AVG(ui.rating), 0) DESC,
+			COUNT(ui.rating) DESC,
+			COALESCE(SUM(CASE WHEN ui.favorited THEN 1 ELSE 0 END), 0) DESC,
+			COALESCE(SUM(CASE WHEN ui.liked THEN 1 ELSE 0 END), 0) DESC,
+			g.game_id
+		LIMIT $2;
+	`
+
+	rows, err := DB.Query(query, year, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	games := make([]models.Game, 0, limit)
+	for rows.Next() {
+		var g models.Game
+		var description sql.NullString
+		var releaseDate sql.NullString
+		var genre sql.NullString
+		var publishers sql.NullString
+		var story sql.NullString
+		var coverImage sql.NullString
+		err := rows.Scan(
+			&g.ID,
+			&g.Name,
+			&description,
+			&releaseDate,
+			&genre,
+			&publishers,
+			&story,
+			&coverImage,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if description.Valid {
+			g.Description = description.String
+		}
+		if releaseDate.Valid {
+			g.ReleaseDate = releaseDate.String
+		}
+		if genre.Valid {
+			g.Genre = genre.String
+		}
+		if publishers.Valid {
+			g.Publishers = publishers.String
+		}
+		if story.Valid {
+			g.Story = story.String
+		}
+		if coverImage.Valid {
+			g.CoverImageURL = coverImage.String
+		}
+		g.Media = []models.GameMedia{}
+		g.Platforms = []int64{}
+		g.Keywords = []int64{}
+		g.Franchises = []int64{}
+		g.Companies = []int64{}
+		g.Series = []int64{}
+		games = append(games, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return games, nil
+}
+
 // GetAllGames returns a default-sized page for backward compatibility.
 func GetAllGames() ([]models.Game, error) {
 	return GetGames(50, 0, false)

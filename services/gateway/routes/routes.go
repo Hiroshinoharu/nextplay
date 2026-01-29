@@ -53,6 +53,7 @@ func SetUpRoutes(app *fiber.App) {
 	games := api.Group("/games")
 	{
 		games.Get("/", handlers.GetAllGames)
+		games.Get("/popular", handlers.GetPopularGames)
 		games.Get("/:id", handlers.GetGameByID)
 		games.Post("/", handlers.CreateGame)
 		games.Put("/:id", handlers.UpdateGame)

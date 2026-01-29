@@ -18,8 +18,9 @@ type GameItem = {
   trailer_url?: string
 }
 
-// Determine the default base URL for the API from environment variables or fallback to localhost
-const DEFAULT_BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:8084').replace(/\/+$/, '')
+// Determine the default base URL for the API from environment variables
+const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '')
+const API_ROOT = RAW_BASE_URL.endsWith('/api') ? RAW_BASE_URL.slice(0, -4) : RAW_BASE_URL
 
 // Normalize cover image URLs to ensure they are absolute and use HTTPS
 const normalizeCoverUrl = (url?: string) => {
@@ -88,7 +89,7 @@ function Game() {
   const navigate = useNavigate()
   // Get gameId from URL parameters
   const { gameId } = useParams()
-  const [baseUrl] = useState<string>(DEFAULT_BASE_URL)
+  const [baseUrl] = useState<string>(API_ROOT)
   const [error] = useState<string | null>(null)
   const [games, setGames] = useState<GameItem[]>([])
   const [gamesError, setGamesError] = useState<string | null>(null)
@@ -105,7 +106,8 @@ function Game() {
   // Construct the games API URL using the base URL and memoization
   const gamesUrl = useMemo(() => {
     const trimmedBase = baseUrl.replace(/\/+$/, '')
-    return `${trimmedBase}/api/games`
+    const root = trimmedBase.endsWith('/api') ? trimmedBase.slice(0, -4) : trimmedBase
+    return `${root}/api/games`
   }, [baseUrl])
 
   // Function to load the list of games from the API
@@ -160,7 +162,8 @@ function Game() {
       setSelectedGameError(null)
       try {
         const trimmedBase = baseUrl.replace(/\/+$/, '')
-        const responseValue = await fetch(`${trimmedBase}/api/games/${numericId}`)
+        const root = trimmedBase.endsWith('/api') ? trimmedBase.slice(0, -4) : trimmedBase
+        const responseValue = await fetch(`${root}/api/games/${numericId}`)
         if (!responseValue.ok) {
           if (isActive) {
             setSelectedGameError(`Failed to load game: ${responseValue.status}`)

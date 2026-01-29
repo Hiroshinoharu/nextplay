@@ -18,6 +18,15 @@ func GetAllGames(c *fiber.Ctx) error {
 	return c.Status(status).Send(data)
 }
 
+func GetPopularGames(c *fiber.Ctx) error {
+	query := c.Context().QueryArgs().String()
+	status, data, err := gameClient.GetPopularGames(query)
+	if err != nil {
+		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.Status(status).Send(data)
+}
+
 func GetGameByID(c *fiber.Ctx) error {
 	id := c.Params("id")
 	status, data, err := gameClient.GetGameByID(id)

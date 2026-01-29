@@ -11,7 +11,9 @@
   color: #e2f2ff;
   padding: clamp(1rem, 3vw, 2.5rem);
   background: linear-gradient(140deg, rgba(6,16,26,0.95), rgba(9,24,38,0.85)),
-    url('/landing-bg.webp') no-repeat center/cover;
+    url('/landing-bg.webp') no-repeat center / cover;
+  background-attachment: scroll;
+  background-position: center top;
   transition: filter 300ms ease-in-out;
   overflow : hidden;
 }
@@ -96,6 +98,7 @@
 .hero{
   display: grid;
   gap: clamp(20px, 4vw, 32px);
+  width: 100%;
 }
 
 .hero__tag {
@@ -177,11 +180,17 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+  width: 100%;
 }
 
 .popular__title{
   color : #8cf37a;
   font-size: clamp(26px, 4.4vw, 40px);
+  margin: 0;
+}
+
+.popular__status {
+  color: rgba(226, 242, 255, 0.7);
   margin: 0;
 }
 
@@ -199,14 +208,19 @@
   scroll-snap-type: x mandatory;
   scroll-padding: 12px;
   -webkit-overflow-scrolling: touch;
+  width: 100%;
+  scrollbar-width: none;
 }
 
+.popular__cards::-webkit-scrollbar {
+  display: none;
+}
 .popular__card {
   background: rgba(11, 20, 26, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 18px;
   overflow: hidden;
-  flex: 0 0 clamp(180px, 36vw, 220px);
+  flex: 0 0 calc((100% - 84px) / 4);
   box-shadow: 0 18px 30px rgba(0, 0, 0, 0.35);
   scroll-snap-align: start;
 }
@@ -234,8 +248,8 @@
 }
 
 .popular__card-title {
-  margin: 12px 14px 16px;
-  font-size: 15px;
+  margin: 8px 10px 10px;
+  font-size: 12.5px;
   color: #e2f2ff;
   line-height: 1.35;
 }
@@ -414,10 +428,42 @@
     flex-wrap: wrap;
     gap: 10px 16px;
   }
+
+  .landing {
+    background-position: center;
+  }
 }
 
 @media (max-width: 480px) {
   .popular__card {
-    flex-basis: clamp(160px, 70vw, 200px);
+    flex-basis: 80%;
+  }
+}
+
+@media (max-width: 960px) {
+  .popular__card {
+    flex-basis: calc((100% - 16px) / 2);
+  }
+}
+
+@media (max-width: 900px) {
+  .landing__nav {
+    gap: 16px;
+  }
+
+  .landing__logo {
+    font-size: 20px;
+  }
+
+  .landing__logo img {
+    width: clamp(64px, 12vw, 96px);
+  }
+
+  .hero__title {
+    font-size: clamp(30px, 6vw, 52px);
+  }
+
+  .hero__subtitle {
+    font-size: clamp(20px, 4vw, 28px);
   }
 }

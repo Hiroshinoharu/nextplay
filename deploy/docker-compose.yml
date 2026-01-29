@@ -159,6 +159,11 @@ services:
     depends_on:
       gateway:
         condition: service_healthy # Only start UI when backend gateway works
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/api/health >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
