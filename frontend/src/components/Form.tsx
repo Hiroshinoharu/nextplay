@@ -13,6 +13,8 @@ const Form = ({ apiBaseUrl, onAuthSuccess }: AuthFormProps) => {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
     return `${apiRoot}/api${normalizedPath}`;
   };
+
+  // State variables for form inputs and status messages
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [signupName, setSignupName] = useState('');
@@ -128,6 +130,11 @@ const Form = ({ apiBaseUrl, onAuthSuccess }: AuthFormProps) => {
                     <button className="flip-card__btn" type="submit" disabled={isLoading}>
                       {isLoading ? 'Working...' : 'Let`s go!'}
                     </button>
+                    {(error || status) && (
+                      <div className={`auth-message ${error ? 'error' : 'success'}`}>
+                        {error ?? status}
+                      </div>
+                    )}
                   </form>
                 </div>
                 <div className="flip-card__back">
@@ -159,15 +166,15 @@ const Form = ({ apiBaseUrl, onAuthSuccess }: AuthFormProps) => {
                     <button className="flip-card__btn" type="submit" disabled={isLoading}>
                       {isLoading ? 'Working...' : 'Confirm!'}
                     </button>
+                    {(error || status) && (
+                      <div className={`auth-message ${error ? 'error' : 'success'}`}>
+                        {error ?? status}
+                      </div>
+                    )}
                   </form>
                 </div>
               </div>
             </div>
-            {(error || status) && (
-              <div className={`auth-message ${error ? 'error' : 'success'}`}>
-                {error ?? status}
-              </div>
-            )}
           </label>
         </div>   
       </div>
@@ -344,6 +351,7 @@ const StyledWrapper = styled.div`
     width: min(300px, 90vw);
     height: 350px;
     position: relative;
+    padding-bottom: 6px;
   }
 
   .flip-card__back {
@@ -420,7 +428,7 @@ const StyledWrapper = styled.div`
   }
 
   .auth-message {
-    margin-top: 12px;
+    margin-top: 6px;
     padding: 8px 12px;
     border-radius: 6px;
     font-size: 13px;
@@ -431,6 +439,23 @@ const StyledWrapper = styled.div`
     color: var(--font-color);
     box-shadow: 2px 2px var(--main-color);
     z-index: 1;
+    max-width: 100%;
+  }
+
+  .flip-card__front .auth-message {
+    display: block;
+  }
+
+  .flip-card__back .auth-message {
+    display: none;
+  }
+
+  .toggle:checked ~ .card-stack .flip-card__front .auth-message {
+    display: none;
+  }
+
+  .toggle:checked ~ .card-stack .flip-card__back .auth-message {
+    display: block;
   }
 
   @media (max-width: 480px) {

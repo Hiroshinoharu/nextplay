@@ -92,6 +92,13 @@
   max-width: 340px;
 }
 
+@media (max-width: 600px) {
+  .auth-page {
+    transform: translateY(-40px);
+    padding-top: 16px;
+  }
+}
+
 .auth-status {
   padding: 8px 14px;
   border-radius: 999px;
