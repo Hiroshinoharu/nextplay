@@ -144,12 +144,12 @@
   width: min(260px, 100%);
   min-width: 0;
   max-width: 260px;
-  padding: 12px 16px;
-  border-radius: 124px;
+  padding: 16px 20px;
+  border-radius: 999px;
   border: none;
   background: rgba(255, 255, 255, 0.9);
   color: #0b141a;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .hero__button {
@@ -157,20 +157,20 @@
   color: #0b141a;
   border: none;
   border-radius: 999px;
-  padding: 8px 12px;
+  padding: 14px 20px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
   transition: background 0.2s ease, box-shadow 0.2s ease;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .hero__button span {
   display: inline-flex;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: #0b141a;
   color: #c7f000;
@@ -414,12 +414,16 @@
 
   .hero__input {
     width: 100%;
-    min-width: 0;
+    max-width: 100%;
+    padding: 10px 14px;
+    font-size: 12px;
   }
 
   .hero__button {
     width: 100%;
     justify-content: center;
+    padding: 10px 14px;
+    font-size: 12px;
   }
 
   .landing__footer-bottom {
@@ -468,5 +472,16 @@
 
   .hero__subtitle {
     font-size: clamp(20px, 4vw, 28px);
+  }
+
+  .hero__input {
+    max-width: 220px;
+    padding: 14px 18px;
+    font-size: 13px;
+  }
+
+  .hero__button {
+    padding: 12px 18px;
+    font-size: 13px;
   }
 }
