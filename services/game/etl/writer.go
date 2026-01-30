@@ -92,6 +92,8 @@ type gameUpsertRow struct {
 	Publishers    *string `json:"publishers"`
 	Story         *string `json:"story"`
 	CoverImageURL *string `json:"cover_image_url"`
+	AggregatedRating *float64 `json:"aggregated_rating"`
+	AggregatedRatingCount *int `json:"aggregated_rating_count"`
 }
 
 // batchUpsertGames upserts games in a single statement and returns igdb_id -> game_id.
@@ -121,7 +123,9 @@ func batchUpsertGames(tx DBTX, rows []gameUpsertRow) (map[int]int, error) {
 				genre text,
 				publishers text,
 				story text,
-				cover_image_url text
+				cover_image_url text,
+				aggregated_rating float8,
+				aggregated_rating_count int
 			)
 		)
 		INSERT INTO games (
@@ -132,7 +136,9 @@ func batchUpsertGames(tx DBTX, rows []gameUpsertRow) (map[int]int, error) {
 			genre,
 			publishers,
 			story,
-			cover_image_url
+			cover_image_url,
+			aggregated_rating,
+			aggregated_rating_count
 		)
 		SELECT
 			igdb_id,
@@ -142,7 +148,9 @@ func batchUpsertGames(tx DBTX, rows []gameUpsertRow) (map[int]int, error) {
 			genre,
 			publishers,
 			story,
-			cover_image_url
+			cover_image_url,
+			aggregated_rating,
+			aggregated_rating_count
 		FROM data
 		ON CONFLICT (igdb_id) DO UPDATE
 		SET game_name = EXCLUDED.game_name,
@@ -151,7 +159,9 @@ func batchUpsertGames(tx DBTX, rows []gameUpsertRow) (map[int]int, error) {
 		    genre = COALESCE(EXCLUDED.genre, games.genre),
 		    publishers = COALESCE(EXCLUDED.publishers, games.publishers),
 		    story = COALESCE(EXCLUDED.story, games.story),
-		    cover_image_url = COALESCE(EXCLUDED.cover_image_url, games.cover_image_url)
+		    cover_image_url = COALESCE(EXCLUDED.cover_image_url, games.cover_image_url),
+		    aggregated_rating = COALESCE(EXCLUDED.aggregated_rating, games.aggregated_rating),
+		    aggregated_rating_count = COALESCE(EXCLUDED.aggregated_rating_count, games.aggregated_rating_count)
 		RETURNING igdb_id, game_id;
 	`
 

@@ -97,6 +97,8 @@ CREATE TABLE games (
     genre            TEXT,        -- JSON array recommended later
     publishers       TEXT,
     cover_image_url  TEXT,       -- image URL
+    aggregated_rating FLOAT,
+    aggregated_rating_count INT,
     story            TEXT
 );
 

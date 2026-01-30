@@ -60,6 +60,7 @@ func (c *RecommenderClient) RecommendForItem(itemID string) ([]byte, error) {
     return io.ReadAll(resp.Body)
 }
 
+// RecommendSimilar fetches items similar to the provided item features.
 func (c *RecommenderClient) RecommendSimilar(body []byte) ([]byte, error) {
     url := fmt.Sprintf("%s/recommend/item", c.BaseURL)
 

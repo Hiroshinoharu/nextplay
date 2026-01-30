@@ -10,7 +10,7 @@ import (
 // Use includeMedia for detail-heavy responses; it is off by default for speed.
 func GetGames(limit, offset int, includeMedia bool) ([]models.Game, error) {
 	query := `
-		SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url
+		SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url, aggregated_rating, aggregated_rating_count
 		FROM games
 		ORDER BY game_id
 		LIMIT $1 OFFSET $2;
@@ -33,6 +33,8 @@ func GetGames(limit, offset int, includeMedia bool) ([]models.Game, error) {
 		var publishers sql.NullString
 		var story sql.NullString
 		var coverImage sql.NullString
+		var aggregatedRating sql.NullFloat64
+		var aggregatedRatingCount sql.NullInt64
 		err := rows.Scan(
 			&g.ID,
 			&g.Name,
@@ -42,6 +44,8 @@ func GetGames(limit, offset int, includeMedia bool) ([]models.Game, error) {
 			&publishers,
 			&story,
 			&coverImage,
+			&aggregatedRating,
+			&aggregatedRatingCount,
 		)
 		if err != nil {
 			return nil, err
@@ -63,6 +67,12 @@ func GetGames(limit, offset int, includeMedia bool) ([]models.Game, error) {
 		}
 		if coverImage.Valid {
 			g.CoverImageURL = coverImage.String
+		}
+		if aggregatedRating.Valid {
+			g.AggregatedRating = aggregatedRating.Float64
+		}
+		if aggregatedRatingCount.Valid {
+			g.AggregatedRatingCount = int(aggregatedRatingCount.Int64)
 		}
 		if includeMedia {
 			media, err := GetGameMedia(int(g.ID))
@@ -100,17 +110,15 @@ func GetPopularGames(year, limit int) ([]models.Game, error) {
 			g.genre,
 			g.publishers,
 			g.story,
-			g.cover_image_url
+			g.cover_image_url,
+			g.aggregated_rating,
+			g.aggregated_rating_count
 		FROM games g
-		LEFT JOIN user_interactions ui
-			ON ui.game_id = g.game_id
 		WHERE ($1 = 0 OR EXTRACT(YEAR FROM g.release_date) = $1)
 		GROUP BY g.game_id
 		ORDER BY
-			COALESCE(AVG(ui.rating), 0) DESC,
-			COUNT(ui.rating) DESC,
-			COALESCE(SUM(CASE WHEN ui.favorited THEN 1 ELSE 0 END), 0) DESC,
-			COALESCE(SUM(CASE WHEN ui.liked THEN 1 ELSE 0 END), 0) DESC,
+			COALESCE(g.aggregated_rating, 0) DESC,
+			COALESCE(g.aggregated_rating_count, 0) DESC,
 			g.game_id
 		LIMIT $2;
 	`
@@ -130,6 +138,8 @@ func GetPopularGames(year, limit int) ([]models.Game, error) {
 		var publishers sql.NullString
 		var story sql.NullString
 		var coverImage sql.NullString
+		var aggregatedRating sql.NullFloat64
+		var aggregatedRatingCount sql.NullInt64
 		err := rows.Scan(
 			&g.ID,
 			&g.Name,
@@ -139,6 +149,8 @@ func GetPopularGames(year, limit int) ([]models.Game, error) {
 			&publishers,
 			&story,
 			&coverImage,
+			&aggregatedRating,
+			&aggregatedRatingCount,
 		)
 		if err != nil {
 			return nil, err
@@ -160,6 +172,12 @@ func GetPopularGames(year, limit int) ([]models.Game, error) {
 		}
 		if coverImage.Valid {
 			g.CoverImageURL = coverImage.String
+		}
+		if aggregatedRating.Valid {
+			g.AggregatedRating = aggregatedRating.Float64
+		}
+		if aggregatedRatingCount.Valid {
+			g.AggregatedRatingCount = int(aggregatedRatingCount.Int64)
 		}
 		g.Media = []models.GameMedia{}
 		g.Platforms = []int64{}
@@ -183,7 +201,7 @@ func GetAllGames() ([]models.Game, error) {
 // GetGameByID retrieves a game by its ID
 func GetGameByID(id int) (*models.Game, error) {
 	query := `
-		SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url
+		SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url, aggregated_rating, aggregated_rating_count
 		FROM games
 		WHERE game_id = $1;
 	`
@@ -196,6 +214,8 @@ func GetGameByID(id int) (*models.Game, error) {
 	var publishers sql.NullString
 	var story sql.NullString
 	var coverImage sql.NullString
+	var aggregatedRating sql.NullFloat64
+	var aggregatedRatingCount sql.NullInt64
 	err := row.Scan(
 		&g.ID,
 		&g.Name,
@@ -205,6 +225,8 @@ func GetGameByID(id int) (*models.Game, error) {
 		&publishers,
 		&story,
 		&coverImage,
+		&aggregatedRating,
+		&aggregatedRatingCount,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -230,6 +252,12 @@ func GetGameByID(id int) (*models.Game, error) {
 	}
 	if coverImage.Valid {
 		g.CoverImageURL = coverImage.String
+	}
+	if aggregatedRating.Valid {
+		g.AggregatedRating = aggregatedRating.Float64
+	}
+	if aggregatedRatingCount.Valid {
+		g.AggregatedRatingCount = int(aggregatedRatingCount.Int64)
 	}
 	g.Media = []models.GameMedia{}
 	g.Platforms = []int64{}

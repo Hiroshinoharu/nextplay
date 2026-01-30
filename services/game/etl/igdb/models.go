@@ -7,6 +7,8 @@ type Game struct {
 	Summary          string `json:"summary"`
 	Storyline        string `json:"storyline"`
 	FirstReleaseDate int64  `json:"first_release_date"`
+	AggregatedRating float64 `json:"aggregated_rating"`
+	AggregatedRatingCount int `json:"aggregated_rating_count"`
 	Genres           []int  `json:"genres"`
 	Platforms        []int  `json:"platforms"`
 	Keywords         []int  `json:"keywords"`

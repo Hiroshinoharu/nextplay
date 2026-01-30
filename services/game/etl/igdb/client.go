@@ -70,7 +70,7 @@ func (client *Client) FetchGames(maxGames int) ([]Game, error) {
 			limit = maxGames - offset
 		}
 		query := fmt.Sprintf(
-			"fields name,summary,first_release_date,genres,platforms,keywords,storyline,cover,involved_companies,artworks,screenshots,videos; limit %d; offset %d; where name != null;",
+			"fields name,summary,first_release_date,aggregated_rating,aggregated_rating_count,genres,platforms,keywords,storyline,cover,involved_companies,artworks,screenshots,videos; limit %d; offset %d; where name != null;",
 			limit,
 			offset,
 		)

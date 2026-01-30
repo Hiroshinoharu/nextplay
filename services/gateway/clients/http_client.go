@@ -3,10 +3,19 @@ package clients
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 )
+
+// HTTPError preserves upstream status codes and bodies for proxy responses.
+type HTTPError struct {
+	Status int
+	Body   []byte
+}
+
+func (e *HTTPError) Error() string {
+	return string(e.Body)
+}
 
 // Global HTTP client for all requests
 var HttpClient = &http.Client{}
@@ -42,7 +51,7 @@ func doGet(url string, headers map[string]string) (interface{}, error) {
 
 	// Check for HTTP error status codes
 	if resp.StatusCode >= 400 {
-		return nil, errors.New(string(body))
+		return nil, &HTTPError{Status: resp.StatusCode, Body: body}
 	}
 
 	// Return the unmarshaled data and no error
@@ -77,7 +86,7 @@ func doPost(url string, body []byte, headers map[string]string) (interface{}, er
 
 	// Check for HTTP error status codes
 	if resp.StatusCode >= 400 {
-		return nil, errors.New(string(raw))
+		return nil, &HTTPError{Status: resp.StatusCode, Body: raw}
 	}
 
 	// Return the unmarshaled data and no error
@@ -104,7 +113,7 @@ func doPut(url string, body []byte, headers map[string]string) (interface{}, err
 	var data interface{}
 	_ = json.Unmarshal(raw, &data)
 	if resp.StatusCode >= 400 {
-		return nil, errors.New(string(raw))
+		return nil, &HTTPError{Status: resp.StatusCode, Body: raw}
 	}
 	return data, nil
 }
@@ -128,7 +137,7 @@ func doDelete(url string, headers map[string]string) (interface{}, error) {
 	var data interface{}
 	_ = json.Unmarshal(raw, &data)
 	if resp.StatusCode >= 400 {
-		return nil, errors.New(string(raw))
+		return nil, &HTTPError{Status: resp.StatusCode, Body: raw}
 	}
 	return data, nil
 }

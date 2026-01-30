@@ -42,12 +42,14 @@ type HealthResponse = {
   >
 }
 
+// Types for popular games
 type PopularGame = {
   id: number
   title: string
   image: string
 }
 
+// Response type for popular games API
 type PopularGameResponse = {
   id: number
   name: string
@@ -109,6 +111,11 @@ type HomeProps = {
   onSignOut: () => void
 }
 
+type AuthHandlers = {
+  authUser: AuthUser | null
+  onAuthSuccess: (payload: unknown) => void
+}
+
 const Home = ({ authUser, onSignOut }: HomeProps) => {
   // Define service cards for the home page
   const navigate = useNavigate()
@@ -124,7 +131,9 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
   const [popularLoading, setPopularLoading] = useState(false)
   const [popularError, setPopularError] = useState<string | null>(null)
 
+  // Load popular games on component mount
   useEffect(() => {
+    // Abort controller for fetch requests
     const controller = new AbortController()
     const loadPopularGames = async () => {
       setPopularLoading(true)
@@ -168,7 +177,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
     return () => controller.abort()
   }, [totalLimit])
 
-
+// Get metrics for card scrolling calculations
   const getCardMetrics = () => {
     const container = cardsRef.current
     if (!container) return null
@@ -182,6 +191,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
     return { container, cardWidth, gap, containerWidth }
   }
 
+  // Update active dot based on scroll position
   const updateActiveDot = useCallback(() => {
     if (popularGames.length === 0) return
     const metrics = getCardMetrics()
@@ -228,6 +238,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
     scrollToPage(nextIndex)
   }, [activeDot, pageSize, popularGames.length, scrollToPage])
 
+  // Handle touch start to record initial X position
   const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
     const touch = event.touches[0]
     touchStartXRef.current = touch.clientX
@@ -235,6 +246,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
     swipeHandledRef.current = false
   }
 
+  // Handle touch move to track last X position
   const handleTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
     const touch = event.touches[0]
     touchLastXRef.current = touch.clientX
@@ -254,6 +266,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
     shiftPage(delta < 0 ? 1 : -1)
   }
 
+  // Set up scroll and resize event listeners
   useEffect(() => {
     const container = cardsRef.current
     if (!container) return
@@ -286,6 +299,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
         <nav className="landing__nav">
           <div className="landing__logo" onClick={() => navigate('/')}>
             <img src={logoUrl} alt="NextPlay Logo" width={128} height={128} />
+            <span>NextPlay</span>
           </div>
           <div>
             <div className="landing__nav-actions">
@@ -295,10 +309,10 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
                 </button>
               ) : (
                 <>
-                  <button type="button" onClick={() => navigate('/user')}>
+                  <button type="button" onClick={() => navigate('/login')}>
                     Sign Up
                   </button>
-                  <button type="button" onClick={() => navigate('/user')}>
+                  <button type="button" onClick={() => navigate('/login')}>
                     Log In
                   </button>
                 </>
@@ -465,53 +479,6 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
   )
 }
 
-      type UserAccessProps = {
-        authUser: AuthUser | null
-  onAuthSuccess: (payload: unknown) => void
-  onSignOut: () => void
-}
-
-      const UserAccess = ({authUser, onAuthSuccess, onSignOut}: UserAccessProps) => {
-  const navigate = useNavigate()
-
-      return (
-      <div className="min-h-screen bg-slate-900 text-slate-100">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-          <div>
-            <h1 className="text-xl font-semibold">User Access</h1>
-            <p className="text-xs text-slate-400">Login or create an account</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {authUser && (
-              <button
-                type="button"
-                onClick={onSignOut}
-                className="rounded-lg border border-rose-500/60 px-3 py-2 text-xs font-semibold text-rose-200 hover:border-rose-400"
-              >
-                Sign out
-              </button>
-            )}
-            <Button label="Back to services" showIcon={false} onClick={() => navigate('/')} />
-          </div>
-        </div>
-        <div className="mx-auto flex max-w-5xl justify-center px-4 py-10">
-          <div className="space-y-6">
-            {authUser && (
-              <div className="rounded-lg border border-emerald-400/50 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-                <div className="font-semibold">Signed in</div>
-                <div className="mt-1 text-xs text-emerald-100/80">
-                  {authUser.username ?? authUser.email ?? 'User'}{' '}
-                  {authUser.id !== undefined ? `(ID: ${authUser.id})` : '(ID unavailable)'}
-                </div>
-              </div>
-            )}
-            <Form apiBaseUrl={API_ROOT} onAuthSuccess={onAuthSuccess} />
-          </div>
-        </div>
-      </div>
-      )
-}
-
 const HealthPage = () => {
   const navigate = useNavigate()
       const [healthChecks, setHealthChecks] = useState<HealthCheck[]>([])
@@ -658,13 +625,13 @@ const HealthPage = () => {
 
   const handleAuthSuccess = (payload: unknown) => {
     const user = coerceAuthUser(payload)
-        if (!user) return
-        setAuthUser(user)
-        try {
-          localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user))
-        } catch {
-          // Ignore storage errors (e.g., private mode)
-        }
+    if (!user) return
+    setAuthUser(user)
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user))
+    } catch {
+      // Ignore storage errors (e.g., private mode)
+    }
   }
 
   const handleSignOut = () => {
@@ -682,10 +649,12 @@ const HealthPage = () => {
           <Route path="/games" element={<Game />} />
           <Route path="/games/:gameId" element={<Game />} />
           <Route
+            path="/login"
+            element={<LoginRoute authUser={authUser} onAuthSuccess={handleAuthSuccess} />}
+          />
+          <Route
             path="/user"
-            element={
-              <UserAccess authUser={authUser} onAuthSuccess={handleAuthSuccess} onSignOut={handleSignOut} />
-            }
+            element={<LoginRoute authUser={authUser} onAuthSuccess={handleAuthSuccess} />}
           />
           <Route path="/health" element={<HealthPage />} />
           <Route path="*" element={<Home authUser={authUser} onSignOut={handleSignOut} />} />
@@ -694,3 +663,35 @@ const HealthPage = () => {
 }
 
         export default App
+const LoginRoute = ({ authUser, onAuthSuccess }: AuthHandlers) => {
+  const navigate = useNavigate()
+  useEffect(() => {
+    if (authUser) {
+      const timeoutId = window.setTimeout(() => {
+        navigate('/', { replace: true })
+      }, 1000)
+      return () => window.clearTimeout(timeoutId)
+    }
+  }, [authUser, navigate])
+
+  return (
+    <div className="landing landing--auth">
+      <div className="landing__container landing__container--auth">
+        <nav className="landing__nav">
+          <div className="landing__logo" onClick={() => navigate('/')}>
+            <img src={logoUrl} alt="NextPlay Logo" width={96} height={96} />
+            <span>NextPlay</span>
+          </div>
+        </nav>
+        <main className="auth-page">
+          {authUser && (
+            <div className="auth-status">
+              Signed in as {authUser.username ?? authUser.email ?? 'User'}
+            </div>
+          )}
+          <Form apiBaseUrl={API_ROOT} onAuthSuccess={onAuthSuccess} />
+        </main>
+      </div>
+    </div>
+  )
+}

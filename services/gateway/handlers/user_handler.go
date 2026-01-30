@@ -5,13 +5,23 @@ import (
 	"github.com/maxceban/nextplay/services/gateway/clients"
 )
 
+func writeProxyError(c *fiber.Ctx, err error) error {
+	if httpErr, ok := err.(*clients.HTTPError); ok {
+		if len(httpErr.Body) == 0 {
+			return c.Status(httpErr.Status).JSON(fiber.Map{"error": "upstream error"})
+		}
+		return c.Status(httpErr.Status).Send(httpErr.Body)
+	}
+	return c.Status(502).JSON(fiber.Map{"error": err.Error()})
+}
+
 // GetUserByID handles GET /api/users/:id
 func GetUserByID(c *fiber.Ctx) error {
 	id := c.Params("id")
 	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.GetUserByID(id)
 	if err != nil {
-		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
+		return writeProxyError(c, err)
 	}
 	return c.JSON(resp)
 }
@@ -21,7 +31,7 @@ func RegisterUser(c *fiber.Ctx) error {
 	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.RegisterUser(c.Body())
 	if err != nil {
-		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
+		return writeProxyError(c, err)
 	}
 	return c.JSON(resp)
 }
@@ -31,7 +41,7 @@ func LoginUser(c *fiber.Ctx) error {
 	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.LoginUser(c.Body())
 	if err != nil {
-		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
+		return writeProxyError(c, err)
 	}
 	return c.JSON(resp)
 }
@@ -42,7 +52,7 @@ func UpdateUser(c *fiber.Ctx) error {
 	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.UpdateUser(id, c.Body())
 	if err != nil {
-		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
+		return writeProxyError(c, err)
 	}
 	return c.JSON(resp)
 }
@@ -53,7 +63,7 @@ func DeleteUser(c *fiber.Ctx) error {
 	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.DeleteUser(id)
 	if err != nil {
-		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
+		return writeProxyError(c, err)
 	}
 	return c.JSON(resp)
 }
@@ -64,7 +74,7 @@ func GetUserInteraction(c *fiber.Ctx) error {
 	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.GetUserInteraction(id)
 	if err != nil {
-		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
+		return writeProxyError(c, err)
 	}
 	return c.JSON(resp)
 }
@@ -75,7 +85,7 @@ func CreateUserInteraction(c *fiber.Ctx) error {
 	userClient := clients.NewUserClientWithAuth(c.Get("Authorization"))
 	resp, err := userClient.CreateUserInteraction(id, c.Body())
 	if err != nil {
-		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
+		return writeProxyError(c, err)
 	}
 	return c.JSON(resp)
 }

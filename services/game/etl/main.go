@@ -309,6 +309,12 @@ func run() error {
 		if existing.CoverImageURL == nil && incoming.CoverImageURL != nil {
 			existing.CoverImageURL = incoming.CoverImageURL
 		}
+		if existing.AggregatedRating == nil && incoming.AggregatedRating != nil {
+			existing.AggregatedRating = incoming.AggregatedRating
+		}
+		if existing.AggregatedRatingCount == nil && incoming.AggregatedRatingCount != nil {
+			existing.AggregatedRatingCount = incoming.AggregatedRatingCount
+		}
 		return existing
 	}
 	// Build upsert rows, deduplicating by IGDB ID
@@ -331,6 +337,20 @@ func run() error {
 			Publishers:    nullableString(publishersByGame[game.ID]),
 			Story:         nullableString(game.Storyline),
 			CoverImageURL: nullableString(coverURLByGame[game.ID]),
+			AggregatedRating: func() *float64 {
+				if game.AggregatedRating <= 0 {
+					return nil
+				}
+				value := game.AggregatedRating
+				return &value
+			}(),
+			AggregatedRatingCount: func() *int {
+				if game.AggregatedRatingCount <= 0 {
+					return nil
+				}
+				value := game.AggregatedRatingCount
+				return &value
+			}(),
 		}
 
 		if idx, exists := gameRowIndex[game.ID]; exists {

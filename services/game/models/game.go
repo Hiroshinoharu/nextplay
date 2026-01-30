@@ -2,6 +2,7 @@ package models
 
 import "encoding/json"
 
+// Game represents a video game with its details and relationships
 type Game struct {
 	ID            int64  `json:"id"`
 	Name          string `json:"name"`
@@ -10,6 +11,8 @@ type Game struct {
 	Genre         string `json:"genre"`
 	Publishers    string `json:"publishers"`
 	CoverImageURL string `json:"cover_image"`
+	AggregatedRating float64 `json:"aggregated_rating"`
+	AggregatedRatingCount int `json:"aggregated_rating_count"`
 	Story         string `json:"story"`
 	Media         []GameMedia `json:"media"`
 
@@ -21,6 +24,7 @@ type Game struct {
 	Series     []int64 `json:"series"`
 }
 
+// GameMedia represents media associated with a game
 type GameMedia struct {
 	IGDBID    int64  `json:"igdb_id"`
 	MediaType string `json:"media_type"`
@@ -28,7 +32,10 @@ type GameMedia struct {
 	SortOrder int    `json:"sort_order"`
 }
 
+// Custom JSON marshalling to ensure slices are not nil	
+// when serialized to JSON (empty slices instead of null)
 func (g Game) MarshalJSON() ([]byte, error) {
+	// Create an alias to avoid infinite recursion
 	type Alias Game
 	alias := Alias(g)
 	if alias.Platforms == nil {
@@ -49,5 +56,6 @@ func (g Game) MarshalJSON() ([]byte, error) {
 	if alias.Media == nil {
 		alias.Media = []GameMedia{}
 	}
+	// Marshal the alias to JSON
 	return json.Marshal(alias)
 }
