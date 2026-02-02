@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import Form from './components/Form'
 import logoUrl from './assets/logo.png'
 
@@ -6,6 +6,8 @@ import logoUrl from './assets/logo.png'
 export default function Login() {
     // Initialize navigation hook
     const navigate = useNavigate()
+    const location = useLocation()
+    const emailFromQuery = new URLSearchParams(location.search).get("email") ?? undefined;
 
     // Render login page layout
     return (
@@ -18,7 +20,7 @@ export default function Login() {
                     </div>
                 </nav>
                 <main className="auth-page">
-                    <Form />
+                    <Form initialEmail={emailFromQuery} />
                 </main>
             </div>
         </div>

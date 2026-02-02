@@ -59,3 +59,10 @@ func (g Game) MarshalJSON() ([]byte, error) {
 	// Marshal the alias to JSON
 	return json.Marshal(alias)
 }
+
+// ExternalGame represents an external game entry linked to IGDB
+type ExternalGame struct {
+	ID       int64  `json:"id"`
+	GameID   string `json:"game_id"`
+	Category string `json:"category"`
+}

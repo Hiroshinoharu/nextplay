@@ -51,12 +51,11 @@
   width: 100%;
   display: flex;
   justify-content: center;
-  padding: 0;
+  padding-block: 24px;
   flex-direction: column;
   align-items: center;
   gap: 12px;
   min-height: 0;
-  transform: translateY(-240px);
 }
 
 .landing--auth .landing__nav {
@@ -94,8 +93,7 @@
 
 @media (max-width: 600px) {
   .auth-page {
-    transform: translateY(-40px);
-    padding-top: 16px;
+    padding-block: 16px;
   }
 }
 

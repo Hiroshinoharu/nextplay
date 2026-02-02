@@ -18,6 +18,8 @@ import (
 	"github.com/maxceban/nextplay/services/shared/config"
 )
 
+const defaultMetacriticCategoryID = 14
+
 // main is the entry point for the ETL process
 func main() {
 	if err := run(); err != nil {
@@ -86,9 +88,20 @@ func run() error {
 		}
 	}
 
+	metacriticCategoryID := defaultMetacriticCategoryID
+	if raw := strings.TrimSpace(os.Getenv("IGDB_METACRITIC_CATEGORY_ID")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			log.Printf("Invalid IGDB_METACRITIC_CATEGORY_ID=%q, using default %d", raw, metacriticCategoryID)
+		} else {
+			metacriticCategoryID = parsed
+		}
+	}
+
 	// Initialize IGDB client with rate limiting settings
 	minInterval := time.Second / time.Duration(rps)
 	log.Printf("IGDB rate limit: %d rps, max concurrent=%d", rps, maxConcurrent)
+	log.Printf("IGDB metacritic category ID: %d", metacriticCategoryID)
 
 	// Create IGDB client struct
 	client := igdb.Client{
@@ -109,6 +122,7 @@ func run() error {
 	genreIDs := collectIDs(games, func(game igdb.Game) []int { return game.Genres })
 	platformIDs := collectIDs(games, func(game igdb.Game) []int { return game.Platforms })
 	keywordIDs := collectIDs(games, func(game igdb.Game) []int { return game.Keywords })
+	externalGameIDs := collectIDs(games, func(game igdb.Game) []int { return game.ExternalGames })
 
 	// Collect cover IDs
 	coverIDs := collectIDs(games, func(game igdb.Game) []int {
@@ -128,6 +142,7 @@ func run() error {
 	platformNames := map[int]string{}
 	keywordNames := map[int]string{}
 	involvedCompanies := map[int]igdb.InvolvedCompany{}
+	externalGames := map[int]igdb.ExternalGame{}
 	coverImageIDs := map[int]string{}
 	artworkImageIDs := map[int]string{}
 	screenshotImageIDs := map[int]string{}
@@ -194,6 +209,13 @@ func run() error {
 		fetch("fetch involved companies", func() error {
 			var err error
 			involvedCompanies, err = client.FetchInvolvedCompanies(involvedCompanyIDs)
+			return err
+		})
+	}
+	if len(externalGameIDs) > 0 {
+		fetch("fetch external games", func() error {
+			var err error
+			externalGames, err = client.FetchExternalGames(externalGameIDs)
 			return err
 		})
 	}
@@ -280,6 +302,10 @@ func run() error {
 	publishersByGame := buildPublishersByGame(games, involvedCompanies, companyNames)
 	coverURLByGame := buildCoverURLsByGame(games, coverImageIDs, artworkImageIDs, screenshotImageIDs)
 	logMissingGameFields(games, publishersByGame, coverURLByGame, genreNames)
+	metacriticGames := buildMetacriticGamesByID(externalGames, metacriticCategoryID)
+	if len(metacriticGames) > 0 {
+		log.Printf("Found %d games with Metacritic links", len(metacriticGames))
+	}
 
 	// Prepare game upsert rows
 	gameRows := make([]gameUpsertRow, 0, len(games))
@@ -338,6 +364,9 @@ func run() error {
 			Story:         nullableString(game.Storyline),
 			CoverImageURL: nullableString(coverURLByGame[game.ID]),
 			AggregatedRating: func() *float64 {
+				if _, ok := metacriticGames[game.ID]; ok {
+					return nil
+				}
 				if game.AggregatedRating <= 0 {
 					return nil
 				}
@@ -345,6 +374,9 @@ func run() error {
 				return &value
 			}(),
 			AggregatedRatingCount: func() *int {
+				if _, ok := metacriticGames[game.ID]; ok {
+					return nil
+				}
 				if game.AggregatedRatingCount <= 0 {
 					return nil
 				}
@@ -638,6 +670,25 @@ func buildCoverURLsByGame(games []igdb.Game, coverImageIDs, artworkImageIDs, scr
 		if imageID := firstImageID(game.Screenshots, screenshotImageIDs); imageID != "" {
 			out[game.ID] = buildCoverURL(imageID)
 		}
+	}
+	return out
+}
+
+// buildMetacriticGamesByID builds a set of game IDs that have Metacritic entries
+// based on the external games data and the specified Metacritic category ID.
+func buildMetacriticGamesByID(externalGames map[int]igdb.ExternalGame, metacriticCategoryID int) map[int]struct{} {
+	out := make(map[int]struct{})
+	if metacriticCategoryID <= 0 || len(externalGames) == 0 {
+		return out
+	}
+	for _, entry := range externalGames {
+		if entry.GameID <= 0 {
+			continue
+		}
+		if entry.Category != metacriticCategoryID {
+			continue
+		}
+		out[entry.GameID] = struct{}{}
 	}
 	return out
 }

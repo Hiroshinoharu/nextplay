@@ -70,7 +70,7 @@ func (client *Client) FetchGames(maxGames int) ([]Game, error) {
 			limit = maxGames - offset
 		}
 		query := fmt.Sprintf(
-			"fields name,summary,first_release_date,aggregated_rating,aggregated_rating_count,genres,platforms,keywords,storyline,cover,involved_companies,artworks,screenshots,videos; limit %d; offset %d; where name != null;",
+			"fields name,summary,first_release_date,aggregated_rating,aggregated_rating_count,genres,platforms,keywords,storyline,cover,involved_companies,external_games,artworks,screenshots,videos; limit %d; offset %d; where name != null;",
 			limit,
 			offset,
 		)
@@ -89,6 +89,32 @@ func (client *Client) FetchGames(maxGames int) ([]Game, error) {
 		games = append(games, batch...)
 	}
 	return games, nil
+}
+
+func (client *Client) FetchExternalGames(ids []int) (map[int]ExternalGame, error){
+	if len(ids) == 0 {
+		return map[int]ExternalGame{}, nil
+	}
+
+	result := make(map[int]ExternalGame, len(ids))
+	for _,chunks := range chunkIDs(ids, 200){
+		query := fmt.Sprintf("fields game,category; where id = (%s); limit %d;", joinIDs(chunks), len(chunks))
+		payload, err := client.post("/external_games", query)
+		if err != nil {
+			return nil, err
+		}
+
+		var entries []ExternalGame
+		if err := json.Unmarshal(payload, &entries); err != nil {
+			return nil, err
+		}
+		for _, item := range entries {
+			if item.ID > 0 {
+				result[item.ID] = item
+			}
+		}
+	}
+	return result, nil
 }
 
 // FetchNamed retrieves named entities (like genres, platforms, keywords) by their IDs

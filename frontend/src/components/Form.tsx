@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 
 type AuthFormProps = {
   apiBaseUrl?: string;
   onAuthSuccess?: (payload: unknown, mode: 'login' | 'register') => void;
+  initialEmail?: string;
 };
 
-const Form = ({ apiBaseUrl, onAuthSuccess }: AuthFormProps) => {
+const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail }: AuthFormProps) => {
   const rawBaseUrl = (apiBaseUrl ?? import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '');
   const apiRoot = rawBaseUrl.endsWith('/api') ? rawBaseUrl.slice(0, -4) : rawBaseUrl;
   const apiUrl = (path: string) => {
@@ -15,14 +16,21 @@ const Form = ({ apiBaseUrl, onAuthSuccess }: AuthFormProps) => {
   };
 
   // State variables for form inputs and status messages
-  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginIdentifier, setLoginIdentifier] = useState(initialEmail ?? '');
   const [loginPassword, setLoginPassword] = useState('');
   const [signupName, setSignupName] = useState('');
-  const [signupEmail, setSignupEmail] = useState('');
+  const [signupEmail, setSignupEmail] = useState(initialEmail ?? '');
   const [signupPassword, setSignupPassword] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const trimmedEmail = initialEmail?.trim();
+    if (!trimmedEmail) return;
+    setLoginIdentifier((current) => (current ? current : trimmedEmail));
+    setSignupEmail((current) => (current ? current : trimmedEmail));
+  }, [initialEmail]);
 
   const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -191,6 +199,7 @@ const StyledWrapper = styled.div`
     --bg-color: #fff;
     --bg-color-alt: #666;
     --main-color: #323232;
+    --switch-color: #8cf37a;
     min-height: auto;
     display: flex;
     align-items: center;
@@ -231,7 +240,7 @@ const StyledWrapper = styled.div`
     top: 0;
     width: 80px;
     text-decoration: underline;
-    color: var(--font-color);
+    color: var(--switch-color);
     font-weight: 600;
     text-align: right;
     opacity: 0.85;
@@ -244,7 +253,7 @@ const StyledWrapper = styled.div`
     top: 0;
     width: 80px;
     text-decoration: none;
-    color: var(--font-color);
+    color: var(--switch-color);
     font-weight: 600;
     text-align: left;
     opacity: 0.85;
@@ -265,8 +274,8 @@ const StyledWrapper = styled.div`
   .slider {
     box-sizing: border-box;
     border-radius: 5px;
-    border: 2px solid var(--main-color);
-    box-shadow: 4px 4px var(--main-color);
+    border: 2px solid var(--switch-color);
+    box-shadow: 4px 4px var(--switch-color);
     position: absolute;
     cursor: pointer;
     top: 0;
@@ -284,12 +293,12 @@ const StyledWrapper = styled.div`
     content: "";
     height: 24px;
     width: 24px;
-    border: 2px solid var(--main-color);
+    border: 2px solid var(--switch-color);
     border-radius: 5px;
     left: -2px;
     bottom: 1px;
     background-color: var(--bg-color);
-    box-shadow: 0 3px 0 var(--main-color);
+    box-shadow: 0 3px 0 var(--switch-color);
     transition: 0.3s;
   }
 
