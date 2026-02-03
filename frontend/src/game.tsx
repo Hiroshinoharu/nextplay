@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Button from './components/Button'
 
@@ -78,7 +78,7 @@ function Game() {
   }, [baseUrl, isValidId, numericId])
 
   // Function to load the game details from the API
-  const loadGame = async (signal?: AbortSignal) => {
+  const loadGame = useCallback(async (signal?: AbortSignal) => {
     if (!gameUrl) {
       setGame(null)
       setGameError(gameId ? 'Invalid game id.' : 'Missing game id.')
@@ -102,14 +102,14 @@ function Game() {
         setGameLoading(false)
       }
     }
-  }
+  }, [gameUrl, gameId])
 
   // Load game details when the component mounts or when gameUrl/gameId changes
   useEffect(() => {
     const controller = new AbortController()
     loadGame(controller.signal)
     return () => controller.abort()
-  }, [gameUrl, gameId])
+  }, [loadGame])
 
   useEffect(() => {
     if (!gameError) return

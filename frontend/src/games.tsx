@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import Button from './components/Button'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import GameCarousel from './components/GameCarousel'
+import logoUrl from './assets/logo.png'
+import './games.css'
 
 // Define the structure of a game item based on expected API response fields
 type GameItem = {
@@ -41,6 +42,7 @@ const parseReleaseDate = (value?: string) => {
 function Games() {
   // Router and state hooks
   const navigate = useNavigate()
+  const location = useLocation()
   const [baseUrl] = useState<string>(API_ROOT)
   const [games, setGames] = useState<GameItem[]>([])
   const [gamesError, setGamesError] = useState<string | null>(null)
@@ -55,10 +57,10 @@ function Games() {
   }, [baseUrl])
 
   // Function to load the list of games from the API
-  const loadGames = async () => {
+  const loadGames = useCallback(async () => {
     setGamesLoading(true)
     setGamesError(null)
-    
+
     try {
       const responseValue = await fetch(gamesUrl)
       if (!responseValue.ok) {
@@ -79,12 +81,12 @@ function Games() {
     } finally {
       setGamesLoading(false)
     }
-  }
+  }, [gamesUrl])
 
   useEffect(() => {
     // Load the list of games when the gamesUrl changes
     loadGames()
-  }, [gamesUrl])
+  }, [loadGames])
 
   useEffect(() => {
     const message = gamesError
@@ -99,6 +101,14 @@ function Games() {
   const openGameDetail = (targetId: number) => {
     navigate(`/games/${targetId}`)
   }
+
+  const activeTab = location.pathname.startsWith('/games')
+    ? 'discover'
+    : location.pathname === '/'
+      ? 'home'
+      : location.pathname.startsWith('/user')
+        ? 'list'
+        : 'home'
 
   const featuredGame = games[0] ?? null
   const featuredCover = normalizeCoverUrl(featuredGame?.cover_image ?? undefined)
@@ -115,130 +125,169 @@ function Games() {
   const discoveryList = discoveryGames.length ? discoveryGames : games.slice(0, 10)
 
   return (
-    <div className="min-h-screen bg-[#0b141a] text-slate-100">
-      <header className="relative overflow-hidden border-b border-[#132029]">
-        {featuredCover && (
-          <div className="absolute inset-0">
-            <img
-              src={featuredCover}
-              alt={featuredGame?.name || 'Featured game'}
-              className="h-full w-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#0b141a] via-[#0b141a]/70 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0b141a] via-[#0b141a]/60 to-transparent" />
+    <div className="games-page">
+      <div className="games-shell">
+        <header className="games-header">
+          <button type="button" className="games-brand" onClick={() => navigate('/')}>
+            <img src={logoUrl} alt="NextPlay Logo" />
+            <span className="games-brand__text">
+              <span className="games-brand__title">NextPlay</span>
+              <span className="games-brand__subtitle">Home Page</span>
+            </span>
+          </button>
+          <nav className="games-nav" aria-label="Primary">
+            <button
+              type="button"
+              className={`games-nav__item${activeTab === 'home' ? ' is-active' : ''}`}
+              onClick={() => navigate('/')}
+            >
+              Home
+            </button>
+            <button
+              type="button"
+              className={`games-nav__item${activeTab === 'discover' ? ' is-active' : ''}`}
+              onClick={() => navigate('/games')}
+            >
+              Discover
+            </button>
+            <button
+              type="button"
+              className={`games-nav__item${activeTab === 'list' ? ' is-active' : ''}`}
+              onClick={() => navigate('/user')}
+            >
+              My List
+            </button>
+          </nav>
+          <div className="games-actions">
+            <button type="button" className="games-icon-button" aria-label="Search games">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M15.5 14h-.79l-.28-.27a6 6 0 1 0-.71.71l.27.28v.79l5 5 1.5-1.5-5-5zm-5.5 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"
+                  fill="currentColor"
+                />
+              </svg>
+            </button>
+            <button type="button" className="games-avatar" aria-label="Account menu">
+              NP
+            </button>
           </div>
-        )}
-        <div className="relative z-10">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-            <div className="flex items-center gap-3">
-              <div className="text-xs uppercase tracking-[0.35em] text-slate-400">NextPlay</div>
-              <span className="text-[11px] uppercase tracking-[0.25em] text-slate-500">Library</span>
-            </div>
-            <Button label="Back to services" showIcon={false} onClick={() => navigate('/games')} />
+        </header>
+
+        <section className="games-hero">
+          <div className="games-hero__media">
+            {featuredCover ? (
+              <img src={featuredCover} alt={featuredGame?.name || 'Featured game'} />
+            ) : null}
+            <div className="games-hero__shade" />
           </div>
-          <div className="mx-auto max-w-6xl px-6 pb-16 pt-6">
+          <div className="games-hero__content">
             {featuredGame ? (
-              <div className="max-w-xl space-y-4">
-                <p className="text-xs uppercase tracking-[0.3em] text-amber-300">
-                  Featured today
-                </p>
-                <h1 className="text-4xl font-semibold tracking-tight text-white">
-                  {featuredGame.name}
-                </h1>
-                <p className="text-sm text-slate-300">
+              <>
+                <p className="games-hero__eyebrow">Featured today</p>
+                <h1 className="games-hero__title">{featuredGame.name}</h1>
+                <p className="games-hero__desc">
                   {featuredGame.description || 'A fresh pick from your library.'}
                 </p>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
+                <div className="games-hero__meta">
                   <span>{featuredGame.genre ?? 'Genre: n/a'}</span>
-                  <span>•</span>
                   <span>{featuredGame.publishers ?? 'Publisher: n/a'}</span>
-                  <span>•</span>
                   <span>
                     {featuredGame.release_date
                       ? `Release: ${featuredGame.release_date}`
                       : 'Release: n/a'}
                   </span>
                 </div>
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    label="View details"
-                    showIcon={false}
-                    disabled={!featuredGame.id}
+                <div className="games-hero__actions">
+                  <button
+                    type="button"
+                    className="games-hero__button games-hero__button--primary"
                     onClick={() => {
                       if (featuredGame?.id) openGameDetail(featuredGame.id)
                     }}
-                  />
-                  <Button
-                    label={gamesLoading ? 'Refreshing...' : 'Refresh list'}
-                    showIcon={false}
+                    disabled={!featuredGame.id}
+                  >
+                    View details
+                  </button>
+                  <button
+                    type="button"
+                    className="games-hero__button games-hero__button--ghost"
                     onClick={loadGames}
                     disabled={gamesLoading}
-                  />
+                  >
+                    {gamesLoading ? 'Refreshing...' : 'Refresh list'}
+                  </button>
                 </div>
-              </div>
+              </>
             ) : (
-              <div className="max-w-xl space-y-3 text-slate-300">
-                <h1 className="text-3xl font-semibold text-white">Loading games...</h1>
-                <p>We will surface a featured title as soon as your API responds.</p>
-              </div>
+              <>
+                <p className="games-hero__eyebrow">Library loading</p>
+                <h1 className="games-hero__title">Loading games...</h1>
+                <p className="games-hero__desc">
+                  We will surface a featured title as soon as your API responds.
+                </p>
+                <div className="games-hero__actions">
+                  <button
+                    type="button"
+                    className="games-hero__button games-hero__button--ghost"
+                    onClick={loadGames}
+                    disabled={gamesLoading}
+                  >
+                    {gamesLoading ? 'Refreshing...' : 'Refresh list'}
+                  </button>
+                </div>
+              </>
             )}
           </div>
-        </div>
-      </header>
+        </section>
 
-      <main className="mx-auto max-w-6xl px-6 py-10 space-y-10">
-        {gamesError && (
-          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-            {gamesError}
-          </div>
-        )}
+        <main className="games-content">
+          {gamesError && <div className="games-alert">{gamesError}</div>}
 
-        <GameCarousel
-          title="Upcoming Games"
-          badge="Preview"
-          games={upcomingList}
-          onSelect={openGameDetail}
-          getCoverUrl={carouselCover}
-          getDescription={game =>
-            game.release_date ? `Release: ${game.release_date}` : 'Release: n/a'
-          }
-        />
+          <GameCarousel
+            title="Upcoming Games"
+            badge="Preview"
+            games={upcomingList}
+            onSelect={openGameDetail}
+            getCoverUrl={carouselCover}
+            itemWidth={170}
+            getDescription={game =>
+              game.release_date ? `Release: ${game.release_date}` : 'Release: n/a'
+            }
+          />
 
-        <GameCarousel
-          title="Top 10 of all time"
-          badge="Ranked"
-          games={topTenGames}
-          onSelect={openGameDetail}
-          getCoverUrl={carouselCover}
-          showRank
-          getDescription={game =>
-            game.genre ? `Genre: ${game.genre}` : 'Genre: n/a'
-          }
-        />
+          <GameCarousel
+            title="Top 10 of all time"
+            badge="Ranked"
+            games={topTenGames}
+            onSelect={openGameDetail}
+            getCoverUrl={carouselCover}
+            showRank
+            itemWidth={180}
+            getDescription={game =>
+              game.genre ? `Genre: ${game.genre}` : 'Genre: n/a'
+            }
+          />
 
-        <GameCarousel
-          title="Explore more"
-          badge="Discover"
-          games={discoveryList}
-          onSelect={openGameDetail}
-          getCoverUrl={carouselCover}
-          getDescription={game =>
-            [
-              game.release_date ? `Release: ${game.release_date}` : null,
-              game.genre ? `Genre: ${game.genre}` : null,
-            ]
-              .filter(Boolean)
-              .join('\n')
-          }
-        />
+          <GameCarousel
+            title="Explore more"
+            badge="Discover"
+            games={discoveryList}
+            onSelect={openGameDetail}
+            getCoverUrl={carouselCover}
+            itemWidth={170}
+            getDescription={game =>
+              [
+                game.release_date ? `Release: ${game.release_date}` : null,
+                game.genre ? `Genre: ${game.genre}` : null,
+              ]
+                .filter(Boolean)
+                .join('\n')
+            }
+          />
+        </main>
+      </div>
 
-      </main>
-      
-      {toastMessage && (
-        <div className="fixed right-4 top-4 z-50 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-100 shadow-lg">
-          {toastMessage}
-        </div>
-      )}
+      {toastMessage && <div className="games-toast">{toastMessage}</div>}
     </div>
   )
 }

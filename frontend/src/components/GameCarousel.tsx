@@ -25,17 +25,6 @@ const baseRowStyle: CSSProperties = {
   display: 'flex',
   flexWrap: 'nowrap',
   overflowX: 'auto',
-  paddingBottom: '0.5rem',
-  paddingRight: '0.5rem',
-}
-
-const rankStyle: CSSProperties = {
-  position: 'absolute',
-  left: '-0.5rem',
-  top: '-1.25rem',
-  fontSize: '3rem',
-  fontWeight: 600,
-  color: '#475569',
 }
 
 const defaultCoverUrl = (game: GameCarouselItem) => {
@@ -62,27 +51,23 @@ const GameCarousel = ({
   const itemStyle: CSSProperties = { flex: `0 0 ${itemWidth}px` }
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-white">{title}</h2>
-        {badge && (
-          <span className="text-xs uppercase tracking-[0.3em] text-slate-400">{badge}</span>
-        )}
+    <section className="games-section">
+      <div className="games-section__header">
+        <h2 className="games-section__title">{title}</h2>
+        {badge && <span className="games-section__badge">{badge}</span>}
       </div>
-      <div className="flex flex-nowrap overflow-x-auto pb-2 pr-2" style={rowStyle}>
+      <div className="games-row" style={rowStyle}>
         {games.map((game, index) => {
           const coverSrc = getCoverUrl(game)
           const description = getDescription(game)
           return (
             <div
               key={game.id}
-              className={`flex-none${showRank ? ' relative' : ''}`}
+              className={`games-item${showRank ? ' games-item--ranked' : ''}`}
               style={itemStyle}
             >
               {showRank && (
-                <span className="absolute -left-2 -top-5 text-5xl font-semibold text-slate-600" style={rankStyle}>
-                  {index + 1}
-                </span>
+                <span className="games-rank">{index + 1}</span>
               )}
               <Card
                 title={game.name || 'Untitled'}

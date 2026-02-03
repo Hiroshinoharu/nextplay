@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Route, Routes, useLocation ,useNavigate } from "react-router-dom";
+import { Route, Routes, useLocation ,useNavigate, Navigate } from "react-router-dom";
 import "./App.css";
 import Button from "./components/Button";
 import Card from "./components/card";
@@ -670,19 +670,16 @@ const HealthPage = () => {
 };
 
 function App() {
-  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
-
-  useEffect(() => {
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
+    if (typeof window === "undefined") return null;
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as AuthUser;
-        setAuthUser(parsed);
-      }
+      if (!stored) return null;
+      return coerceAuthUser(JSON.parse(stored));
     } catch {
-      setAuthUser(null);
+      return null;
     }
-  }, []);
+  });
 
   const handleAuthSuccess = (payload: unknown) => {
     const user = coerceAuthUser(payload);
@@ -708,7 +705,13 @@ function App() {
     <Routes>
       <Route
         path="/"
-        element={<Home authUser={authUser} onSignOut={handleSignOut} />}
+        element={
+          authUser ? (
+            <Navigate to="/games" replace />
+          ) : (
+            <Home authUser={authUser} onSignOut={handleSignOut} />
+          )
+        }
       />
       <Route path="/games" element={<Games />} />
       <Route path="/games/:gameId" element={<Game />} />
@@ -727,7 +730,13 @@ function App() {
       <Route path="/health" element={<HealthPage />} />
       <Route
         path="*"
-        element={<Home authUser={authUser} onSignOut={handleSignOut} />}
+        element={
+          authUser ? (
+            <Navigate to="/games" replace />
+          ) : (
+            <Navigate to="/" replace />
+          )
+        }
       />
     </Routes>
   );
