@@ -1,0 +1,2 @@
+ALTER TABLE games ADD COLUMN IF NOT EXISTS total_rating FLOAT;
+ALTER TABLE games ADD COLUMN IF NOT EXISTS total_rating_count INT;

@@ -94,6 +94,9 @@ type gameUpsertRow struct {
 	CoverImageURL *string `json:"cover_image_url"`
 	AggregatedRating *float64 `json:"aggregated_rating"`
 	AggregatedRatingCount *int `json:"aggregated_rating_count"`
+	TotalRating *float64 `json:"total_rating"`
+	TotalRatingCount *int `json:"total_rating_count"`
+	Popularity *float64 `json:"popularity"`
 }
 
 // batchUpsertGames upserts games in a single statement and returns igdb_id -> game_id.
@@ -125,7 +128,10 @@ func batchUpsertGames(tx DBTX, rows []gameUpsertRow) (map[int]int, error) {
 				story text,
 				cover_image_url text,
 				aggregated_rating float8,
-				aggregated_rating_count int
+				aggregated_rating_count int,
+				total_rating float8,
+				total_rating_count int,
+				popularity float8
 			)
 		)
 		INSERT INTO games (
@@ -138,7 +144,10 @@ func batchUpsertGames(tx DBTX, rows []gameUpsertRow) (map[int]int, error) {
 			story,
 			cover_image_url,
 			aggregated_rating,
-			aggregated_rating_count
+			aggregated_rating_count,
+			total_rating,
+			total_rating_count,
+			popularity
 		)
 		SELECT
 			igdb_id,
@@ -150,7 +159,10 @@ func batchUpsertGames(tx DBTX, rows []gameUpsertRow) (map[int]int, error) {
 			story,
 			cover_image_url,
 			aggregated_rating,
-			aggregated_rating_count
+			aggregated_rating_count,
+			total_rating,
+			total_rating_count,
+			popularity
 		FROM data
 		ON CONFLICT (igdb_id) DO UPDATE
 		SET game_name = EXCLUDED.game_name,
@@ -161,7 +173,10 @@ func batchUpsertGames(tx DBTX, rows []gameUpsertRow) (map[int]int, error) {
 		    story = COALESCE(EXCLUDED.story, games.story),
 		    cover_image_url = COALESCE(EXCLUDED.cover_image_url, games.cover_image_url),
 		    aggregated_rating = COALESCE(EXCLUDED.aggregated_rating, games.aggregated_rating),
-		    aggregated_rating_count = COALESCE(EXCLUDED.aggregated_rating_count, games.aggregated_rating_count)
+		    aggregated_rating_count = COALESCE(EXCLUDED.aggregated_rating_count, games.aggregated_rating_count),
+		    total_rating = COALESCE(EXCLUDED.total_rating, games.total_rating),
+		    total_rating_count = COALESCE(EXCLUDED.total_rating_count, games.total_rating_count),
+		    popularity = COALESCE(EXCLUDED.popularity, games.popularity)
 		RETURNING igdb_id, game_id;
 	`
 

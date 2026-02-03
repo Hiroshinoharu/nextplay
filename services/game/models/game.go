@@ -13,6 +13,9 @@ type Game struct {
 	CoverImageURL string `json:"cover_image"`
 	AggregatedRating float64 `json:"aggregated_rating"`
 	AggregatedRatingCount int `json:"aggregated_rating_count"`
+	TotalRating float64 `json:"total_rating"`
+	TotalRatingCount int `json:"total_rating_count"`
+	Popularity    float64 `json:"popularity"`
 	Story         string `json:"story"`
 	Media         []GameMedia `json:"media"`
 

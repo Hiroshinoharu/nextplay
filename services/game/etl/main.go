@@ -18,8 +18,6 @@ import (
 	"github.com/maxceban/nextplay/services/shared/config"
 )
 
-const defaultMetacriticCategoryID = 14
-
 // main is the entry point for the ETL process
 func main() {
 	if err := run(); err != nil {
@@ -60,14 +58,22 @@ func run() error {
 
 	maxGames := 300
 	if raw := strings.TrimSpace(os.Getenv("IGDB_MAX_GAMES")); raw != "" {
-		parsed, err := strconv.Atoi(raw)
-		if err != nil || parsed <= 0 {
-			log.Printf("Invalid IGDB_MAX_GAMES=%q, using default %d", raw, maxGames)
+		if strings.EqualFold(raw, "all") || raw == "0" {
+			maxGames = 0
 		} else {
-			maxGames = parsed
+			parsed, err := strconv.Atoi(raw)
+			if err != nil || parsed < 0 {
+				log.Printf("Invalid IGDB_MAX_GAMES=%q, using default %d", raw, maxGames)
+			} else {
+				maxGames = parsed
+			}
 		}
 	}
-	log.Printf("Extracting %d games from IGDB", maxGames)
+	if maxGames == 0 {
+		log.Printf("Extracting all games from IGDB")
+	} else {
+		log.Printf("Extracting %d games from IGDB", maxGames)
+	}
 
 	rps := 4
 	if raw := strings.TrimSpace(os.Getenv("IGDB_RPS")); raw != "" {
@@ -88,20 +94,76 @@ func run() error {
 		}
 	}
 
-	metacriticCategoryID := defaultMetacriticCategoryID
-	if raw := strings.TrimSpace(os.Getenv("IGDB_METACRITIC_CATEGORY_ID")); raw != "" {
+	popularityYear := 0
+	if raw := strings.TrimSpace(os.Getenv("IGDB_POPULARITY_YEAR")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
 		if err != nil || parsed <= 0 {
-			log.Printf("Invalid IGDB_METACRITIC_CATEGORY_ID=%q, using default %d", raw, metacriticCategoryID)
+			log.Printf("Invalid IGDB_POPULARITY_YEAR=%q, ignoring", raw)
 		} else {
-			metacriticCategoryID = parsed
+			popularityYear = parsed
+		}
+	}
+	popularityPool := 0
+	if raw := strings.TrimSpace(os.Getenv("IGDB_POPULARITY_POOL")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			log.Printf("Invalid IGDB_POPULARITY_POOL=%q, ignoring", raw)
+		} else {
+			popularityPool = parsed
+		}
+	}
+	popularityMaxGames := 0
+	if raw := strings.TrimSpace(os.Getenv("IGDB_POPULARITY_MAX_GAMES")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			log.Printf("Invalid IGDB_POPULARITY_MAX_GAMES=%q, ignoring", raw)
+		} else {
+			popularityMaxGames = parsed
+		}
+	}
+	popularityMaxIDs := 0
+	if raw := strings.TrimSpace(os.Getenv("IGDB_POPULARITY_MAX_IDS")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			log.Printf("Invalid IGDB_POPULARITY_MAX_IDS=%q, ignoring", raw)
+		} else {
+			popularityMaxIDs = parsed
+		}
+	}
+	popularityMaxPages := 0
+	if raw := strings.TrimSpace(os.Getenv("IGDB_POPULARITY_MAX_PAGES")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			log.Printf("Invalid IGDB_POPULARITY_MAX_PAGES=%q, ignoring", raw)
+		} else {
+			popularityMaxPages = parsed
+		}
+	}
+	usePopularitySeed := strings.EqualFold(strings.TrimSpace(os.Getenv("IGDB_POPULARITY_SEED")), "true") ||
+		strings.TrimSpace(os.Getenv("IGDB_POPULARITY_SEED")) == "1" ||
+		popularityYear > 0
+	usePopularityAll := strings.EqualFold(strings.TrimSpace(os.Getenv("IGDB_POPULARITY_ALL")), "true") ||
+		strings.TrimSpace(os.Getenv("IGDB_POPULARITY_ALL")) == "1"
+	popularityType := 1
+	if raw := strings.TrimSpace(os.Getenv("IGDB_POPULARITY_TYPE")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			log.Printf("Invalid IGDB_POPULARITY_TYPE=%q, using default %d", raw, popularityType)
+		} else {
+			popularityType = parsed
 		}
 	}
 
 	// Initialize IGDB client with rate limiting settings
 	minInterval := time.Second / time.Duration(rps)
 	log.Printf("IGDB rate limit: %d rps, max concurrent=%d", rps, maxConcurrent)
-	log.Printf("IGDB metacritic category ID: %d", metacriticCategoryID)
+	log.Printf("IGDB popularity type: %d", popularityType)
+	if usePopularitySeed {
+		log.Printf("IGDB popularity seed enabled (year=%d)", popularityYear)
+	}
+	if usePopularityAll {
+		log.Printf("IGDB popularity all enabled (max_ids=%d, max_pages=%d)", popularityMaxIDs, popularityMaxPages)
+	}
 
 	// Create IGDB client struct
 	client := igdb.Client{
@@ -113,17 +175,77 @@ func run() error {
 	}
 
 	// Fetch games
-	games, err := client.FetchGames(maxGames)
-	if err != nil {
-		return fmt.Errorf("failed to fetch games: %w", err)
+	var games []igdb.Game
+	popularityByGame := map[int]float64{}
+	if usePopularityAll {
+		seedIDs, seedPopularity, err := client.FetchAllPopularityGameIDs(popularityType, popularityMaxIDs, popularityMaxPages)
+		if err != nil {
+			return fmt.Errorf("failed to fetch popularity seed: %w", err)
+		}
+		popularityByGame = seedPopularity
+		if len(seedIDs) == 0 {
+			return fmt.Errorf("no popularity seeds returned")
+		}
+		games, err = client.FetchGamesByIDs(seedIDs)
+		if err != nil {
+			return fmt.Errorf("failed to fetch games by popularity: %w", err)
+		}
+		if popularityYear > 0 {
+			games = filterGamesByReleaseYear(games, popularityYear)
+		}
+		games = orderGamesByIDList(games, seedIDs)
+		if popularityMaxGames > 0 && len(games) > popularityMaxGames {
+			games = games[:popularityMaxGames]
+		}
+	} else if usePopularitySeed {
+		targetGames := maxGames
+		if popularityMaxGames > 0 {
+			targetGames = popularityMaxGames
+		}
+		pool := popularityPool
+		if pool <= 0 {
+			pool = targetGames * 5
+			if pool < 500 {
+				pool = 500
+			}
+			if pool > 5000 {
+				pool = 5000
+			}
+		}
+		seedIDs, seedPopularity, err := client.FetchTopPopularityGameIDs(pool, popularityType)
+		if err != nil {
+			return fmt.Errorf("failed to fetch popularity seed: %w", err)
+		}
+		popularityByGame = seedPopularity
+		if len(seedIDs) == 0 {
+			return fmt.Errorf("no popularity seeds returned")
+		}
+		games, err = client.FetchGamesByIDs(seedIDs)
+		if err != nil {
+			return fmt.Errorf("failed to fetch games by popularity: %w", err)
+		}
+		if popularityYear > 0 {
+			games = filterGamesByReleaseYear(games, popularityYear)
+		}
+		games = orderGamesByIDList(games, seedIDs)
+		if targetGames > 0 && len(games) > targetGames {
+			games = games[:targetGames]
+		}
+		if popularityYear > 0 {
+			log.Printf("PopScore seed returned %d games for year %d (pool=%d, target=%d)", len(games), popularityYear, pool, targetGames)
+		}
+	} else {
+		var err error
+		games, err = client.FetchGames(maxGames)
+		if err != nil {
+			return fmt.Errorf("failed to fetch games: %w", err)
+		}
 	}
 
 	// Gather auxiliary IDs
 	genreIDs := collectIDs(games, func(game igdb.Game) []int { return game.Genres })
 	platformIDs := collectIDs(games, func(game igdb.Game) []int { return game.Platforms })
 	keywordIDs := collectIDs(games, func(game igdb.Game) []int { return game.Keywords })
-	externalGameIDs := collectIDs(games, func(game igdb.Game) []int { return game.ExternalGames })
-
 	// Collect cover IDs
 	coverIDs := collectIDs(games, func(game igdb.Game) []int {
 		if game.CoverID > 0 {
@@ -137,12 +259,17 @@ func run() error {
 	artworkIDs := collectIDs(games, func(game igdb.Game) []int { return game.Artworks })
 	screenshotIDs := collectIDs(games, func(game igdb.Game) []int { return game.Screenshots })
 	videoIDs := collectIDs(games, func(game igdb.Game) []int { return game.Videos })
+	gameIDs := collectIDs(games, func(game igdb.Game) []int {
+		if game.ID > 0 {
+			return []int{game.ID}
+		}
+		return nil
+	})
 
 	genreNames := map[int]string{}
 	platformNames := map[int]string{}
 	keywordNames := map[int]string{}
 	involvedCompanies := map[int]igdb.InvolvedCompany{}
-	externalGames := map[int]igdb.ExternalGame{}
 	coverImageIDs := map[int]string{}
 	artworkImageIDs := map[int]string{}
 	screenshotImageIDs := map[int]string{}
@@ -212,13 +339,6 @@ func run() error {
 			return err
 		})
 	}
-	if len(externalGameIDs) > 0 {
-		fetch("fetch external games", func() error {
-			var err error
-			externalGames, err = client.FetchExternalGames(externalGameIDs)
-			return err
-		})
-	}
 	// Start fetching auxiliary data
 	if len(coverIDs) > 0 {
 		fetch("fetch covers", func() error {
@@ -250,6 +370,26 @@ func run() error {
 			videoEntries, err = client.FetchGameVideos(videoIDs)
 			return err
 		})
+	}
+	if len(gameIDs) > 0 {
+		missingPopularityIDs := make([]int, 0, len(gameIDs))
+		for _, id := range gameIDs {
+			if _, ok := popularityByGame[id]; !ok {
+				missingPopularityIDs = append(missingPopularityIDs, id)
+			}
+		}
+		if len(missingPopularityIDs) > 0 {
+			fetch("fetch popularity", func() error {
+				values, err := client.FetchPopularityPrimitives(missingPopularityIDs, popularityType)
+				if err != nil {
+					return err
+				}
+				for id, value := range values {
+					popularityByGame[id] = value
+				}
+				return nil
+			})
+		}
 	}
 
 	// Wait for all fetches to complete
@@ -302,10 +442,6 @@ func run() error {
 	publishersByGame := buildPublishersByGame(games, involvedCompanies, companyNames)
 	coverURLByGame := buildCoverURLsByGame(games, coverImageIDs, artworkImageIDs, screenshotImageIDs)
 	logMissingGameFields(games, publishersByGame, coverURLByGame, genreNames)
-	metacriticGames := buildMetacriticGamesByID(externalGames, metacriticCategoryID)
-	if len(metacriticGames) > 0 {
-		log.Printf("Found %d games with Metacritic links", len(metacriticGames))
-	}
 
 	// Prepare game upsert rows
 	gameRows := make([]gameUpsertRow, 0, len(games))
@@ -341,6 +477,15 @@ func run() error {
 		if existing.AggregatedRatingCount == nil && incoming.AggregatedRatingCount != nil {
 			existing.AggregatedRatingCount = incoming.AggregatedRatingCount
 		}
+		if existing.TotalRating == nil && incoming.TotalRating != nil {
+			existing.TotalRating = incoming.TotalRating
+		}
+		if existing.TotalRatingCount == nil && incoming.TotalRatingCount != nil {
+			existing.TotalRatingCount = incoming.TotalRatingCount
+		}
+		if existing.Popularity == nil && incoming.Popularity != nil {
+			existing.Popularity = incoming.Popularity
+		}
 		return existing
 	}
 	// Build upsert rows, deduplicating by IGDB ID
@@ -354,6 +499,14 @@ func run() error {
 			parsed := time.Unix(game.FirstReleaseDate, 0).UTC().Format("2006-01-02")
 			releaseDate = &parsed
 		}
+		aggregatedRatingValue := game.AggregatedRating
+		aggregatedRatingCountValue := game.AggregatedRatingCount
+		if aggregatedRatingValue <= 0 && game.TotalRating > 0 {
+			aggregatedRatingValue = game.TotalRating
+			if aggregatedRatingCountValue <= 0 && game.TotalRatingCount > 0 {
+				aggregatedRatingCountValue = game.TotalRatingCount
+			}
+		}
 		row := gameUpsertRow{
 			IGDBID:        game.ID,
 			Name:          gameName,
@@ -364,23 +517,38 @@ func run() error {
 			Story:         nullableString(game.Storyline),
 			CoverImageURL: nullableString(coverURLByGame[game.ID]),
 			AggregatedRating: func() *float64 {
-				if _, ok := metacriticGames[game.ID]; ok {
+				if aggregatedRatingValue <= 0 {
 					return nil
 				}
-				if game.AggregatedRating <= 0 {
-					return nil
-				}
-				value := game.AggregatedRating
+				value := aggregatedRatingValue
 				return &value
 			}(),
 			AggregatedRatingCount: func() *int {
-				if _, ok := metacriticGames[game.ID]; ok {
+				if aggregatedRatingCountValue <= 0 {
 					return nil
 				}
-				if game.AggregatedRatingCount <= 0 {
+				value := aggregatedRatingCountValue
+				return &value
+			}(),
+			TotalRating: func() *float64 {
+				if game.TotalRating <= 0 {
 					return nil
 				}
-				value := game.AggregatedRatingCount
+				value := game.TotalRating
+				return &value
+			}(),
+			TotalRatingCount: func() *int {
+				if game.TotalRatingCount <= 0 {
+					return nil
+				}
+				value := game.TotalRatingCount
+				return &value
+			}(),
+			Popularity: func() *float64 {
+				value, ok := popularityByGame[game.ID]
+				if !ok || value <= 0 {
+					return nil
+				}
 				return &value
 			}(),
 		}
@@ -609,6 +777,40 @@ func collectCompanyIDs(involved map[int]igdb.InvolvedCompany) []int {
 	return ids
 }
 
+func filterGamesByReleaseYear(games []igdb.Game, year int) []igdb.Game {
+	if year <= 0 {
+		return games
+	}
+	out := make([]igdb.Game, 0, len(games))
+	for _, game := range games {
+		if game.FirstReleaseDate <= 0 {
+			continue
+		}
+		releaseYear := time.Unix(game.FirstReleaseDate, 0).UTC().Year()
+		if releaseYear == year {
+			out = append(out, game)
+		}
+	}
+	return out
+}
+
+func orderGamesByIDList(games []igdb.Game, idOrder []int) []igdb.Game {
+	if len(games) == 0 || len(idOrder) == 0 {
+		return games
+	}
+	byID := make(map[int]igdb.Game, len(games))
+	for _, game := range games {
+		byID[game.ID] = game
+	}
+	ordered := make([]igdb.Game, 0, len(idOrder))
+	for _, id := range idOrder {
+		if game, ok := byID[id]; ok {
+			ordered = append(ordered, game)
+		}
+	}
+	return ordered
+}
+
 // buildPublishersByGame constructs a map of game IDs to publisher names
 // based on involved companies data.
 func buildPublishersByGame(games []igdb.Game, involved map[int]igdb.InvolvedCompany, companyNames map[int]string) map[int]string {
@@ -670,25 +872,6 @@ func buildCoverURLsByGame(games []igdb.Game, coverImageIDs, artworkImageIDs, scr
 		if imageID := firstImageID(game.Screenshots, screenshotImageIDs); imageID != "" {
 			out[game.ID] = buildCoverURL(imageID)
 		}
-	}
-	return out
-}
-
-// buildMetacriticGamesByID builds a set of game IDs that have Metacritic entries
-// based on the external games data and the specified Metacritic category ID.
-func buildMetacriticGamesByID(externalGames map[int]igdb.ExternalGame, metacriticCategoryID int) map[int]struct{} {
-	out := make(map[int]struct{})
-	if metacriticCategoryID <= 0 || len(externalGames) == 0 {
-		return out
-	}
-	for _, entry := range externalGames {
-		if entry.GameID <= 0 {
-			continue
-		}
-		if entry.Category != metacriticCategoryID {
-			continue
-		}
-		out[entry.GameID] = struct{}{}
 	}
 	return out
 }

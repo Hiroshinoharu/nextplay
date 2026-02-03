@@ -9,6 +9,8 @@ type Game struct {
 	FirstReleaseDate      int64   `json:"first_release_date"`
 	AggregatedRating      float64 `json:"aggregated_rating"`
 	AggregatedRatingCount int     `json:"aggregated_rating_count"`
+	TotalRating           float64 `json:"total_rating"`
+	TotalRatingCount      int     `json:"total_rating_count"`
 	Genres                []int   `json:"genres"`
 	Platforms             []int   `json:"platforms"`
 	Keywords              []int   `json:"keywords"`
@@ -52,4 +54,12 @@ type ExternalGame struct {
 	ID       int `json:"id"`
 	GameID   int `json:"game"`
 	Category int `json:"category"`
+}
+
+// PopularityPrimitive represents a PopScore entry.
+type PopularityPrimitive struct {
+	ID             int     `json:"id"`
+	GameID         int     `json:"game_id"`
+	PopularityType int     `json:"popularity_type"`
+	Value          float64 `json:"value"`
 }
