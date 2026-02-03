@@ -255,13 +255,118 @@
   border-radius: 999px;
 }
 
+.games-hero__screenshot-button {
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.games-hero__screenshot-button:focus-visible {
+  outline: 2px solid #7fe070;
+  outline-offset: 2px;
+}
+
 .games-hero__screenshot {
-  width: 120px;
-  height: 68px;
+  width: 104px;
+  height: 58px;
   border-radius: 6px;
   object-fit: cover;
   flex-shrink: 0;
   border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.games-lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 10, 12, 0.75);
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.games-lightbox__dialog {
+  position: relative;
+  width: min(1000px, 92vw);
+  background: #0b141a;
+  border: 1px solid #1f3b46;
+  border-radius: 12px;
+  padding: 18px 64px 24px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  display: grid;
+  gap: 16px;
+}
+
+.games-lightbox__image {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #020609;
+}
+
+.games-lightbox__caption {
+  font-size: 12px;
+  color: #a8c0cc;
+  text-align: center;
+}
+
+.games-lightbox__close {
+  position: absolute;
+  right: 16px;
+  top: 12px;
+  border: 1px solid #2c4956;
+  background: rgba(8, 17, 22, 0.8);
+  color: #d7e4ec;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.games-lightbox__nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 1px solid #2c4956;
+  background: rgba(8, 17, 22, 0.8);
+  color: #d7e4ec;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.games-lightbox__nav--prev {
+  left: 12px;
+}
+
+.games-lightbox__nav--next {
+  right: 12px;
+}
+
+@media (max-width: 640px) {
+  .games-lightbox__dialog {
+    padding: 16px 18px 20px;
+  }
+
+  .games-lightbox__nav {
+    top: auto;
+    bottom: 12px;
+    transform: none;
+  }
+
+  .games-lightbox__nav--prev {
+    left: 12px;
+  }
+
+  .games-lightbox__nav--next {
+    right: 12px;
+  }
 }
 
 .games-hero__button {

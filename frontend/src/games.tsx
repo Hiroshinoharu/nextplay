@@ -49,6 +49,16 @@ const parseReleaseDate = (value?: string) => {
   return parsed
 }
 
+const formatReleaseDate = (value?: string) => {
+  const parsed = parseReleaseDate(value)
+  if (!parsed) return null
+  return parsed.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+  })
+}
+
 // Main Games component handling game list view
 function Games() {
   // Router and state hooks
@@ -59,6 +69,7 @@ function Games() {
   const [gamesError, setGamesError] = useState<string | null>(null)
   const [gamesLoading, setGamesLoading] = useState<boolean>(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
   // Construct the games API URL using the base URL and memoization
   const gamesUrl = useMemo(() => {
@@ -121,7 +132,35 @@ function Games() {
         ? 'list'
         : 'home'
 
-  const featuredGame = games[0] ?? null
+  const featuredCandidates = useMemo(() => {
+    const withReleaseDates = games.filter(game => Boolean(parseReleaseDate(game.release_date)))
+    return withReleaseDates.length ? withReleaseDates : games
+  }, [games])
+
+  const [featuredGameId, setFeaturedGameId] = useState<number | null>(null)
+
+  useEffect(() => {
+    // Scroll to top when the featured game changes
+    if (!featuredCandidates.length){
+      setFeaturedGameId(null)
+      return
+    }
+
+    setFeaturedGameId(prevId => {
+      if (prevId && featuredCandidates.some(game => game.id === prevId)) {
+        return prevId
+      }
+      const randomIndex = Math.floor(Math.random() * featuredCandidates.length)
+      return featuredCandidates[randomIndex].id ?? null
+    })
+  }, [featuredCandidates])
+
+  const featuredGame = featuredGameId
+    ? featuredCandidates.find(game => game.id === featuredGameId) ?? null
+    : featuredCandidates.length
+      ? featuredCandidates[Math.floor(Math.random() * featuredCandidates.length)]
+      : null
+
   const featuredCover = normalizeMediaUrl(featuredGame?.cover_image ?? undefined)
   const featuredMedia = Array.isArray(featuredGame?.media) ? featuredGame?.media : []
   const featuredMediaItems = featuredMedia
@@ -152,6 +191,46 @@ function Games() {
   const discoveryGames = games.slice(10, 20)
   const upcomingList = upcomingGames.length ? upcomingGames : games.slice(0, 10)
   const discoveryList = discoveryGames.length ? discoveryGames : games.slice(0, 10)
+
+  const closeLightbox = useCallback(() => {
+    setLightboxIndex(null)
+  }, [])
+
+  const showPrevShot = useCallback(() => {
+    if (!featuredScreenshots.length) return
+    setLightboxIndex((current) => {
+      if (current === null) return 0
+      return (current - 1 + featuredScreenshots.length) % featuredScreenshots.length
+    })
+  }, [featuredScreenshots.length])
+
+  const showNextShot = useCallback(() => {
+    if (!featuredScreenshots.length) return
+    setLightboxIndex((current) => {
+      if (current === null) return 0
+      return (current + 1) % featuredScreenshots.length
+    })
+  }, [featuredScreenshots.length])
+
+  useEffect(() => {
+    if (lightboxIndex === null) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeLightbox()
+      }
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        showPrevShot()
+      }
+      if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        showNextShot()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [closeLightbox, lightboxIndex, showNextShot, showPrevShot])
 
   return (
     <div className="games-page">
@@ -221,8 +300,8 @@ function Games() {
                   <span>{featuredGame.genre ?? 'Genre: n/a'}</span>
                   <span>{featuredGame.publishers ?? 'Publisher: n/a'}</span>
                   <span>
-                    {featuredGame.release_date
-                      ? `Release: ${featuredGame.release_date}`
+                    {formatReleaseDate(featuredGame.release_date)
+                      ? `Release: ${formatReleaseDate(featuredGame.release_date)}`
                       : 'Release: n/a'}
                   </span>
                 </div>
@@ -272,12 +351,19 @@ function Games() {
               <p className="games-hero__screenshots-label">Screenshots</p>
               <div className="games-hero__screenshots-row">
                 {featuredScreenshots.slice(0, 5).map((screenshot, index) => (
-                  <img
+                  <button
                     key={`${featuredGame?.id}-screenshot-${index}`}
-                    src={screenshot}
-                    alt={`Screenshot ${index + 1} of ${featuredGame?.name}`}
-                    className="games-hero__screenshot"
-                  />
+                    type="button"
+                    className="games-hero__screenshot-button"
+                    onClick={() => setLightboxIndex(index)}
+                    aria-label={`Open screenshot ${index + 1} of ${featuredGame?.name}`}
+                  >
+                    <img
+                      src={screenshot}
+                      alt={`Screenshot ${index + 1} of ${featuredGame?.name}`}
+                      className="games-hero__screenshot"
+                    />
+                  </button>
                 ))}
               </div>
             </div>
@@ -295,7 +381,9 @@ function Games() {
             getCoverUrl={carouselCover}
             itemWidth={170}
             getDescription={game =>
-              game.release_date ? `Release: ${game.release_date}` : 'Release: n/a'
+              formatReleaseDate(game.release_date)
+                ? `Release: ${formatReleaseDate(game.release_date)}`
+                : 'Release: n/a'
             }
           />
 
@@ -321,7 +409,9 @@ function Games() {
             itemWidth={170}
             getDescription={game =>
               [
-                game.release_date ? `Release: ${game.release_date}` : null,
+                formatReleaseDate(game.release_date)
+                  ? `Release: ${formatReleaseDate(game.release_date)}`
+                  : null,
                 game.genre ? `Genre: ${game.genre}` : null,
               ]
                 .filter(Boolean)
@@ -332,6 +422,47 @@ function Games() {
       </div>
 
       {toastMessage && <div className="games-toast">{toastMessage}</div>}
+      {lightboxIndex !== null && featuredScreenshots.length ? (
+        <div className="games-lightbox" onClick={closeLightbox}>
+          <div
+            className="games-lightbox__dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="games-lightbox__close"
+              onClick={closeLightbox}
+              aria-label="Close screenshots"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              className="games-lightbox__nav games-lightbox__nav--prev"
+              onClick={showPrevShot}
+              aria-label="Previous screenshot"
+            >
+              Prev
+            </button>
+            <img
+              src={featuredScreenshots[lightboxIndex]}
+              alt={`Screenshot ${lightboxIndex + 1} of ${featuredGame?.name}`}
+              className="games-lightbox__image"
+            />
+            <button
+              type="button"
+              className="games-lightbox__nav games-lightbox__nav--next"
+              onClick={showNextShot}
+              aria-label="Next screenshot"
+            >
+              Next
+            </button>
+            <div className="games-lightbox__caption">
+              Screenshot {lightboxIndex + 1} of {featuredScreenshots.length}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
