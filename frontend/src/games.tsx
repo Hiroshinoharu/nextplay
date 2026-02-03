@@ -17,17 +17,28 @@ type GameItem = {
   screenshots?: string[]
   trailers?: string[]
   trailer_url?: string
+  media?: GameMedia[]
+}
+
+type GameMedia = {
+  media_type?: string
+  url?: string
 }
 
 // Determine the default base URL for the API from environment variables
 const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '')
 const API_ROOT = RAW_BASE_URL.endsWith('/api') ? RAW_BASE_URL.slice(0, -4) : RAW_BASE_URL
 
-// Normalize cover image URLs to ensure they are absolute and use HTTPS
-const normalizeCoverUrl = (url?: string) => {
+// Normalize media  URLs to ensure they are absolute and use HTTPS
+const normalizeMediaUrl = (url?: string) => {
   if (!url) return null
   if (url.startsWith('//')) return `https:${url}`
   return url
+}
+
+const upgradeIgdbSize = (url: string | null, size: string) => {
+  if (!url) return null
+  return url.replace(/\/t_[^/]+\//, `/${size}/`)
 }
 
 // Parse release date strings into Date objects, returning null for invalid or missing dates
@@ -53,7 +64,7 @@ function Games() {
   const gamesUrl = useMemo(() => {
     const trimmedBase = baseUrl.replace(/\/+$/, '')
     const root = trimmedBase.endsWith('/api') ? trimmedBase.slice(0, -4) : trimmedBase
-    return `${root}/api/games`
+    return `${root}/api/games?include_media=1&limit=30`
   }, [baseUrl])
 
   // Function to load the list of games from the API
@@ -111,8 +122,26 @@ function Games() {
         : 'home'
 
   const featuredGame = games[0] ?? null
-  const featuredCover = normalizeCoverUrl(featuredGame?.cover_image ?? undefined)
-  const carouselCover = (game: GameItem) => normalizeCoverUrl(game.cover_image)
+  const featuredCover = normalizeMediaUrl(featuredGame?.cover_image ?? undefined)
+  const featuredMedia = Array.isArray(featuredGame?.media) ? featuredGame?.media : []
+  const featuredMediaItems = featuredMedia
+    .filter(item => item.media_type === 'screenshot' || item.media_type === 'artwork')
+    .map(item => ({
+      type: item.media_type ?? 'screenshot',
+      url: normalizeMediaUrl(item.url),
+    }))
+    .filter((item): item is { type: string; url: string } => Boolean(item.url))
+  const heroMediaUrl =
+    featuredMediaItems.find(item => item.type === 'artwork')?.url ??
+    featuredMediaItems[0]?.url ??
+    upgradeIgdbSize(featuredCover, 't_1080p')
+  const featuredScreenshots =
+    featuredMediaItems.length
+      ? featuredMediaItems.map(item => item.url)
+      : (featuredGame?.screenshots ?? [])
+        .map((screenshot) => normalizeMediaUrl(screenshot))
+        .filter((screenshot): screenshot is string => Boolean(screenshot))
+  const carouselCover = (game: GameItem) => normalizeMediaUrl(game.cover_image)
   const upcomingGames = games
     .filter(game => {
       const date = parseReleaseDate(game.release_date)
@@ -175,8 +204,8 @@ function Games() {
 
         <section className="games-hero">
           <div className="games-hero__media">
-            {featuredCover ? (
-              <img src={featuredCover} alt={featuredGame?.name || 'Featured game'} />
+            {heroMediaUrl ? (
+              <img src={heroMediaUrl} alt={featuredGame?.name || 'Featured game'} />
             ) : null}
             <div className="games-hero__shade" />
           </div>
@@ -238,6 +267,21 @@ function Games() {
               </>
             )}
           </div>
+          {featuredScreenshots.length ? (
+            <div className="games-hero__screenshots games-hero__screenshots--overlay">
+              <p className="games-hero__screenshots-label">Screenshots</p>
+              <div className="games-hero__screenshots-row">
+                {featuredScreenshots.slice(0, 5).map((screenshot, index) => (
+                  <img
+                    key={`${featuredGame?.id}-screenshot-${index}`}
+                    src={screenshot}
+                    alt={`Screenshot ${index + 1} of ${featuredGame?.name}`}
+                    className="games-hero__screenshot"
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </section>
 
         <main className="games-content">

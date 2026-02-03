@@ -208,6 +208,62 @@
   margin-top: 6px;
 }
 
+.games-hero__screenshots {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.games-hero__screenshots--overlay {
+  position: absolute;
+  right: 20px;
+  bottom: 18px;
+  z-index: 3;
+  max-width: min(460px, 45vw);
+  padding: 10px 12px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(60, 92, 108, 0.7);
+  background: rgba(10, 20, 26, 0.7);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+.games-hero__screenshots-label {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: #9fb8c6;
+}
+
+.games-hero__screenshots-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #2b4652 transparent;
+}
+
+.games-hero__screenshots-row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.games-hero__screenshots-row::-webkit-scrollbar-thumb {
+  background: #2b4652;
+  border-radius: 999px;
+}
+
+.games-hero__screenshot {
+  width: 120px;
+  height: 68px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 .games-hero__button {
   border-radius: 999px;
   border: 1px solid #2c4956;
@@ -369,6 +425,14 @@
 
   .games-hero__media img {
     height: 260px;
+  }
+
+  .games-hero__screenshots--overlay {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    max-width: 100%;
+    margin: 12px 18px 18px;
   }
 }
 
