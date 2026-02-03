@@ -1,242 +1,278 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import GameCarousel from './components/GameCarousel'
-import logoUrl from './assets/logo.png'
-import './games.css'
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import GameCarousel from "./components/GameCarousel";
+import logoUrl from "./assets/logo.png";
+import "./games.css";
 
 // Define the structure of a game item based on expected API response fields
 type GameItem = {
-  id: number
-  name: string
-  description?: string
-  release_date?: string
-  genre?: string
-  publishers?: string
-  cover_image?: string
-  story?: string
-  screenshots?: string[]
-  trailers?: string[]
-  trailer_url?: string
-  media?: GameMedia[]
-}
+  id: number;
+  name: string;
+  description?: string;
+  release_date?: string;
+  genre?: string;
+  publishers?: string;
+  cover_image?: string;
+  story?: string;
+  screenshots?: string[];
+  trailers?: string[];
+  trailer_url?: string;
+  media?: GameMedia[];
+};
 
 type GameMedia = {
-  media_type?: string
-  url?: string
-}
+  media_type?: string;
+  url?: string;
+};
 
 // Determine the default base URL for the API from environment variables
-const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '')
-const API_ROOT = RAW_BASE_URL.endsWith('/api') ? RAW_BASE_URL.slice(0, -4) : RAW_BASE_URL
+const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(
+  /\/+$/,
+  "",
+);
+const API_ROOT = RAW_BASE_URL.endsWith("/api")
+  ? RAW_BASE_URL.slice(0, -4)
+  : RAW_BASE_URL;
 
 // Normalize media  URLs to ensure they are absolute and use HTTPS
 const normalizeMediaUrl = (url?: string) => {
-  if (!url) return null
-  if (url.startsWith('//')) return `https:${url}`
-  return url
-}
+  if (!url) return null;
+  if (url.startsWith("//")) return `https:${url}`;
+  return url;
+};
 
 const upgradeIgdbSize = (url: string | null, size: string) => {
-  if (!url) return null
-  return url.replace(/\/t_[^/]+\//, `/${size}/`)
-}
+  if (!url) return null;
+  return url.replace(/\/t_[^/]+\//, `/${size}/`);
+};
 
 // Parse release date strings into Date objects, returning null for invalid or missing dates
 const parseReleaseDate = (value?: string) => {
-  if (!value) return null
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return null
-  return parsed
-}
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+};
 
 const formatReleaseDate = (value?: string) => {
-  const parsed = parseReleaseDate(value)
-  if (!parsed) return null
+  const parsed = parseReleaseDate(value);
+  if (!parsed) return null;
   return parsed.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-  })
-}
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  });
+};
 
 // Main Games component handling game list view
 function Games() {
   // Router and state hooks
-  const navigate = useNavigate()
-  const location = useLocation()
-  const [baseUrl] = useState<string>(API_ROOT)
-  const [games, setGames] = useState<GameItem[]>([])
-  const [gamesError, setGamesError] = useState<string | null>(null)
-  const [gamesLoading, setGamesLoading] = useState<boolean>(false)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [baseUrl] = useState<string>(API_ROOT);
+  const [games, setGames] = useState<GameItem[]>([]);
+  const [gamesError, setGamesError] = useState<string | null>(null);
+  const [gamesLoading, setGamesLoading] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [featuredGameId, setFeaturedGameId] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [hasNextPage, setHasNextPage] = useState<boolean>(true);
+
+  const pageSize = 30;
 
   // Construct the games API URL using the base URL and memoization
   const gamesUrl = useMemo(() => {
-    const trimmedBase = baseUrl.replace(/\/+$/, '')
-    const root = trimmedBase.endsWith('/api') ? trimmedBase.slice(0, -4) : trimmedBase
-    return `${root}/api/games?include_media=1&limit=30`
-  }, [baseUrl])
+    const trimmedBase = baseUrl.replace(/\/+$/, "");
+    const root = trimmedBase.endsWith("/api")
+      ? trimmedBase.slice(0, -4)
+      : trimmedBase;
+    const offset = (currentPage - 1) * pageSize;
+    return `${root}/api/games?include_media=1&limit=${pageSize}&offset=${offset}`;
+  }, [baseUrl, currentPage, pageSize]);
 
   // Function to load the list of games from the API
   const loadGames = useCallback(async () => {
-    setGamesLoading(true)
-    setGamesError(null)
+    setGamesLoading(true);
+    setGamesError(null);
 
     try {
-      const responseValue = await fetch(gamesUrl)
+      const responseValue = await fetch(gamesUrl);
       if (!responseValue.ok) {
-        setGamesError(`Failed to load games: ${responseValue.status}`)
-        setGames([])
-        return
+        setGamesError(`Failed to load games: ${responseValue.status}`);
+        setGames([]);
+        return;
       }
-      const data = (await responseValue.json()) as GameItem[]
+      const data = (await responseValue.json()) as GameItem[];
       if (!Array.isArray(data)) {
-        setGamesError('Unexpected response for /api/games')
-        setGames([])
-        return
+        setGamesError("Unexpected response for /api/games");
+        setGames([]);
+        return;
       }
-      setGames(data)
+      setGames(data);
+      setHasNextPage(data.length === pageSize);
     } catch (err) {
-      setGamesError(`${err}`)
-      setGames([])
+      setGamesError(`${err}`);
+      setGames([]);
     } finally {
-      setGamesLoading(false)
+      setGamesLoading(false);
     }
-  }, [gamesUrl])
+  }, [gamesUrl]);
 
   useEffect(() => {
     // Load the list of games when the gamesUrl changes
-    loadGames()
-  }, [loadGames])
+    loadGames();
+  }, [loadGames]);
 
   useEffect(() => {
-    const message = gamesError
-    if (!message) return
-    setToastMessage(message)
+    const message = gamesError;
+    if (!message) return;
+    setToastMessage(message);
     const timeout = window.setTimeout(() => {
-      setToastMessage(null)
-    }, 4500)
-    return () => window.clearTimeout(timeout)
-  }, [gamesError])
+      setToastMessage(null);
+    }, 4500);
+    return () => window.clearTimeout(timeout);
+  }, [gamesError]);
 
   const openGameDetail = (targetId: number) => {
-    navigate(`/games/${targetId}`)
-  }
+    navigate(`/games/${targetId}`);
+  };
 
-  const activeTab = location.pathname.startsWith('/games')
-    ? 'discover'
-    : location.pathname === '/'
-      ? 'home'
-      : location.pathname.startsWith('/user')
-        ? 'list'
-        : 'home'
+  const activeTab = location.pathname.startsWith("/games")
+    ? "discover"
+    : location.pathname === "/"
+      ? "home"
+      : location.pathname.startsWith("/user")
+        ? "list"
+        : "home";
 
   const featuredCandidates = useMemo(() => {
-    const withReleaseDates = games.filter(game => Boolean(parseReleaseDate(game.release_date)))
-    return withReleaseDates.length ? withReleaseDates : games
-  }, [games])
-
-  const [featuredGameId, setFeaturedGameId] = useState<number | null>(null)
+    const withReleaseDates = games.filter((game) =>
+      Boolean(parseReleaseDate(game.release_date)),
+    );
+    return withReleaseDates.length ? withReleaseDates : games;
+  }, [games]);
 
   useEffect(() => {
     // Scroll to top when the featured game changes
-    if (!featuredCandidates.length){
-      setFeaturedGameId(null)
-      return
+    if (!featuredCandidates.length) {
+      setFeaturedGameId(null);
+      return;
     }
 
-    setFeaturedGameId(prevId => {
-      if (prevId && featuredCandidates.some(game => game.id === prevId)) {
-        return prevId
+    setFeaturedGameId((prevId) => {
+      if (prevId && featuredCandidates.some((game) => game.id === prevId)) {
+        return prevId;
       }
-      const randomIndex = Math.floor(Math.random() * featuredCandidates.length)
-      return featuredCandidates[randomIndex].id ?? null
-    })
-  }, [featuredCandidates])
+      const randomIndex = Math.floor(Math.random() * featuredCandidates.length);
+      return featuredCandidates[randomIndex].id ?? null;
+    });
+  }, [featuredCandidates]);
 
   const featuredGame = featuredGameId
-    ? featuredCandidates.find(game => game.id === featuredGameId) ?? null
+    ? (featuredCandidates.find((game) => game.id === featuredGameId) ?? null)
     : featuredCandidates.length
-      ? featuredCandidates[Math.floor(Math.random() * featuredCandidates.length)]
-      : null
+      ? featuredCandidates[
+          Math.floor(Math.random() * featuredCandidates.length)
+        ]
+      : null;
 
-  const featuredCover = normalizeMediaUrl(featuredGame?.cover_image ?? undefined)
-  const featuredMedia = Array.isArray(featuredGame?.media) ? featuredGame?.media : []
+  const featuredCover = normalizeMediaUrl(
+    featuredGame?.cover_image ?? undefined,
+  );
+  const featuredMedia = Array.isArray(featuredGame?.media)
+    ? featuredGame?.media
+    : [];
   const featuredMediaItems = featuredMedia
-    .filter(item => item.media_type === 'screenshot' || item.media_type === 'artwork')
-    .map(item => ({
-      type: item.media_type ?? 'screenshot',
+    .filter(
+      (item) =>
+        item.media_type === "screenshot" || item.media_type === "artwork",
+    )
+    .map((item) => ({
+      type: item.media_type ?? "screenshot",
       url: normalizeMediaUrl(item.url),
     }))
-    .filter((item): item is { type: string; url: string } => Boolean(item.url))
+    .filter((item): item is { type: string; url: string } => Boolean(item.url));
   const heroMediaUrl =
-    featuredMediaItems.find(item => item.type === 'artwork')?.url ??
+    featuredMediaItems.find((item) => item.type === "artwork")?.url ??
     featuredMediaItems[0]?.url ??
-    upgradeIgdbSize(featuredCover, 't_1080p')
-  const featuredScreenshots =
-    featuredMediaItems.length
-      ? featuredMediaItems.map(item => item.url)
-      : (featuredGame?.screenshots ?? [])
+    upgradeIgdbSize(featuredCover, "t_1080p");
+  const featuredScreenshots = featuredMediaItems.length
+    ? featuredMediaItems.map((item) => item.url)
+    : (featuredGame?.screenshots ?? [])
         .map((screenshot) => normalizeMediaUrl(screenshot))
-        .filter((screenshot): screenshot is string => Boolean(screenshot))
-  const carouselCover = (game: GameItem) => normalizeMediaUrl(game.cover_image)
+        .filter((screenshot): screenshot is string => Boolean(screenshot));
+  const carouselCover = (game: GameItem) => normalizeMediaUrl(game.cover_image);
+
+  // Filter upcoming games based on release date
   const upcomingGames = games
-    .filter(game => {
-      const date = parseReleaseDate(game.release_date)
-      return date ? date >= new Date() : false
+    .filter((game) => {
+      const date = parseReleaseDate(game.release_date);
+      return date ? date >= new Date() : false;
     })
-    .slice(0, 10)
-  const topTenGames = games.slice(0, 10)
-  const discoveryGames = games.slice(10, 20)
-  const upcomingList = upcomingGames.length ? upcomingGames : games.slice(0, 10)
-  const discoveryList = discoveryGames.length ? discoveryGames : games.slice(0, 10)
+    .slice(0, 10);
+
+  // Prepare game lists for carousels
+  const topTenGames = games.slice(0, 10);
+  const discoveryGames = games.slice(10, 20);
+  const upcomingList = upcomingGames.length
+    ? upcomingGames
+    : games.slice(0, 10);
+  const discoveryList = discoveryGames.length
+    ? discoveryGames
+    : games.slice(0, 10);
 
   const closeLightbox = useCallback(() => {
-    setLightboxIndex(null)
-  }, [])
+    setLightboxIndex(null);
+  }, []);
 
   const showPrevShot = useCallback(() => {
-    if (!featuredScreenshots.length) return
+    if (!featuredScreenshots.length) return;
     setLightboxIndex((current) => {
-      if (current === null) return 0
-      return (current - 1 + featuredScreenshots.length) % featuredScreenshots.length
-    })
-  }, [featuredScreenshots.length])
+      if (current === null) return 0;
+      return (
+        (current - 1 + featuredScreenshots.length) % featuredScreenshots.length
+      );
+    });
+  }, [featuredScreenshots.length]);
 
   const showNextShot = useCallback(() => {
-    if (!featuredScreenshots.length) return
+    if (!featuredScreenshots.length) return;
     setLightboxIndex((current) => {
-      if (current === null) return 0
-      return (current + 1) % featuredScreenshots.length
-    })
-  }, [featuredScreenshots.length])
+      if (current === null) return 0;
+      return (current + 1) % featuredScreenshots.length;
+    });
+  }, [featuredScreenshots.length]);
 
   useEffect(() => {
-    if (lightboxIndex === null) return
+    if (lightboxIndex === null) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        closeLightbox()
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeLightbox();
       }
-      if (event.key === 'ArrowLeft') {
-        event.preventDefault()
-        showPrevShot()
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        showPrevShot();
       }
-      if (event.key === 'ArrowRight') {
-        event.preventDefault()
-        showNextShot()
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        showNextShot();
       }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [closeLightbox, lightboxIndex, showNextShot, showPrevShot])
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [closeLightbox, lightboxIndex, showNextShot, showPrevShot]);
 
   return (
     <div className="games-page">
       <div className="games-shell">
         <header className="games-header">
-          <button type="button" className="games-brand" onClick={() => navigate('/')}>
+          <button
+            type="button"
+            className="games-brand"
+            onClick={() => navigate("/")}
+          >
             <img src={logoUrl} alt="NextPlay Logo" />
             <span className="games-brand__text">
               <span className="games-brand__title">NextPlay</span>
@@ -246,28 +282,32 @@ function Games() {
           <nav className="games-nav" aria-label="Primary">
             <button
               type="button"
-              className={`games-nav__item${activeTab === 'home' ? ' is-active' : ''}`}
-              onClick={() => navigate('/')}
+              className={`games-nav__item${activeTab === "home" ? " is-active" : ""}`}
+              onClick={() => navigate("/")}
             >
               Home
             </button>
             <button
               type="button"
-              className={`games-nav__item${activeTab === 'discover' ? ' is-active' : ''}`}
-              onClick={() => navigate('/games')}
+              className={`games-nav__item${activeTab === "discover" ? " is-active" : ""}`}
+              onClick={() => navigate("/games")}
             >
               Discover
             </button>
             <button
               type="button"
-              className={`games-nav__item${activeTab === 'list' ? ' is-active' : ''}`}
-              onClick={() => navigate('/user')}
+              className={`games-nav__item${activeTab === "list" ? " is-active" : ""}`}
+              onClick={() => navigate("/user")}
             >
               My List
             </button>
           </nav>
           <div className="games-actions">
-            <button type="button" className="games-icon-button" aria-label="Search games">
+            <button
+              type="button"
+              className="games-icon-button"
+              aria-label="Search games"
+            >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path
                   d="M15.5 14h-.79l-.28-.27a6 6 0 1 0-.71.71l.27.28v.79l5 5 1.5-1.5-5-5zm-5.5 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"
@@ -275,7 +315,11 @@ function Games() {
                 />
               </svg>
             </button>
-            <button type="button" className="games-avatar" aria-label="Account menu">
+            <button
+              type="button"
+              className="games-avatar"
+              aria-label="Account menu"
+            >
               NP
             </button>
           </div>
@@ -284,7 +328,10 @@ function Games() {
         <section className="games-hero">
           <div className="games-hero__media">
             {heroMediaUrl ? (
-              <img src={heroMediaUrl} alt={featuredGame?.name || 'Featured game'} />
+              <img
+                src={heroMediaUrl}
+                alt={featuredGame?.name || "Featured game"}
+              />
             ) : null}
             <div className="games-hero__shade" />
           </div>
@@ -294,15 +341,16 @@ function Games() {
                 <p className="games-hero__eyebrow">Featured today</p>
                 <h1 className="games-hero__title">{featuredGame.name}</h1>
                 <p className="games-hero__desc">
-                  {featuredGame.description || 'A fresh pick from your library.'}
+                  {featuredGame.description ||
+                    "A fresh pick from your library."}
                 </p>
                 <div className="games-hero__meta">
-                  <span>{featuredGame.genre ?? 'Genre: n/a'}</span>
-                  <span>{featuredGame.publishers ?? 'Publisher: n/a'}</span>
+                  <span>{featuredGame.genre ?? "Genre: n/a"}</span>
+                  <span>{featuredGame.publishers ?? "Publisher: n/a"}</span>
                   <span>
                     {formatReleaseDate(featuredGame.release_date)
                       ? `Release: ${formatReleaseDate(featuredGame.release_date)}`
-                      : 'Release: n/a'}
+                      : "Release: n/a"}
                   </span>
                 </div>
                 <div className="games-hero__actions">
@@ -310,7 +358,7 @@ function Games() {
                     type="button"
                     className="games-hero__button games-hero__button--primary"
                     onClick={() => {
-                      if (featuredGame?.id) openGameDetail(featuredGame.id)
+                      if (featuredGame?.id) openGameDetail(featuredGame.id);
                     }}
                     disabled={!featuredGame.id}
                   >
@@ -322,7 +370,7 @@ function Games() {
                     onClick={loadGames}
                     disabled={gamesLoading}
                   >
-                    {gamesLoading ? 'Refreshing...' : 'Refresh list'}
+                    {gamesLoading ? "Refreshing..." : "Refresh list"}
                   </button>
                 </div>
               </>
@@ -340,7 +388,7 @@ function Games() {
                     onClick={loadGames}
                     disabled={gamesLoading}
                   >
-                    {gamesLoading ? 'Refreshing...' : 'Refresh list'}
+                    {gamesLoading ? "Refreshing..." : "Refresh list"}
                   </button>
                 </div>
               </>
@@ -380,10 +428,22 @@ function Games() {
             onSelect={openGameDetail}
             getCoverUrl={carouselCover}
             itemWidth={170}
-            getDescription={game =>
+            getDescription={(game) =>
               formatReleaseDate(game.release_date)
                 ? `Release: ${formatReleaseDate(game.release_date)}`
-                : 'Release: n/a'
+                : "Release: n/a"
+            }
+          />
+
+          <GameCarousel
+            title="Top Rated Games"
+            badge="Popular"
+            games={topTenGames}
+            onSelect={openGameDetail}
+            getCoverUrl={carouselCover}
+            itemWidth={180}
+            getDescription={(game) =>
+              game.genre ? `Genre: ${game.genre}` : "Genre: n/a"
             }
           />
 
@@ -395,8 +455,8 @@ function Games() {
             getCoverUrl={carouselCover}
             showRank
             itemWidth={180}
-            getDescription={game =>
-              game.genre ? `Genre: ${game.genre}` : 'Genre: n/a'
+            getDescription={(game) =>
+              game.genre ? `Genre: ${game.genre}` : "Genre: n/a"
             }
           />
 
@@ -407,7 +467,7 @@ function Games() {
             onSelect={openGameDetail}
             getCoverUrl={carouselCover}
             itemWidth={170}
-            getDescription={game =>
+            getDescription={(game) =>
               [
                 formatReleaseDate(game.release_date)
                   ? `Release: ${formatReleaseDate(game.release_date)}`
@@ -415,10 +475,112 @@ function Games() {
                 game.genre ? `Genre: ${game.genre}` : null,
               ]
                 .filter(Boolean)
-                .join('\n')
+                .join("\n")
             }
           />
+
+          <section className="games-section">
+            <div className="games-section__header">
+              <h2 className="games-section__title">All games</h2>
+              <span className="games-section__badge">Page {currentPage}</span>
+            </div>
+            <GameCarousel
+              title="All games"
+              games={games}
+              onSelect={openGameDetail}
+              getCoverUrl={carouselCover}
+              itemWidth={170}
+              showHeader={false}
+              getDescription={(game) =>
+                game.release_date
+                  ? `Release: ${game.release_date}`
+                  : "Release: TBA"
+              }
+            />
+            <div className="games-pagination">
+              <button
+                type="button"
+                className="games-pagination__button"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              <span className="games-pagination__status">
+                Page {currentPage}
+              </span>
+              <button
+                type="button"
+                className="games-pagination__button"
+                onClick={() => setCurrentPage((page) => page + 1)}
+                disabled={!hasNextPage}
+              >
+                Next
+              </button>
+            </div>
+          </section>
         </main>
+        <footer className="landing__footer">
+          <div className="landing__footer-grid">
+            <div className="landing__footer-brand">
+              <div className="landing__logo">
+                <img src={logoUrl} alt="NextPlay Logo" width={56} height={56} />
+                <span>NextPlay</span>
+              </div>
+              <p>
+                Find your next obsession with curated picks, social play, and
+                smart recommendations.
+              </p>
+            </div>
+            <div className="landing__footer-section">
+              <h4>Product</h4>
+              <ul>
+                <li>Discover</li>
+                <li>Collections</li>
+                <li>Party Finder</li>
+                <li>Wishlist</li>
+              </ul>
+            </div>
+            <div className="landing__footer-section">
+              <h4>Company</h4>
+              <ul>
+                <li>About</li>
+                <li>Careers</li>
+                <li>Press</li>
+                <li>Contact</li>
+              </ul>
+            </div>
+            <div className="landing__footer-section">
+              <h4>Resources</h4>
+              <ul>
+                <li>Help Center</li>
+                <li>Community</li>
+                <li>Developers</li>
+                <li>Status</li>
+              </ul>
+            </div>
+            <div className="landing__footer-section">
+              <h4>Stay in the loop</h4>
+              <p>Weekly drops, co-op nights, and hot releases.</p>
+              <div className="landing__footer-form">
+                <input
+                  type="email"
+                  placeholder="you@email.com"
+                  aria-label="Email address"
+                />
+                <button type="button">Subscribe</button>
+              </div>
+            </div>
+          </div>
+          <div className="landing__footer-bottom">
+            <span>© 2026 NextPlay. All rights reserved.</span>
+            <div className="landing__footer-links">
+              <span>Privacy</span>
+              <span>Terms</span>
+              <span>Cookies</span>
+            </div>
+          </div>
+        </footer>
       </div>
 
       {toastMessage && <div className="games-toast">{toastMessage}</div>}
@@ -464,7 +626,8 @@ function Games() {
         </div>
       ) : null}
     </div>
-  )
+    
+  );
 }
 
-export default Games
+export default Games;

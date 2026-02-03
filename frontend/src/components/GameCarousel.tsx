@@ -17,6 +17,7 @@ type GameCarouselProps = {
   getDescription?: (game: GameCarouselItem) => ReactNode
   getCoverUrl?: (game: GameCarouselItem) => string | null
   showRank?: boolean
+  showHeader?: boolean
   itemWidth?: number
   gap?: number
 }
@@ -46,16 +47,19 @@ const GameCarousel = ({
   showRank = false,
   itemWidth = 200,
   gap = 20,
+  showHeader = true,
 }: GameCarouselProps) => {
   const rowStyle: CSSProperties = { ...baseRowStyle, gap }
   const itemStyle: CSSProperties = { flex: `0 0 ${itemWidth}px` }
 
   return (
     <section className="games-section">
-      <div className="games-section__header">
-        <h2 className="games-section__title">{title}</h2>
-        {badge && <span className="games-section__badge">{badge}</span>}
-      </div>
+      {showHeader ? (
+        <header className="games-section__header">
+          <h2 className="games-section__title">{title}</h2>
+          {badge && <span className="games-section__badge">{badge}</span>}
+        </header>
+      ) : null}
       <div className="games-row" style={rowStyle}>
         {games.map((game, index) => {
           const coverSrc = getCoverUrl(game)

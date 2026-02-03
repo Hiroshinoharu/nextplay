@@ -13,16 +13,16 @@ export default function Login() {
     return (
         <div className="landing landing--auth">
             <div className="landing__container landing__container--auth">
-                <nav className="landing__nav">
-                    <div className="landing__logo" onClick={() => navigate('/')}>
-                        <img src={logoUrl} alt="NextPlay Logo" width={96} height={96} />
-                        <span>NextPlay</span>
-                    </div>
-                </nav>
-                <main className="auth-page">
-                    <Form initialEmail={emailFromQuery} />
-                </main>
-            </div>
+            <nav className="landing__nav">
+                <div className="landing__logo" onClick={() => navigate('/')}>
+                    <img src={logoUrl} alt="NextPlay Logo" width={96} height={96} />
+                    <span>NextPlay</span>
+                </div>
+            </nav>
+            <main className="auth-page">
+                <Form initialEmail={emailFromQuery} />
+            </main>
         </div>
-    )
+    </div>
+)
 }
