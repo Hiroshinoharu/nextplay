@@ -133,6 +133,7 @@
 .games-hero {
   position: relative;
   display: grid;
+  grid-template-rows: minmax(260px, auto);
   border: 1px solid #23414e;
   border-radius: 6px;
   overflow: hidden;
@@ -559,8 +560,16 @@
     align-self: flex-end;
   }
 
+  .games-hero {
+    grid-template-rows: minmax(220px, auto) auto;
+  }
+
   .games-hero__content {
+    grid-area: 2 / 1;
+    align-self: stretch;
     max-width: 100%;
+    background: #0e1d24;
+    border-top: 1px solid #1f3944;
   }
 
   .games-hero__media img {
@@ -597,6 +606,10 @@
 
   .games-hero__content {
     padding: 18px;
+  }
+
+  .games-hero__media img {
+    height: clamp(200px, 52vw, 260px);
   }
 
   .games-hero__actions {

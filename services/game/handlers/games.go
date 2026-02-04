@@ -35,7 +35,7 @@ func GetAllGames(c *fiber.Ctx) error {
 func GetPopularGames(c *fiber.Ctx) error {
 	year := c.QueryInt("year", 0)
 	limit := c.QueryInt("limit", 4)
-	minRatingCount := c.QueryInt("min_rating_count", 50)
+	minRatingCount := c.QueryInt("min_rating_count", 1000)
 	if limit > 16 {
 		limit = 16
 	}

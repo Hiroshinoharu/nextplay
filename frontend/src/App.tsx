@@ -148,7 +148,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
       try {
         const cacheBust = Date.now();
         const response = await fetch(
-          `${apiUrl("/games/popular")}?year=2025&limit=${totalLimit}&min_rating_count=1000&t=${cacheBust}`,
+          `${apiUrl("/games/popular")}?year=2025&limit=${totalLimit}&t=${cacheBust}`,
           {
             signal: controller.signal,
           },
