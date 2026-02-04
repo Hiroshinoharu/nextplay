@@ -131,10 +131,12 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
   const pageSize = 4;
   const pageCountTarget = 4;
   const totalLimit = pageCountTarget * 4;
+  const currentYear = new Date().getFullYear();
   const touchStartXRef = useRef<number | null>(null);
   const touchLastXRef = useRef<number | null>(null);
   const swipeHandledRef = useRef(false);
   const [popularGames, setPopularGames] = useState<PopularGame[]>([]);
+  const [popularYear, setPopularYear] = useState<number>(currentYear);
   const [popularLoading, setPopularLoading] = useState(false);
   const [popularError, setPopularError] = useState<string | null>(null);
 
@@ -147,22 +149,45 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
       setPopularError(null);
       try {
         const cacheBust = Date.now();
-        const response = await fetch(
-          `${apiUrl("/games/popular")}?year=2025&limit=${totalLimit}&t=${cacheBust}`,
-          {
-            signal: controller.signal,
-          },
-        );
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(
-            `Failed to load popular games (${response.status}) ${errorText}`,
+        const fetchPopular = async (year: number) => {
+          const params = new URLSearchParams({
+            limit: String(totalLimit),
+            t: String(cacheBust),
+          });
+          if (year > 0) {
+            params.set("year", String(year));
+          }
+          const response = await fetch(
+            `${apiUrl("/games/popular")}?${params.toString()}`,
+            {
+              signal: controller.signal,
+            },
           );
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(
+              `Failed to load popular games (${response.status}) ${errorText}`,
+            );
+          }
+          const data = (await response.json()) as PopularGameResponse[];
+          if (!Array.isArray(data)) {
+            throw new Error("Unexpected response shape for popular games");
+          }
+          return data;
+        };
+
+        const yearCandidates = [currentYear, currentYear - 1, 0];
+        let data: PopularGameResponse[] = [];
+        let resolvedYear = currentYear;
+        for (const year of yearCandidates) {
+          const responseData = await fetchPopular(year);
+          if (responseData.length > 0 || year === 0) {
+            data = responseData;
+            resolvedYear = year;
+            break;
+          }
         }
-        const data = (await response.json()) as PopularGameResponse[];
-        if (!Array.isArray(data)) {
-          throw new Error("Unexpected response shape for popular games");
-        }
+
         const normalized = data.map((game) => {
           const rawImage = game.cover_image ?? "";
           const image = rawImage.startsWith("//")
@@ -174,6 +199,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
             image,
           };
         });
+        setPopularYear(resolvedYear);
         setPopularGames(normalized.slice(0, totalLimit));
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
@@ -186,7 +212,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
 
     loadPopularGames();
     return () => controller.abort();
-  }, [totalLimit]);
+  }, [currentYear, totalLimit]);
 
   // Get metrics for card scrolling calculations
   const getCardMetrics = () => {
@@ -371,7 +397,11 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
         </section>
 
         <section className="popular">
-          <h3 className="popular__title">Most Popular Games: 2025</h3>
+          <h3 className="popular__title">
+            {popularYear > 0
+              ? `Most Popular Games: ${popularYear}`
+              : "Most Popular Games"}
+          </h3>
           {popularError ? (
             <p className="popular__status">
               Unable to load popular games: {popularError}
