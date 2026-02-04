@@ -131,12 +131,11 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
   const pageSize = 4;
   const pageCountTarget = 4;
   const totalLimit = pageCountTarget * 4;
-  const currentYear = new Date().getFullYear();
   const touchStartXRef = useRef<number | null>(null);
   const touchLastXRef = useRef<number | null>(null);
   const swipeHandledRef = useRef(false);
   const [popularGames, setPopularGames] = useState<PopularGame[]>([]);
-  const [popularYear, setPopularYear] = useState<number>(currentYear);
+  const popularYear = 2025;
   const [popularLoading, setPopularLoading] = useState(false);
   const [popularError, setPopularError] = useState<string | null>(null);
 
@@ -153,6 +152,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
           const params = new URLSearchParams({
             limit: String(totalLimit),
             t: String(cacheBust),
+            min_rating_count: "0",
           });
           if (year > 0) {
             params.set("year", String(year));
@@ -176,17 +176,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
           return data;
         };
 
-        const yearCandidates = [currentYear, currentYear - 1, 0];
-        let data: PopularGameResponse[] = [];
-        let resolvedYear = currentYear;
-        for (const year of yearCandidates) {
-          const responseData = await fetchPopular(year);
-          if (responseData.length > 0 || year === 0) {
-            data = responseData;
-            resolvedYear = year;
-            break;
-          }
-        }
+        const data = await fetchPopular(popularYear);
 
         const normalized = data.map((game) => {
           const rawImage = game.cover_image ?? "";
@@ -199,7 +189,6 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
             image,
           };
         });
-        setPopularYear(resolvedYear);
         setPopularGames(normalized.slice(0, totalLimit));
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
@@ -212,7 +201,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
 
     loadPopularGames();
     return () => controller.abort();
-  }, [currentYear, totalLimit]);
+  }, [popularYear, totalLimit]);
 
   // Get metrics for card scrolling calculations
   const getCardMetrics = () => {
