@@ -7,6 +7,7 @@ import Form from "./components/Form";
 import Game from "./game";
 import Games from "./games";
 import logoUrl from "./assets/logo.png";
+import UserPage from "./user";
 
 // Types for authenticated user
 type AuthUser = {
@@ -152,7 +153,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
           const params = new URLSearchParams({
             limit: String(totalLimit),
             t: String(cacheBust),
-            min_rating_count: "0",
+            min_rating_count: "1",
           });
           if (year > 0) {
             params.set("year", String(year));
@@ -541,6 +542,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
   );
 };
 
+
 const HealthPage = () => {
   const navigate = useNavigate();
   const [healthChecks, setHealthChecks] = useState<HealthCheck[]>([]);
@@ -743,7 +745,7 @@ function App() {
       <Route
         path="/user"
         element={
-          <LoginRoute authUser={authUser} onAuthSuccess={handleAuthSuccess} />
+          <UserPage authUser={authUser} onSignOut={handleSignOut} />
         }
       />
       <Route path="/health" element={<HealthPage />} />

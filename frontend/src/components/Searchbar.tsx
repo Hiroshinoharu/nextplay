@@ -21,19 +21,22 @@ const StyledWrapper = styled.div`
     position: relative;
     box-sizing: border-box;
     width: fit-content;
+    max-width: min(280px, 80vw);
   }
 
   .mainbox {
     box-sizing: border-box;
     position: relative;
-    width: 230px;
-    height: 50px;
+    width: 240px;
+    height: 48px;
     display: flex;
     flex-direction: row-reverse;
     align-items: center;
     justify-content: center;
-    border-radius: 160px;
-    background-color: rgb(0, 0, 0);
+    border-radius: 999px;
+    background-color: rgba(10, 30, 48, 0.7);
+    border: 1px solid var(--games-border, rgba(140, 243, 122, 0.35));
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
     transition: all 0.3s ease;
   }
 
@@ -47,7 +50,7 @@ const StyledWrapper = styled.div`
   }
 
   .checkbox:checked ~ .mainbox {
-    width: 50px;
+    width: 48px;
   }
 
   .checkbox:checked ~ .mainbox .search_input {
@@ -56,7 +59,7 @@ const StyledWrapper = styled.div`
   }
 
   .checkbox:checked ~ .mainbox .iconContainer {
-    padding-right: 8px;
+    padding-right: 6px;
   }
 
   .checkbox {
@@ -64,8 +67,8 @@ const StyledWrapper = styled.div`
     width: 30px;
     height: 30px;
     position: absolute;
-    right: 17px;
-    top: 10px;
+    right: 16px;
+    top: 9px;
     z-index: 9;
     cursor: pointer;
     appearance: none;
@@ -81,13 +84,13 @@ const StyledWrapper = styled.div`
     padding-bottom: 4px;
     padding-left: 10px;
     font-size: 1em;
-    color: white;
+    color: var(--games-text, #e2f2ff);
     transition: all 0.3s ease;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-family: inherit;
   }
 
   .search_input::placeholder {
-    color: rgba(255, 255, 255, 0.776);
+    color: rgba(226, 242, 255, 0.7);
   }
 
   .iconContainer {
@@ -99,8 +102,32 @@ const StyledWrapper = styled.div`
 
   .search_icon {
     box-sizing: border-box;
-    fill: white;
+    fill: var(--games-accent, #8cf37a);
     font-size: 1.3em;
+  }
+
+  @media (max-width: 640px) {
+    .container {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .mainbox {
+      width: 100%;
+    }
+
+    .checkbox {
+      right: 12px;
+    }
+
+    .checkbox:checked ~ .mainbox {
+      width: 100%;
+    }
+
+    .checkbox:checked ~ .mainbox .search_input {
+      width: 100%;
+      height: 100%;
+    }
   }`;
 
 export default Input;

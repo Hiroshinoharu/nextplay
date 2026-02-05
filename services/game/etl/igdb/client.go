@@ -131,6 +131,7 @@ func (client *Client) FetchGamesByIDs(ids []int) ([]Game, error) {
 	return games, nil
 }
 
+// FetchExternalGames retrieves external game entries by their IDs.
 func (client *Client) FetchExternalGames(ids []int) (map[int]ExternalGame, error){
 	if len(ids) == 0 {
 		return map[int]ExternalGame{}, nil

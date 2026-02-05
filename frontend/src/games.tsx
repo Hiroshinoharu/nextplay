@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import GameCarousel from "./components/GameCarousel";
+import Navbar from "./components/Navbar";
+import Searchbar from "./components/Searchbar";
 import logoUrl from "./assets/logo.png";
 import "./games.css";
 
@@ -68,7 +70,6 @@ const formatReleaseDate = (value?: string) => {
 function Games() {
   // Router and state hooks
   const navigate = useNavigate();
-  const location = useLocation();
   const [baseUrl] = useState<string>(API_ROOT);
   const [games, setGames] = useState<GameItem[]>([]);
   const [gamesError, setGamesError] = useState<string | null>(null);
@@ -137,14 +138,6 @@ function Games() {
   const openGameDetail = (targetId: number) => {
     navigate(`/games/${targetId}`);
   };
-
-  const activeTab = location.pathname.startsWith("/games")
-    ? "discover"
-    : location.pathname === "/"
-      ? "home"
-      : location.pathname.startsWith("/user")
-        ? "list"
-        : "home";
 
   const featuredCandidates = useMemo(() => {
     const withReleaseDates = games.filter((game) =>
@@ -244,6 +237,7 @@ function Games() {
     });
   }, [featuredScreenshots.length]);
 
+  // Keyboard navigation for lightbox controls
   useEffect(() => {
     if (lightboxIndex === null) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -280,45 +274,15 @@ function Games() {
             </span>
           </button>
           <nav className="games-nav" aria-label="Primary">
-            <button
-              type="button"
-              className={`games-nav__item${activeTab === "home" ? " is-active" : ""}`}
-              onClick={() => navigate("/")}
-            >
-              Home
-            </button>
-            <button
-              type="button"
-              className={`games-nav__item${activeTab === "discover" ? " is-active" : ""}`}
-              onClick={() => navigate("/games")}
-            >
-              Discover
-            </button>
-            <button
-              type="button"
-              className={`games-nav__item${activeTab === "list" ? " is-active" : ""}`}
-              onClick={() => navigate("/user")}
-            >
-              My List
-            </button>
+            <Navbar />
           </nav>
           <div className="games-actions">
-            <button
-              type="button"
-              className="games-icon-button"
-              aria-label="Search games"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  d="M15.5 14h-.79l-.28-.27a6 6 0 1 0-.71.71l.27.28v.79l5 5 1.5-1.5-5-5zm-5.5 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z"
-                  fill="currentColor"
-                />
-              </svg>
-            </button>
+            <Searchbar />
             <button
               type="button"
               className="games-avatar"
               aria-label="Account menu"
+              onClick={() => navigate("/user")}
             >
               NP
             </button>

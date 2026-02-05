@@ -75,6 +75,7 @@ func run() error {
 		log.Printf("Extracting %d games from IGDB", maxGames)
 	}
 
+	// Initialize IGDB client and fetch data
 	rps := 4
 	if raw := strings.TrimSpace(os.Getenv("IGDB_RPS")); raw != "" {
 		parsed, err := strconv.Atoi(raw)

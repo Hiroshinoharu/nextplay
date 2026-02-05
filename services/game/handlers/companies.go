@@ -116,6 +116,7 @@ func AddGameCompany(c *fiber.Ctx) error {
 	})
 }
 
+// RemoveGameCompany disassociates a company from a specific game
 func RemoveGameCompany(c *fiber.Ctx) error {
 	idParam := c.Params("id")
 	companyParam := c.Params("companyId")

@@ -1,17 +1,40 @@
+import { useLocation, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 
-const Button = () => {
+const NAV_ITEMS = [
+  { label: 'Home', path: '/' },
+  { label: 'Discover', path: '/games' },
+  { label: 'My List', path: '/user' },
+];
+
+const Navbar = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const activePath = location.pathname.startsWith('/games')
+    ? '/games'
+    : location.pathname.startsWith('/user')
+      ? '/user'
+      : '/';
+
   return (
     <StyledWrapper>
       <div className="nav">
         <div className="container">
-          <div className="btn">Home</div>
-          <div className="btn">Contact</div>
-          <div className="btn">About</div>
-          <div className="btn">FAQ</div>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 60" height={60} width={400} overflow="visible" className="outline">
-            <rect strokeWidth={5} fill="transparent" height={60} width={400} y={0} x={0} pathLength={100} className="rect" />
-          </svg>
+          {NAV_ITEMS.map((item) => {
+            const isActive = activePath === item.path;
+            return (
+              <button
+                key={item.path}
+                type="button"
+                className={`btn${isActive ? ' is-active' : ''}`}
+                onClick={() => navigate(item.path)}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </div>
       </div>
     </StyledWrapper>
@@ -19,80 +42,82 @@ const Button = () => {
 }
 
 const StyledWrapper = styled.div`
-  .outline {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-  }
-
-  .rect {
-    stroke-dashoffset: 5;
-    stroke-dasharray: 0 0 10 40 10 40;
-    transition: 0.5s;
-    stroke: #e4ae0b;
-  }
-
   .nav {
-    position: relative;
-    width: 400px;
-    height: 60px;
-    border-radius: 40px;
-  }
-
-  .container:hover .outline .rect {
-    transition: 999999s;
-    /* Must specify these values here as something *different* just so that the transition works properly */
-    stroke-dashoffset: 1;
-    stroke-dasharray: 0;
+    width: min(520px, 100%);
+    height: auto;
+    border-radius: 999px;
+    box-sizing: border-box;
   }
 
   .container {
-    position: absolute;
-    inset: 0;
-    background: rgba(16, 16, 16, 0.4);
+    position: relative;
+    width: 100%;
+    min-height: 56px;
+    background: rgba(10, 30, 48, 0.7);
     display: flex;
     flex-direction: row;
-    justify-content: space-around;
+    justify-content: center;
     align-items: center;
-    padding: 0.5em;
+    gap: 8px;
+    row-gap: 6px;
+    flex-wrap: wrap;
+    padding: 0.4em 0.6em;
+    border-radius: 999px;
+    border: 1px solid var(--games-border, rgba(140, 243, 122, 0.3));
+    box-shadow: 0 16px 28px rgba(0, 0, 0, 0.25);
+    box-sizing: border-box;
   }
 
   .btn {
-    padding: 0.5em 1.5em;
-    color: #fff;
+    padding: 0.45em 1.2em;
+    color: var(--games-text, #e2f2ff);
     cursor: pointer;
-    transition: 0.1s;
+    transition: 0.2s ease;
+    font-size: 0.9rem;
+    border-radius: 999px;
+    white-space: nowrap;
+    background: transparent;
+    border: none;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    appearance: none;
+    flex: 0 0 auto;
   }
 
   .btn:hover {
-    background: #e4ae0b;
-    border-radius: 10px;
+    background: rgba(140, 243, 122, 0.18);
+    color: var(--games-text, #e2f2ff);
   }
 
-  .btn:nth-child(1):hover ~ svg .rect {
-    stroke-dashoffset: 0;
-    stroke-dasharray: 0 2 8 73.3 8 10.7;
+  .btn.is-active {
+    background: linear-gradient(135deg, var(--games-accent, #8cf37a), var(--games-accent-strong, #c7f000));
+    color: #0b141a;
+    box-shadow: 0 8px 18px rgba(140, 243, 122, 0.35);
   }
 
-  .btn:nth-child(2):hover ~ svg .rect {
-    stroke-dashoffset: 0;
-    stroke-dasharray: 0 12.6 9.5 49.3 9.5 31.6;
+  .btn:focus {
+    outline: none;
   }
 
-  .btn:nth-child(3):hover ~ svg .rect {
-    stroke-dashoffset: 0;
-    stroke-dasharray: 0 24.5 8.5 27.5 8.5 55.5;
+  .btn:focus-visible {
+    outline: 2px solid var(--games-accent, #8cf37a);
+    outline-offset: 2px;
   }
 
-  .btn:nth-child(4):hover ~ svg .rect {
-    stroke-dashoffset: 0;
-    stroke-dasharray: 0 34.7 6.9 10.2 6.9 76;
-  }
+  @media (max-width: 640px) {
+    .btn {
+      padding: 0.4em 0.9em;
+      font-size: 0.8rem;
+    }
 
-  .btn:hover ~ .outline .rect {
-    stroke-dashoffset: 0;
-    stroke-dasharray: 0 0 10 40 10 40;
-    transition: 0.5s !important;
+    .container {
+      min-height: 52px;
+    }
   }`;
 
-export default Button;
+export default Navbar;
