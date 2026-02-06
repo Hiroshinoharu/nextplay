@@ -328,14 +328,6 @@ function Games() {
                   >
                     View details
                   </button>
-                  <button
-                    type="button"
-                    className="games-hero__button games-hero__button--ghost"
-                    onClick={loadGames}
-                    disabled={gamesLoading}
-                  >
-                    {gamesLoading ? "Refreshing..." : "Refresh list"}
-                  </button>
                 </div>
               </>
             ) : (
@@ -457,7 +449,7 @@ function Games() {
               showHeader={false}
               getDescription={(game) =>
                 game.release_date
-                  ? `Release: ${game.release_date}`
+                  ? `Release: ${formatReleaseDate(game.release_date)}`
                   : "Release: TBA"
               }
             />

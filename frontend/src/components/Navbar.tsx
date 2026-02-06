@@ -47,6 +47,7 @@ const StyledWrapper = styled.div`
     height: auto;
     border-radius: 999px;
     box-sizing: border-box;
+    flex: 1 1 320px;
   }
 
   .container {
@@ -109,14 +110,33 @@ const StyledWrapper = styled.div`
     outline-offset: 2px;
   }
 
+  @media (max-width: 900px) {
+    .nav {
+      width: 100%;
+    }
+  }
+
   @media (max-width: 640px) {
+    .nav {
+      width: 100%;
+    }
+
     .btn {
       padding: 0.4em 0.9em;
       font-size: 0.8rem;
+      flex: 1 1 120px;
     }
 
     .container {
       min-height: 52px;
+      border-radius: 18px;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .btn {
+      padding: 0.35em 0.75em;
+      font-size: 0.75rem;
     }
   }`;
 
