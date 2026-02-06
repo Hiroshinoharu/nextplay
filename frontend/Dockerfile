@@ -6,7 +6,15 @@ COPY frontend/package*.json ./
 RUN npm install
 
 # ---- BUILD APP ----
-COPY frontend ./
+COPY frontend/index.html ./index.html
+COPY frontend/*.html ./
+COPY frontend/public ./public
+COPY frontend/src ./src
+COPY frontend/vite.config.ts ./vite.config.ts
+COPY frontend/tsconfig*.json ./
+COPY frontend/postcss.config.js ./postcss.config.js
+COPY frontend/tailwind.config.js ./tailwind.config.js
+COPY frontend/eslint.config.js ./eslint.config.js
 RUN npm run build
 
 # ---- SERVE STAGE ----
