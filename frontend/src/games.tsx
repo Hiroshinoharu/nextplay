@@ -99,14 +99,8 @@ function Games() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [featuredGameId, setFeaturedGameId] = useState<number | null>(null);
   const [featuredDetail, setFeaturedDetail] = useState<GameItem | null>(null);
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [hasMore, setHasMore] = useState<boolean>(true);
-  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
-  const [loadMoreRef, setLoadMoreRef] = useState<HTMLDivElement | null>(null);
-  const [supportsObserver, setSupportsObserver] = useState<boolean>(true);
-
   const pageSize = 200; // Number of games to fetch per page
-  const maxGames = 0; // Maximum number of games to load in total
+  const maxGames = 1000; // Maximum number of games to load in total
 
   const fetchPage = useCallback(
     async (page: number) => {
@@ -155,8 +149,6 @@ function Games() {
         page += 1;
       }
       setGames(accumulated);
-      setCurrentPage(page);
-      setHasMore(false);
     } catch (error: unknown) {
       setGamesError(
         error instanceof Error ? error.message : "Failed to load games",
@@ -166,52 +158,10 @@ function Games() {
     }
   }, [fetchPage, pageSize]);
 
-  const loadMoreGames = useCallback(async () => {
-    if (isLoadingMore || gamesLoading || !hasMore) return;
-    setIsLoadingMore(true);
-    setGamesError(null);
-    const nextPage = currentPage + 1;
-    try {
-      const data = await fetchPage(nextPage);
-      if (data.length === 0) {
-        setHasMore(false);
-        return;
-      }
-      setGames((prev) => mergeUniqueGames(prev, data));
-      setCurrentPage(nextPage);
-      setHasMore(data.length === pageSize);
-    } catch (error: unknown) {
-      setGamesError(
-        error instanceof Error ? error.message : "Failed to load games",
-      );
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }, [currentPage, fetchPage, gamesLoading, hasMore, isLoadingMore, pageSize]);
-  
   useEffect(() => {
     // Load the list of games when the gamesUrl changes
     loadGames();
   }, [loadGames]);
-
-  useEffect(() => {
-    setSupportsObserver(typeof window !== "undefined" && "IntersectionObserver" in window);
-  }, []);
-
-  useEffect(() => {
-    if (!supportsObserver) return;
-    if (!loadMoreRef || !hasMore) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries;
-        if (!entry.isIntersecting) return;
-        loadMoreGames();
-      },
-      { rootMargin: "200px" },
-    );
-    observer.observe(loadMoreRef);
-    return () => observer.disconnect();
-  }, [hasMore, loadMoreGames, loadMoreRef, supportsObserver]);
 
   useEffect(() => {
     const message = gamesError;
@@ -595,48 +545,6 @@ function Games() {
                 : "Release: n/a"
             }
           />
-
-          <section className="games-section">
-            <div className="games-section__header">
-              <h2 className="games-section__title">All games</h2>
-              <span className="games-section__badge">
-                {games.length ? `${games.length} loaded` : "All games"}
-              </span>
-            </div>
-            <GameCarousel
-              title="All games"
-              games={games}
-              onSelect={openGameDetail}
-              getCoverUrl={carouselCover}
-              itemWidth={190}
-              showHeader={false}
-              getDescription={(game) =>
-                game.release_date
-                  ? `Release: ${formatReleaseDate(game.release_date)}`
-                  : "Release: TBA"
-              }
-            />
-            <div className="games-load-more" ref={setLoadMoreRef}>
-              {hasMore ? (
-                supportsObserver ? (
-                  <span className="games-pagination__status">
-                    {isLoadingMore || gamesLoading ? "Loading more..." : "Scroll to load more"}
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    className="games-pagination__button"
-                    onClick={loadMoreGames}
-                    disabled={isLoadingMore || gamesLoading}
-                  >
-                    {isLoadingMore || gamesLoading ? "Loading..." : "Load more"}
-                  </button>
-                )
-              ) : (
-                <span className="games-pagination__status">All games loaded</span>
-              )}
-            </div>
-          </section>
         </main>
         <footer className="landing__footer">
           <div className="landing__footer-grid">
