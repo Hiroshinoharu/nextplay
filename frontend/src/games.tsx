@@ -27,6 +27,27 @@ type GameMedia = {
   url?: string;
 };
 
+const dedupeGames = (items: GameItem[]) => {
+  const seen = new Set<number>();
+  return items.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+};
+
+const mergeUniqueGames = (existing: GameItem[], incoming: GameItem[]) => {
+  if (!incoming.length) return existing;
+  const merged = [...existing];
+  const seen = new Set<number>(existing.map((item) => item.id));
+  for (const item of incoming) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    merged.push(item);
+  }
+  return merged;
+};
+
 // Determine the default base URL for the API from environment variables
 const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(
   /\/+$/,
@@ -78,48 +99,72 @@ function Games() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [featuredGameId, setFeaturedGameId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [hasNextPage, setHasNextPage] = useState<boolean>(true);
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
 
-  const pageSize = 30;
+  const pageSize = 50; // Number of games to fetch per page
 
-  // Construct the games API URL using the base URL and memoization
-  const gamesUrl = useMemo(() => {
-    const trimmedBase = baseUrl.replace(/\/+$/, "");
-    const root = trimmedBase.endsWith("/api")
-      ? trimmedBase.slice(0, -4)
-      : trimmedBase;
-    const offset = (currentPage - 1) * pageSize;
-    return `${root}/api/games?include_media=1&limit=${pageSize}&offset=${offset}`;
-  }, [baseUrl, currentPage, pageSize]);
+  const fetchPage = useCallback(
+    async (page: number) => {
+      // Ensure the base URL is properly formatted and does not have trailing slashes
+      const trimmedBaseUrl = baseUrl.replace(/\/+$/, "");
+      const root = trimmedBaseUrl.endsWith("/api")
+        ? trimmedBaseUrl.slice(0, -4)
+        : trimmedBaseUrl;
+      const url = `${root}/api/games?page=${page}&page_size=${pageSize}&include_media=1`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      const data = await response.json();
+      if (!Array.isArray(data)) {
+        throw new Error("Invalid API response: expected an array of games");
+      }
+      return data as GameItem[];
+    },
+    [baseUrl, pageSize],
+  );
 
-  // Function to load the list of games from the API
   const loadGames = useCallback(async () => {
     setGamesLoading(true);
     setGamesError(null);
-
     try {
-      const responseValue = await fetch(gamesUrl);
-      if (!responseValue.ok) {
-        setGamesError(`Failed to load games: ${responseValue.status}`);
-        setGames([]);
-        return;
-      }
-      const data = (await responseValue.json()) as GameItem[];
-      if (!Array.isArray(data)) {
-        setGamesError("Unexpected response for /api/games");
-        setGames([]);
-        return;
-      }
-      setGames(data);
-      setHasNextPage(data.length === pageSize);
-    } catch (err) {
-      setGamesError(`${err}`);
-      setGames([]);
+      const data = await fetchPage(1);
+      setGames(dedupeGames(data));
+      setCurrentPage(1);
+      setHasMore(data.length === pageSize);
+    } catch (error: unknown) {
+      setGamesError(
+        error instanceof Error ? error.message : "Failed to load games",
+      );
     } finally {
       setGamesLoading(false);
     }
-  }, [gamesUrl]);
+  }, [fetchPage, pageSize]);
 
+  const loadMoreGames = useCallback(async () => {
+    if (isLoadingMore || gamesLoading || !hasMore) return;
+    setIsLoadingMore(true);
+    setGamesError(null);
+    const nextPage = currentPage + 1;
+    try {
+      const data = await fetchPage(nextPage);
+      if (data.length === 0) {
+        setHasMore(false);
+        return;
+      }
+      setGames((prev) => mergeUniqueGames(prev, data));
+      setCurrentPage(nextPage);
+      setHasMore(data.length === pageSize);
+    } catch (error: unknown) {
+      setGamesError(
+        error instanceof Error ? error.message : "Failed to load games",
+      );
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [currentPage, fetchPage, gamesLoading, hasMore, isLoadingMore, pageSize]);
+  
   useEffect(() => {
     // Load the list of games when the gamesUrl changes
     loadGames();
@@ -198,19 +243,27 @@ function Games() {
   const carouselCover = (game: GameItem) => normalizeMediaUrl(game.cover_image);
 
   // Filter upcoming games based on release date
-  const upcomingGames = games
-    .filter((game) => {
-      const date = parseReleaseDate(game.release_date);
-      return date ? date >= new Date() : false;
-    })
-    .slice(0, 10);
+  const upcomingGames = useMemo(() => {
+    const now = new Date();
+    return games
+      .filter((game) => {
+        const date = parseReleaseDate(game.release_date);
+        return Boolean(date && date > now);
+      })
+      .sort((a, b) => {
+        const dateA = parseReleaseDate(a.release_date);
+        const dateB = parseReleaseDate(b.release_date);
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        return dateA.getTime() - dateB.getTime();
+      });
+  }, [games]);
 
   // Prepare game lists for carousels
   const topTenGames = games.slice(0, 10);
   const discoveryGames = games.slice(10, 20);
-  const upcomingList = upcomingGames.length
-    ? upcomingGames
-    : games.slice(0, 10);
+  const upcomingList = upcomingGames;
+  
   const discoveryList = discoveryGames.length
     ? discoveryGames
     : games.slice(0, 10);
@@ -383,7 +436,7 @@ function Games() {
             games={upcomingList}
             onSelect={openGameDetail}
             getCoverUrl={carouselCover}
-            itemWidth={170}
+            itemWidth={190}
             getDescription={(game) =>
               formatReleaseDate(game.release_date)
                 ? `Release: ${formatReleaseDate(game.release_date)}`
@@ -397,7 +450,7 @@ function Games() {
             games={topTenGames}
             onSelect={openGameDetail}
             getCoverUrl={carouselCover}
-            itemWidth={180}
+            itemWidth={200}
             getDescription={(game) =>
               game.genre ? `Genre: ${game.genre}` : "Genre: n/a"
             }
@@ -410,7 +463,7 @@ function Games() {
             onSelect={openGameDetail}
             getCoverUrl={carouselCover}
             showRank
-            itemWidth={180}
+            itemWidth={200}
             getDescription={(game) =>
               game.genre ? `Genre: ${game.genre}` : "Genre: n/a"
             }
@@ -422,7 +475,7 @@ function Games() {
             games={discoveryList}
             onSelect={openGameDetail}
             getCoverUrl={carouselCover}
-            itemWidth={170}
+            itemWidth={190}
             getDescription={(game) =>
               [
                 formatReleaseDate(game.release_date)
@@ -438,14 +491,16 @@ function Games() {
           <section className="games-section">
             <div className="games-section__header">
               <h2 className="games-section__title">All games</h2>
-              <span className="games-section__badge">Page {currentPage}</span>
+              <span className="games-section__badge">
+                {games.length ? `${games.length} loaded` : "All games"}
+              </span>
             </div>
             <GameCarousel
               title="All games"
               games={games}
               onSelect={openGameDetail}
               getCoverUrl={carouselCover}
-              itemWidth={170}
+              itemWidth={190}
               showHeader={false}
               getDescription={(game) =>
                 game.release_date
@@ -453,26 +508,19 @@ function Games() {
                   : "Release: TBA"
               }
             />
-            <div className="games-pagination">
-              <button
-                type="button"
-                className="games-pagination__button"
-                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </button>
-              <span className="games-pagination__status">
-                Page {currentPage}
-              </span>
-              <button
-                type="button"
-                className="games-pagination__button"
-                onClick={() => setCurrentPage((page) => page + 1)}
-                disabled={!hasNextPage}
-              >
-                Next
-              </button>
+            <div className="games-load-more">
+              {hasMore ? (
+                <button
+                  type="button"
+                  className="games-pagination__button"
+                  onClick={loadMoreGames}
+                  disabled={isLoadingMore || gamesLoading}
+                >
+                  {isLoadingMore ? "Loading..." : "Load more"}
+                </button>
+              ) : (
+                <span className="games-pagination__status">All games loaded</span>
+              )}
             </div>
           </section>
         </main>

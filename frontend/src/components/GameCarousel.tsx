@@ -64,9 +64,10 @@ const GameCarousel = ({
         {games.map((game, index) => {
           const coverSrc = getCoverUrl(game)
           const description = getDescription(game)
+          const key = `${game.id ?? 'game'}-${index}`;
           return (
             <div
-              key={game.id}
+              key={key}
               className={`games-item${showRank ? ' games-item--ranked' : ''}`}
               style={itemStyle}
             >
