@@ -51,37 +51,50 @@ func GetPopularGames(c *fiber.Ctx) error {
 
 // GET /api/games/:id - retrieves a game by ID
 func GetGameByID(c *fiber.Ctx) error {
+	// Get game ID from URL params
 	idParam := c.Params("id")
 
+	// Convert ID to integer
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid game ID"})
 	}
 
+	// Call DB function to get game details
+
+	// Fetch game details
 	game, err := db.GetGameByID(id)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 
+	// If game not found, return 404
 	if game == nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Game not found"})
 	}
 
-	platforms, keywords, franchises, companies, series, err := db.GetGameRelations(id)
+	// Fetch related entity IDs and media for the game
+	platforms, platformNames, keywords, franchises, companies, series, err := db.GetGameRelations(id)
+	// Note: GetGameRelations now also returns platform names for easier frontend display
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
+	// Fetch media separately
 	media, err := db.GetGameMedia(id)
+	// Note: GetGameMedia is a new function that retrieves media entries for the game
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
+	// Populate the game struct with related entity IDs, platform names, and media
 	game.Platforms = platforms
+	game.PlatformNames = platformNames
 	game.Keywords = keywords
 	game.Franchises = franchises
 	game.Companies = companies
 	game.Series = series
 	game.Media = media
 
+	// Return the game details as JSON
 	return c.JSON(game)
 }
 

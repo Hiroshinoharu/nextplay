@@ -5,6 +5,9 @@ const NAV_ITEMS = [
   { label: 'Home', path: '/' },
   { label: 'Discover', path: '/games' },
   { label: 'My List', path: '/user' },
+  ...(import.meta.env.DEV && import.meta.env.VITE_ENABLE_STATUS === 'true'
+    ? [{ label: 'Status', path: '/health', to: '/health?status=1' }]
+    : []),
 ];
 
 const Navbar = () => {
@@ -15,7 +18,9 @@ const Navbar = () => {
     ? '/games'
     : location.pathname.startsWith('/user')
       ? '/user'
-      : '/';
+      : location.pathname.startsWith('/health')
+        ? '/health'
+        : '/';
 
   return (
     <StyledWrapper>
@@ -28,7 +33,7 @@ const Navbar = () => {
                 key={item.path}
                 type="button"
                 className={`btn${isActive ? ' is-active' : ''}`}
-                onClick={() => navigate(item.path)}
+                onClick={() => navigate(item.to ?? item.path)}
                 aria-current={isActive ? 'page' : undefined}
               >
                 {item.label}

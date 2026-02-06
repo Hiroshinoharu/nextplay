@@ -21,6 +21,7 @@ type Game struct {
 
 	// Relationship lists (IDs only)
 	Platforms  []int64 `json:"platforms"`
+	PlatformNames []string `json:"platform_names"` // Added for easier frontend display
 	Keywords   []int64 `json:"keywords"`
 	Franchises []int64 `json:"franchises"`
 	Companies  []int64 `json:"companies"`
@@ -43,6 +44,9 @@ func (g Game) MarshalJSON() ([]byte, error) {
 	alias := Alias(g)
 	if alias.Platforms == nil {
 		alias.Platforms = []int64{}
+	}
+	if alias.PlatformNames == nil {
+		alias.PlatformNames = []string{}
 	}
 	if alias.Keywords == nil {
 		alias.Keywords = []int64{}

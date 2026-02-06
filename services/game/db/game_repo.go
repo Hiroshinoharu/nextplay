@@ -99,6 +99,7 @@ func GetGames(limit, offset int, includeMedia bool) ([]models.Game, error) {
 			g.Media = []models.GameMedia{}
 		}
 		g.Platforms = []int64{}
+		g.PlatformNames = []string{}
 		g.Keywords = []int64{}
 		g.Franchises = []int64{}
 		g.Companies = []int64{}
@@ -219,6 +220,7 @@ func GetPopularGames(year, limit, minRatingCount int) ([]models.Game, error) {
 		}
 		g.Media = []models.GameMedia{}
 		g.Platforms = []int64{}
+		g.PlatformNames = []string{}
 		g.Keywords = []int64{}
 		g.Franchises = []int64{}
 		g.Companies = []int64{}
@@ -314,6 +316,7 @@ func GetGameByID(id int) (*models.Game, error) {
 	}
 	g.Media = []models.GameMedia{}
 	g.Platforms = []int64{}
+	g.PlatformNames = []string{}
 	g.Keywords = []int64{}
 	g.Franchises = []int64{}
 	g.Companies = []int64{}
@@ -324,6 +327,7 @@ func GetGameByID(id int) (*models.Game, error) {
 
 // CreateGame inserts a new game into the database
 func CreateGame(g *models.Game) (int, error) {
+	// Insert the new game record and return the generated game_id
 	query := `
 		INSERT INTO games (game_name, game_description, release_date, genre, publishers, story, cover_image_url)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -350,6 +354,7 @@ func CreateGame(g *models.Game) (int, error) {
 
 // UpdateGame updates an existing game in the database
 func UpdateGame(id int, g *models.Game) error {
+	// Update the game record with the provided fields
 	query := `
 		UPDATE games
 		SET game_name = $1,
@@ -447,28 +452,69 @@ func GetGameMedia(gameID int) ([]models.GameMedia, error) {
 }
 
 // GetGameRelations retrieves all related entity IDs for a given game
-func GetGameRelations(gameID int) ([]int64, []int64, []int64, []int64, []int64, error) {
+func GetGameRelations(gameID int) ([]int64, []string, []int64, []int64, []int64, []int64, error) {
+	// Fetch related entity IDs for platforms, keywords, franchises, companies, and series using a helper function to avoid code duplication
 	platforms, err := fetchRelationIDs(`SELECT platform_id FROM game_platform WHERE game_id=$1`, gameID)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
+
+	platformNames, err := fetchPlatformNames(gameID)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, err
+	}
+
+	// Fetch keywords, franchises, companies, and series in a similar way
 	keywords, err := fetchRelationIDs(`SELECT keyword_id FROM game_keywords WHERE game_id=$1`, gameID)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
+
+	// Fetch franchises, companies, and series in a similar way
 	franchises, err := fetchRelationIDs(`SELECT franchise_id FROM game_franchise WHERE game_id=$1`, gameID)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
+
+	// Fetch
 	companies, err := fetchRelationIDs(`SELECT company_id FROM game_companies WHERE game_id=$1`, gameID)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
 	series, err := fetchRelationIDs(`SELECT series_id FROM game_series WHERE game_id=$1`, gameID)
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
-	return platforms, keywords, franchises, companies, series, nil
+	return platforms, platformNames, keywords, franchises, companies, series, nil
+}
+
+func fetchPlatformNames(gameID int) ([]string, error) {
+	rows, err := DB.Query(`
+			SELECT p.platform_name FROM platform p
+			INNER JOIN game_platform gp ON gp.platform_id = p.platform_id
+			WHERE gp.game_id = $1
+			ORDER BY p.platform_name
+	`, gameID)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	names := make([]string, 0)
+	for rows.Next(){
+		var name sql.NullString
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		if name.Valid {
+			names = append(names, name.String)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return names, nil
 }
 
 // Helper function to fetch relation IDs

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Route, Routes, useLocation ,useNavigate, Navigate } from "react-router-dom";
 import "./App.css";
+import "./health.css";
 import Button from "./components/Button";
-import Card from "./components/card";
 import Form from "./components/Form";
 import Game from "./game";
 import Games from "./games";
@@ -545,6 +545,11 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
 
 const HealthPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const statusAllowed =
+    import.meta.env.DEV &&
+    import.meta.env.VITE_ENABLE_STATUS === "true" &&
+    new URLSearchParams(location.search).get("status") === "1";
   const [healthChecks, setHealthChecks] = useState<HealthCheck[]>([]);
   const [healthUpdatedAt, setHealthUpdatedAt] = useState<string | null>(null);
   const [healthLoading, setHealthLoading] = useState<boolean>(false);
@@ -617,54 +622,81 @@ const HealthPage = () => {
   }, []);
 
   useEffect(() => {
+    if (!statusAllowed) return;
     loadHealth();
-  }, [loadHealth]);
+  }, [loadHealth, statusAllowed]);
+
+  if (!statusAllowed) {
+    return <Navigate to="/games" replace />;
+  }
+
+  const okCount = healthChecks.filter((check) => check.status === "ok").length;
+  const totalCount = healthChecks.length;
+  const score = totalCount ? Math.round((okCount / totalCount) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-        <div>
-          <h1 className="text-xl font-semibold">System Health</h1>
-          <p className="text-xs text-slate-400">
-            {healthUpdatedAt
-              ? `Last checked ${healthUpdatedAt}`
-              : "Run a check to see status."}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            onClick={loadHealth}
-            disabled={healthLoading}
-            label={healthLoading ? "Checking..." : "Refresh"}
-            showIcon={false}
-          />
-          <Button
-            label="Back to services"
-            showIcon={false}
-            onClick={() => navigate("/games")}
-          />
-        </div>
-      </div>
-      <main className="mx-auto max-w-5xl px-4 py-8 space-y-6">
-        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-          <span>
-            Aggregate:{" "}
-            {overallOk === null
-              ? "unknown"
-              : overallOk
-                ? "healthy"
-                : "issues detected"}
-          </span>
-          <span>Endpoint: {apiUrl("/health")}</span>
-        </div>
+    <div className="health-page">
+      <div className="health-shell">
+        <header className="health-header">
+          <div className="health-brand">
+            <span className="health-brand__title">NextPlay</span>
+            <span className="health-brand__subtitle">System Status</span>
+          </div>
+          <div className="health-actions">
+            <Button
+              onClick={loadHealth}
+              disabled={healthLoading}
+              label={healthLoading ? "Checking..." : "Refresh"}
+              showIcon={false}
+            />
+            <Button
+              label="Back to services"
+              showIcon={false}
+              onClick={() => navigate("/games")}
+            />
+          </div>
+        </header>
+
+        <section className="health-summary">
+          <div className="health-score">
+            <span className="health-score__label">Health points</span>
+            <div className="health-score__value">{score}</div>
+            <span className="health-score__max">/ 100</span>
+            <p className="health-score__meta">
+              {totalCount ? `${okCount} of ${totalCount} services OK` : "Awaiting checks"}
+            </p>
+          </div>
+          <div className="health-meta">
+            <div className="health-meta__item">
+              <span className="health-meta__label">Aggregate</span>
+              <span className="health-meta__value">
+                {overallOk === null
+                  ? "unknown"
+                  : overallOk
+                    ? "healthy"
+                    : "issues detected"}
+              </span>
+            </div>
+            <div className="health-meta__item">
+              <span className="health-meta__label">Endpoint</span>
+              <span className="health-meta__value">{apiUrl("/health")}</span>
+            </div>
+            <div className="health-meta__item">
+              <span className="health-meta__label">Last checked</span>
+              <span className="health-meta__value">
+                {healthUpdatedAt ?? "not yet"}
+              </span>
+            </div>
+          </div>
+        </section>
 
         {healthError && (
-          <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+          <div className="health-alert">
             {healthError}
           </div>
         )}
 
-        <div className="grid gap-6 md:grid-cols-2 justify-items-center">
+        <section className="health-grid">
           {healthChecks.map((check) => {
             const descriptionLines = [
               check.status === "loading"
@@ -676,16 +708,21 @@ const HealthPage = () => {
             ].filter(Boolean);
 
             return (
-              <Card
-                key={check.key}
-                title={check.name}
-                description={descriptionLines.join("\n")}
-                variant="info"
-              />
+              <div key={check.key} className={`health-card is-${check.status}`}>
+                <div className="health-card__header">
+                  <h3>{check.name}</h3>
+                  <span className="health-card__status">
+                    {check.status === "loading" ? "checking" : check.status}
+                  </span>
+                </div>
+                <pre className="health-card__details">
+                  {descriptionLines.join("\n")}
+                </pre>
+              </div>
             );
           })}
-        </div>
-      </main>
+        </section>
+      </div>
     </div>
   );
 };

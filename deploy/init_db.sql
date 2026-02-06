@@ -64,6 +64,10 @@ CREATE TABLE platform (
     product_url   TEXT
 );
 
+-- Legacy compatibility view for older queries that reference "platforms".
+CREATE VIEW platforms AS
+    SELECT * FROM platform;
+
 -- ============================================================
 -- TABLE: series
 -- Purpose: Represents game series (e.g., The Witcher series)

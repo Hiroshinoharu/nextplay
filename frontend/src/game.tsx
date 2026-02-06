@@ -17,6 +17,7 @@ type GameItem = {
   trailers?: string[]
   trailer_url?: string
   media?: GameMedia[]
+  platform_names?: string[]
 }
 
 type GameMedia = {
@@ -231,8 +232,8 @@ function Game() {
                     <span className="game-stat__value">{formatReleaseDate(game.release_date) ?? 'n/a'}</span>
                   </div>
                   <div className="game-stat">
-                    <span className="game-stat__label">Game ID</span>
-                    <span className="game-stat__value">{game.id}</span>
+                    <span className="game-stat__label">Platforms</span>
+                    <span className="game-stat__value">{game.platform_names?.join(', ') ?? 'n/a'}</span>
                   </div>
                 </div>
                 <section className="game-panel">
