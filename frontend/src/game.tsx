@@ -287,7 +287,6 @@ function Game() {
                   </div>
                 </section>
                 <div className="game-info__actions">
-                  <Button label="Refresh details" showIcon={false} onClick={() => loadGame()} />
                   <Button label="Back to list" showIcon={false} onClick={closeGameDetail} />
                 </div>
               </div>

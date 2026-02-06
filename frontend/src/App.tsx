@@ -342,7 +342,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
                 </button>
               ) : (
                 <>
-                  <button type="button" onClick={() => navigate("/login")}>
+                  <button type="button" onClick={() => navigate("/login?mode=signup")}>
                     Sign Up
                   </button>
                   <button type="button" onClick={() => navigate("/login")}>
@@ -805,6 +805,10 @@ const LoginRoute = ({ authUser, onAuthSuccess }: AuthHandlers) => {
   const navigate = useNavigate();
   const location = useLocation();
   const emailFromQuery = new URLSearchParams(location.search).get("email") ?? undefined;
+  const modeFromQuery = new URLSearchParams(location.search).get("mode") ?? undefined;
+  const initialMode = modeFromQuery === "signup" || modeFromQuery === "register"
+    ? "register"
+    : "login";
   useEffect(() => {
     if (authUser) {
       const timeoutId = window.setTimeout(() => {
@@ -829,7 +833,12 @@ const LoginRoute = ({ authUser, onAuthSuccess }: AuthHandlers) => {
               Signed in as {authUser.username ?? authUser.email ?? "User"}
             </div>
           )}
-          <Form apiBaseUrl={API_ROOT} onAuthSuccess={onAuthSuccess} initialEmail={emailFromQuery} />
+          <Form
+            apiBaseUrl={API_ROOT}
+            onAuthSuccess={onAuthSuccess}
+            initialEmail={emailFromQuery}
+            initialMode={initialMode}
+          />
         </main>
       </div>
     </div>
