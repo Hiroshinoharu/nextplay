@@ -98,11 +98,15 @@ function Games() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [featuredGameId, setFeaturedGameId] = useState<number | null>(null);
+  const [featuredDetail, setFeaturedDetail] = useState<GameItem | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [loadMoreRef, setLoadMoreRef] = useState<HTMLDivElement | null>(null);
+  const [supportsObserver, setSupportsObserver] = useState<boolean>(true);
 
-  const pageSize = 50; // Number of games to fetch per page
+  const pageSize = 200; // Number of games to fetch per page
+  const maxGames = 0; // Maximum number of games to load in total
 
   const fetchPage = useCallback(
     async (page: number) => {
@@ -111,7 +115,9 @@ function Games() {
       const root = trimmedBaseUrl.endsWith("/api")
         ? trimmedBaseUrl.slice(0, -4)
         : trimmedBaseUrl;
-      const url = `${root}/api/games?page=${page}&page_size=${pageSize}&include_media=1`;
+      const offset = (page - 1) * pageSize;
+      console.debug(`Fetching games from: ${root}/api/games?limit=${pageSize}&offset=${offset}`);
+      const url = `${root}/api/games?limit=${pageSize}&offset=${offset}`;
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`API error: ${response.status} ${response.statusText}`);
@@ -129,10 +135,28 @@ function Games() {
     setGamesLoading(true);
     setGamesError(null);
     try {
-      const data = await fetchPage(1);
-      setGames(dedupeGames(data));
-      setCurrentPage(1);
-      setHasMore(data.length === pageSize);
+      let page = 1;
+      let accumulated: GameItem[] = [];
+      // Fetch all pages up front until the API indicates no more results.
+      while (true) {
+        const data = await fetchPage(page);
+        if (page === 1) {
+          accumulated = dedupeGames(data);
+        } else {
+          const before = accumulated.length;
+          accumulated = mergeUniqueGames(accumulated, data);
+          if (accumulated.length === before) break;
+        }
+        if (maxGames > 0 && accumulated.length >= maxGames) {
+          accumulated = accumulated.slice(0, maxGames);
+          break;
+        }
+        if (data.length < pageSize) break;
+        page += 1;
+      }
+      setGames(accumulated);
+      setCurrentPage(page);
+      setHasMore(false);
     } catch (error: unknown) {
       setGamesError(
         error instanceof Error ? error.message : "Failed to load games",
@@ -171,6 +195,25 @@ function Games() {
   }, [loadGames]);
 
   useEffect(() => {
+    setSupportsObserver(typeof window !== "undefined" && "IntersectionObserver" in window);
+  }, []);
+
+  useEffect(() => {
+    if (!supportsObserver) return;
+    if (!loadMoreRef || !hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (!entry.isIntersecting) return;
+        loadMoreGames();
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(loadMoreRef);
+    return () => observer.disconnect();
+  }, [hasMore, loadMoreGames, loadMoreRef, supportsObserver]);
+
+  useEffect(() => {
     const message = gamesError;
     if (!message) return;
     setToastMessage(message);
@@ -195,6 +238,7 @@ function Games() {
     // Scroll to top when the featured game changes
     if (!featuredCandidates.length) {
       setFeaturedGameId(null);
+      setFeaturedDetail(null);
       return;
     }
 
@@ -207,6 +251,37 @@ function Games() {
     });
   }, [featuredCandidates]);
 
+  useEffect(() => {
+    if (!featuredGameId) {
+      setFeaturedDetail(null);
+      return;
+    }
+    const controller = new AbortController();
+    const trimmedBaseUrl = baseUrl.replace(/\/+$/, "");
+    const root = trimmedBaseUrl.endsWith("/api")
+      ? trimmedBaseUrl.slice(0, -4)
+      : trimmedBaseUrl;
+    const url = `${root}/api/games/${featuredGameId}`;
+    const loadFeaturedDetail = async () => {
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) {
+          throw new Error(`Failed to load featured game: ${response.status}`);
+        }
+        const data = (await response.json()) as GameItem;
+        if (!data || typeof data !== "object") {
+          throw new Error("Invalid featured game response");
+        }
+        setFeaturedDetail(data);
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setFeaturedDetail(null);
+      }
+    };
+    loadFeaturedDetail();
+    return () => controller.abort();
+  }, [baseUrl, featuredGameId]);
+
   const featuredGame = featuredGameId
     ? (featuredCandidates.find((game) => game.id === featuredGameId) ?? null)
     : featuredCandidates.length
@@ -215,11 +290,16 @@ function Games() {
         ]
       : null;
 
+  const heroGame =
+    featuredDetail && featuredDetail.id === featuredGameId
+      ? featuredDetail
+      : featuredGame;
+
   const featuredCover = normalizeMediaUrl(
-    featuredGame?.cover_image ?? undefined,
+    heroGame?.cover_image ?? undefined,
   );
-  const featuredMedia = Array.isArray(featuredGame?.media)
-    ? featuredGame?.media
+  const featuredMedia = Array.isArray(heroGame?.media)
+    ? heroGame?.media
     : [];
   const featuredMediaItems = featuredMedia
     .filter(
@@ -237,7 +317,7 @@ function Games() {
     upgradeIgdbSize(featuredCover, "t_1080p");
   const featuredScreenshots = featuredMediaItems.length
     ? featuredMediaItems.map((item) => item.url)
-    : (featuredGame?.screenshots ?? [])
+    : (heroGame?.screenshots ?? [])
         .map((screenshot) => normalizeMediaUrl(screenshot))
         .filter((screenshot): screenshot is string => Boolean(screenshot));
   const carouselCover = (game: GameItem) => normalizeMediaUrl(game.cover_image);
@@ -347,26 +427,26 @@ function Games() {
             {heroMediaUrl ? (
               <img
                 src={heroMediaUrl}
-                alt={featuredGame?.name || "Featured game"}
+                alt={heroGame?.name || "Featured game"}
               />
             ) : null}
             <div className="games-hero__shade" />
           </div>
           <div className="games-hero__content">
-            {featuredGame ? (
+            {heroGame ? (
               <>
                 <p className="games-hero__eyebrow">Featured today</p>
-                <h1 className="games-hero__title">{featuredGame.name}</h1>
+                <h1 className="games-hero__title">{heroGame.name}</h1>
                 <p className="games-hero__desc">
-                  {featuredGame.description ||
+                  {heroGame.description ||
                     "A fresh pick from your library."}
                 </p>
                 <div className="games-hero__meta">
-                  <span>{featuredGame.genre ?? "Genre: n/a"}</span>
-                  <span>{featuredGame.publishers ?? "Publisher: n/a"}</span>
+                  <span>{heroGame.genre ?? "Genre: n/a"}</span>
+                  <span>{heroGame.publishers ?? "Publisher: n/a"}</span>
                   <span>
-                    {formatReleaseDate(featuredGame.release_date)
-                      ? `Release: ${formatReleaseDate(featuredGame.release_date)}`
+                    {formatReleaseDate(heroGame.release_date)
+                      ? `Release: ${formatReleaseDate(heroGame.release_date)}`
                       : "Release: n/a"}
                   </span>
                 </div>
@@ -375,9 +455,9 @@ function Games() {
                     type="button"
                     className="games-hero__button games-hero__button--primary"
                     onClick={() => {
-                      if (featuredGame?.id) openGameDetail(featuredGame.id);
+                      if (heroGame?.id) openGameDetail(heroGame.id);
                     }}
-                    disabled={!featuredGame.id}
+                    disabled={!heroGame.id}
                   >
                     View details
                   </button>
@@ -409,15 +489,15 @@ function Games() {
               <div className="games-hero__screenshots-row">
                 {featuredScreenshots.slice(0, 5).map((screenshot, index) => (
                   <button
-                    key={`${featuredGame?.id}-screenshot-${index}`}
+                    key={`${heroGame?.id}-screenshot-${index}`}
                     type="button"
                     className="games-hero__screenshot-button"
                     onClick={() => setLightboxIndex(index)}
-                    aria-label={`Open screenshot ${index + 1} of ${featuredGame?.name}`}
+                    aria-label={`Open screenshot ${index + 1} of ${heroGame?.name}`}
                   >
                     <img
                       src={screenshot}
-                      alt={`Screenshot ${index + 1} of ${featuredGame?.name}`}
+                      alt={`Screenshot ${index + 1} of ${heroGame?.name}`}
                       className="games-hero__screenshot"
                     />
                   </button>
@@ -488,6 +568,34 @@ function Games() {
             }
           />
 
+          <GameCarousel
+            title="RPG Games"
+            badge="Genre"
+            games={games.filter((game) => game.genre?.toLowerCase().includes("rpg"))}
+            onSelect={openGameDetail}
+            getCoverUrl={carouselCover}
+            itemWidth={190}
+            getDescription = {(game) =>
+              formatReleaseDate(game.release_date)
+                ? `Release: ${formatReleaseDate(game.release_date)}`
+                : "Release: n/a"
+            }
+          />
+
+          <GameCarousel
+            title="Strategy Games"
+            badge="Genre"
+            games={games.filter((game) => game.genre?.toLowerCase().includes("strategy"))}
+            onSelect={openGameDetail}
+            getCoverUrl={carouselCover}
+            itemWidth={190}
+            getDescription = {(game) =>
+              formatReleaseDate(game.release_date)
+                ? `Release: ${formatReleaseDate(game.release_date)}`
+                : "Release: n/a"
+            }
+          />
+
           <section className="games-section">
             <div className="games-section__header">
               <h2 className="games-section__title">All games</h2>
@@ -508,16 +616,22 @@ function Games() {
                   : "Release: TBA"
               }
             />
-            <div className="games-load-more">
+            <div className="games-load-more" ref={setLoadMoreRef}>
               {hasMore ? (
-                <button
-                  type="button"
-                  className="games-pagination__button"
-                  onClick={loadMoreGames}
-                  disabled={isLoadingMore || gamesLoading}
-                >
-                  {isLoadingMore ? "Loading..." : "Load more"}
-                </button>
+                supportsObserver ? (
+                  <span className="games-pagination__status">
+                    {isLoadingMore || gamesLoading ? "Loading more..." : "Scroll to load more"}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="games-pagination__button"
+                    onClick={loadMoreGames}
+                    disabled={isLoadingMore || gamesLoading}
+                  >
+                    {isLoadingMore || gamesLoading ? "Loading..." : "Load more"}
+                  </button>
+                )
               ) : (
                 <span className="games-pagination__status">All games loaded</span>
               )}
