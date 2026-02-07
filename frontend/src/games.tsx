@@ -95,12 +95,15 @@ function Games() {
   const [games, setGames] = useState<GameItem[]>([]);
   const [gamesError, setGamesError] = useState<string | null>(null);
   const [gamesLoading, setGamesLoading] = useState<boolean>(false);
+  const [gamesLoadingMore, setGamesLoadingMore] = useState<boolean>(false);
+  const [hasMoreGames, setHasMoreGames] = useState<boolean>(true);
+  const [nextPage,setNextPage] = useState<number>(1);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [featuredGameId, setFeaturedGameId] = useState<number | null>(null);
   const [featuredDetail, setFeaturedDetail] = useState<GameItem | null>(null);
   const pageSize = 200; // Number of games to fetch per page
-  const maxGames = 1000; // Maximum number of games to load in total
+  const maxGames = 0; // Maximum number of games to load in total
 
   const fetchPage = useCallback(
     async (page: number) => {
@@ -125,43 +128,50 @@ function Games() {
     [baseUrl, pageSize],
   );
 
-  const loadGames = useCallback(async () => {
-    setGamesLoading(true);
-    setGamesError(null);
-    try {
-      let page = 1;
-      let accumulated: GameItem[] = [];
-      // Fetch all pages up front until the API indicates no more results.
-      while (true) {
-        const data = await fetchPage(page);
-        if (page === 1) {
-          accumulated = dedupeGames(data);
-        } else {
-          const before = accumulated.length;
-          accumulated = mergeUniqueGames(accumulated, data);
-          if (accumulated.length === before) break;
-        }
-        if (maxGames > 0 && accumulated.length >= maxGames) {
-          accumulated = accumulated.slice(0, maxGames);
-          break;
-        }
-        if (data.length < pageSize) break;
-        page += 1;
+  const loadGamesPage = useCallback(
+    async (page: number, mode: "replace" | "append") => {
+      if (mode === "replace") {
+        setGamesLoading(true);
+      } else {
+        setGamesLoadingMore(true);
       }
-      setGames(accumulated);
-    } catch (error: unknown) {
+    setGamesError(null);
+    try{
+      const data = await fetchPage(page);
+      setGames((previous) => {
+        const merged = 
+        mode === "replace" 
+        ? dedupeGames(data) 
+        : mergeUniqueGames(previous, dedupeGames(data));
+        const capped =
+          maxGames > 0 ? merged.slice(0, maxGames) : merged;
+        const reachedCap = maxGames > 0 && merged.length >= maxGames;
+        setHasMoreGames(!reachedCap && data.length === pageSize);
+        setNextPage(page + 1);
+        return capped;
+      })
+    } catch (error : unknown){
       setGamesError(
-        error instanceof Error ? error.message : "Failed to load games",
+        error instanceof Error ? error.message : "An unknown error occurred while loading games."
       );
-    } finally {
-      setGamesLoading(false);
+    } finally{
+      if (mode === "replace") {
+        setGamesLoading(false);
+      } else {
+        setGamesLoadingMore(false);
+      }
     }
-  }, [fetchPage, pageSize]);
+  }, [fetchPage, maxGames,pageSize]);
+
+  const loadMoreGames = useCallback(async () => {
+    if (!hasMoreGames || gamesLoadingMore || gamesLoading) return;
+    await loadGamesPage(nextPage, "append");
+  }, [hasMoreGames, gamesLoadingMore, gamesLoading, loadGamesPage, nextPage]);
 
   useEffect(() => {
     // Load the list of games when the gamesUrl changes
-    loadGames();
-  }, [loadGames]);
+    loadGamesPage(1, "replace");
+  }, [loadGamesPage]);
 
   useEffect(() => {
     const message = gamesError;
@@ -424,7 +434,7 @@ function Games() {
                   <button
                     type="button"
                     className="games-hero__button games-hero__button--ghost"
-                    onClick={loadGames}
+                    onClick={() => void loadGamesPage(1, "replace")}
                     disabled={gamesLoading}
                   >
                     {gamesLoading ? "Refreshing..." : "Refresh list"}
@@ -459,6 +469,24 @@ function Games() {
 
         <main className="games-content">
           {gamesError && <div className="games-alert">{gamesError}</div>}
+
+          <div className="games-pagination" aria-live="polite">
+            <span>
+              Loaded {games.length.toLocaleString()} games
+            </span>
+            <button
+              className="games-pagination__button"
+              type="button"
+              onClick={loadMoreGames}
+              disabled={!hasMoreGames || gamesLoadingMore || gamesLoading}
+            >
+              {gamesLoadingMore
+                ? "Loading more..."
+                : hasMoreGames
+                ? `Load more ${nextPage}`
+                : "No more games"}
+            </button>
+          </div>
 
           <GameCarousel
             title="Upcoming Games"
@@ -545,6 +573,7 @@ function Games() {
                 : "Release: n/a"
             }
           />
+
         </main>
         <footer className="landing__footer">
           <div className="landing__footer-grid">
