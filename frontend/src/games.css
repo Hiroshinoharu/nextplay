@@ -475,10 +475,11 @@
 .games-pagination {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 12px;
   padding-top: 8px;
   flex-wrap: wrap;
+  text-align: center;
 }
 
 .games-load-more {

@@ -64,6 +64,7 @@ const normalizeMediaUrl = (url?: string) => {
   return url;
 };
 
+// Upgrade IGDB image URLs to a specified size by replacing the size segment in the URL
 const upgradeIgdbSize = (url: string | null, size: string) => {
   if (!url) return null;
   return url.replace(/\/t_[^/]+\//, `/${size}/`);
@@ -77,6 +78,7 @@ const parseReleaseDate = (value?: string) => {
   return parsed;
 };
 
+// Format release dates into a human-readable string format, or return null if the date is invalid
 const formatReleaseDate = (value?: string) => {
   const parsed = parseReleaseDate(value);
   if (!parsed) return null;
@@ -97,7 +99,7 @@ function Games() {
   const [gamesLoading, setGamesLoading] = useState<boolean>(false);
   const [gamesLoadingMore, setGamesLoadingMore] = useState<boolean>(false);
   const [hasMoreGames, setHasMoreGames] = useState<boolean>(true);
-  const [nextPage,setNextPage] = useState<number>(1);
+  const [nextPage, setNextPage] = useState<number>(1);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [featuredGameId, setFeaturedGameId] = useState<number | null>(null);
@@ -113,7 +115,9 @@ function Games() {
         ? trimmedBaseUrl.slice(0, -4)
         : trimmedBaseUrl;
       const offset = (page - 1) * pageSize;
-      console.debug(`Fetching games from: ${root}/api/games?limit=${pageSize}&offset=${offset}`);
+      console.debug(
+        `Fetching games from: ${root}/api/games?limit=${pageSize}&offset=${offset}`,
+      );
       const url = `${root}/api/games?limit=${pageSize}&offset=${offset}`;
       const response = await fetch(url);
       if (!response.ok) {
@@ -135,33 +139,36 @@ function Games() {
       } else {
         setGamesLoadingMore(true);
       }
-    setGamesError(null);
-    try{
-      const data = await fetchPage(page);
-      setGames((previous) => {
-        const merged = 
-        mode === "replace" 
-        ? dedupeGames(data) 
-        : mergeUniqueGames(previous, dedupeGames(data));
-        const capped =
-          maxGames > 0 ? merged.slice(0, maxGames) : merged;
-        const reachedCap = maxGames > 0 && merged.length >= maxGames;
-        setHasMoreGames(!reachedCap && data.length === pageSize);
-        setNextPage(page + 1);
-        return capped;
-      })
-    } catch (error : unknown){
-      setGamesError(
-        error instanceof Error ? error.message : "An unknown error occurred while loading games."
-      );
-    } finally{
-      if (mode === "replace") {
-        setGamesLoading(false);
-      } else {
-        setGamesLoadingMore(false);
+      setGamesError(null);
+      try {
+        const data = await fetchPage(page);
+        setGames((previous) => {
+          const merged =
+            mode === "replace"
+              ? dedupeGames(data)
+              : mergeUniqueGames(previous, dedupeGames(data));
+          const capped = maxGames > 0 ? merged.slice(0, maxGames) : merged;
+          const reachedCap = maxGames > 0 && merged.length >= maxGames;
+          setHasMoreGames(!reachedCap && data.length === pageSize);
+          setNextPage(page + 1);
+          return capped;
+        });
+      } catch (error: unknown) {
+        setGamesError(
+          error instanceof Error
+            ? error.message
+            : "An unknown error occurred while loading games.",
+        );
+      } finally {
+        if (mode === "replace") {
+          setGamesLoading(false);
+        } else {
+          setGamesLoadingMore(false);
+        }
       }
-    }
-  }, [fetchPage, maxGames,pageSize]);
+    },
+    [fetchPage, maxGames, pageSize],
+  );
 
   const loadMoreGames = useCallback(async () => {
     if (!hasMoreGames || gamesLoadingMore || gamesLoading) return;
@@ -255,12 +262,8 @@ function Games() {
       ? featuredDetail
       : featuredGame;
 
-  const featuredCover = normalizeMediaUrl(
-    heroGame?.cover_image ?? undefined,
-  );
-  const featuredMedia = Array.isArray(heroGame?.media)
-    ? heroGame?.media
-    : [];
+  const featuredCover = normalizeMediaUrl(heroGame?.cover_image ?? undefined);
+  const featuredMedia = Array.isArray(heroGame?.media) ? heroGame?.media : [];
   const featuredMediaItems = featuredMedia
     .filter(
       (item) =>
@@ -303,7 +306,7 @@ function Games() {
   const topTenGames = games.slice(0, 10);
   const discoveryGames = games.slice(10, 20);
   const upcomingList = upcomingGames;
-  
+
   const discoveryList = discoveryGames.length
     ? discoveryGames
     : games.slice(0, 10);
@@ -385,10 +388,7 @@ function Games() {
         <section className="games-hero">
           <div className="games-hero__media">
             {heroMediaUrl ? (
-              <img
-                src={heroMediaUrl}
-                alt={heroGame?.name || "Featured game"}
-              />
+              <img src={heroMediaUrl} alt={heroGame?.name || "Featured game"} />
             ) : null}
             <div className="games-hero__shade" />
           </div>
@@ -398,8 +398,7 @@ function Games() {
                 <p className="games-hero__eyebrow">Featured today</p>
                 <h1 className="games-hero__title">{heroGame.name}</h1>
                 <p className="games-hero__desc">
-                  {heroGame.description ||
-                    "A fresh pick from your library."}
+                  {heroGame.description || "A fresh pick from your library."}
                 </p>
                 <div className="games-hero__meta">
                   <span>{heroGame.genre ?? "Genre: n/a"}</span>
@@ -470,24 +469,6 @@ function Games() {
         <main className="games-content">
           {gamesError && <div className="games-alert">{gamesError}</div>}
 
-          <div className="games-pagination" aria-live="polite">
-            <span>
-              Loaded {games.length.toLocaleString()} games
-            </span>
-            <button
-              className="games-pagination__button"
-              type="button"
-              onClick={loadMoreGames}
-              disabled={!hasMoreGames || gamesLoadingMore || gamesLoading}
-            >
-              {gamesLoadingMore
-                ? "Loading more..."
-                : hasMoreGames
-                ? `Load more ${nextPage}`
-                : "No more games"}
-            </button>
-          </div>
-
           <GameCarousel
             title="Upcoming Games"
             badge="Preview"
@@ -499,18 +480,6 @@ function Games() {
               formatReleaseDate(game.release_date)
                 ? `Release: ${formatReleaseDate(game.release_date)}`
                 : "Release: n/a"
-            }
-          />
-
-          <GameCarousel
-            title="Top Rated Games"
-            badge="Popular"
-            games={topTenGames}
-            onSelect={openGameDetail}
-            getCoverUrl={carouselCover}
-            itemWidth={200}
-            getDescription={(game) =>
-              game.genre ? `Genre: ${game.genre}` : "Genre: n/a"
             }
           />
 
@@ -546,34 +515,20 @@ function Games() {
             }
           />
 
-          <GameCarousel
-            title="RPG Games"
-            badge="Genre"
-            games={games.filter((game) => game.genre?.toLowerCase().includes("rpg"))}
-            onSelect={openGameDetail}
-            getCoverUrl={carouselCover}
-            itemWidth={190}
-            getDescription = {(game) =>
-              formatReleaseDate(game.release_date)
-                ? `Release: ${formatReleaseDate(game.release_date)}`
-                : "Release: n/a"
-            }
-          />
-
-          <GameCarousel
-            title="Strategy Games"
-            badge="Genre"
-            games={games.filter((game) => game.genre?.toLowerCase().includes("strategy"))}
-            onSelect={openGameDetail}
-            getCoverUrl={carouselCover}
-            itemWidth={190}
-            getDescription = {(game) =>
-              formatReleaseDate(game.release_date)
-                ? `Release: ${formatReleaseDate(game.release_date)}`
-                : "Release: n/a"
-            }
-          />
-
+          <div className="games-pagination" aria-live="polite">
+            <button
+              className="games-pagination__button"
+              type="button"
+              onClick={loadMoreGames}
+              disabled={!hasMoreGames || gamesLoadingMore || gamesLoading}
+            >
+              {gamesLoadingMore
+                ? "Loading more..."
+                : hasMoreGames
+                  ? `Load more (${nextPage})`
+                  : "No more games"}
+            </button>
+          </div>
         </main>
         <footer className="landing__footer">
           <div className="landing__footer-grid">
@@ -681,7 +636,6 @@ function Games() {
         </div>
       ) : null}
     </div>
-    
   );
 }
 
