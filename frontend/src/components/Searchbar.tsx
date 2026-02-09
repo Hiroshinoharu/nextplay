@@ -36,10 +36,10 @@ const StyledWrapper = styled.div`
     align-items: center;
     gap: 10px;
     padding: 0 14px;
-    border-radius: 999px;
-    background-color: rgba(10, 30, 48, 0.7);
+    border-radius: 14px;
+    background: linear-gradient(145deg, rgba(8, 28, 44, 0.86), rgba(9, 23, 36, 0.74));
     border: 1px solid var(--games-border, rgba(140, 243, 122, 0.35));
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.28);
   }
 
   .search_input {
@@ -59,14 +59,14 @@ const StyledWrapper = styled.div`
   }
 
   .search_input::placeholder {
-    color: rgba(226, 242, 255, 0.7);
+    color: rgba(226, 242, 255, 0.62);
   }
 
   .iconContainer {
     box-sizing: border-box;
     width: 28px;
     height: 28px;
-    border-radius: 50%;
+    border-radius: 8px;
     border: 1px solid rgba(140, 243, 122, 0.35);
     display: grid;
     place-items: center;
@@ -84,6 +84,24 @@ const StyledWrapper = styled.div`
   @media (max-width: 900px) {
     .search {
       width: 100%;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .search {
+      height: 42px;
+      padding: 0 10px 0 12px;
+      gap: 8px;
+      border-radius: 12px;
+    }
+
+    .search_input {
+      font-size: 0.9em;
+    }
+
+    .iconContainer {
+      width: 24px;
+      height: 24px;
     }
   }
 `;

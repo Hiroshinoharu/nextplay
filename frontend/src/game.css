@@ -123,6 +123,7 @@
   border-radius: 18px;
   overflow: hidden;
   background: var(--game-panel-strong);
+  aspect-ratio: 3 / 4;
   min-height: 360px;
   box-shadow: var(--game-shadow);
 }
@@ -183,6 +184,9 @@
   border: 1px solid rgba(140, 243, 122, 0.2);
   background: rgba(10, 30, 48, 0.7);
   padding: 12px 14px;
+  min-height: 108px;
+  display: flex;
+  flex-direction: column;
 }
 
 .game-stat__label {
@@ -194,9 +198,18 @@
 }
 
 .game-stat__value {
+  display: block;
   margin-top: 6px;
   color: var(--game-text);
   font-size: 14px;
+  line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.game-stat__value--wrap {
+  text-wrap: pretty;
 }
 
 .game-panel__header {
@@ -231,6 +244,17 @@
   overflow: hidden;
   border: 1px solid rgba(226, 242, 255, 0.12);
   background: #040b12;
+}
+
+.game-gallery__item-button {
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.game-gallery__item-button:focus-visible {
+  outline: 2px solid var(--game-accent);
+  outline-offset: 2px;
 }
 
 .game-gallery__image {
@@ -295,7 +319,7 @@
 
   .game-header__actions {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
   }
 
   .game-grid {
@@ -303,18 +327,45 @@
   }
 
   .game-cover {
-    min-height: 300px;
+    aspect-ratio: 16 / 9;
+    min-height: 240px;
   }
 }
 
 @media (max-width: 640px) {
+  .game-page {
+    --game-text: #eef7ff;
+    --game-muted: rgba(238, 247, 255, 0.82);
+    --game-subtle: rgba(238, 247, 255, 0.64);
+    --game-accent: #9bea8f;
+    --game-accent-strong: #dcff74;
+    --game-border: rgba(155, 234, 143, 0.24);
+    --game-shadow: 0 10px 22px rgba(0, 0, 0, 0.4);
+    background:
+      radial-gradient(circle at 15% 15%, rgba(140, 243, 122, 0.08), transparent 58%),
+      radial-gradient(circle at 85% 10%, rgba(14, 165, 233, 0.08), transparent 54%),
+      linear-gradient(155deg, rgba(4, 10, 16, 0.98), rgba(7, 18, 29, 0.92));
+  }
+
   .game-shell {
-    width: min(100%, 92vw);
+    width: min(100%, 94vw);
+    gap: 14px;
     padding-bottom: 64px;
   }
 
   .game-header {
-    padding: 12px;
+    padding: 10px;
+    border-radius: 14px;
+    gap: 10px;
+  }
+
+  .game-brand__subtitle {
+    display: none;
+  }
+
+  .game-brand__title {
+    letter-spacing: 0.2em;
+    font-size: 12px;
   }
 
   .game-header__actions {
@@ -326,8 +377,104 @@
     align-self: flex-end;
   }
 
+  .game-info {
+    gap: 14px;
+  }
+
+  .game-info__title {
+    font-size: clamp(24px, 7.4vw, 30px);
+    line-height: 1.08;
+  }
+
+  .game-info__description {
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
   .game-info__stats {
     grid-template-columns: 1fr;
+  }
+
+  .game-panel__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .game-panel__meta {
+    text-align: left;
+  }
+
+  .game-gallery {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .game-gallery__image {
+    height: 130px;
+  }
+
+  .game-info__actions {
+    width: 100%;
+  }
+
+  .game-info__actions > * {
+    width: 100%;
+  }
+
+  .game-info__actions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 520px) {
+  .game-shell {
+    width: min(100%, 94vw);
+    padding: 12px 0 56px;
+    gap: 14px;
+  }
+
+  .game-header {
+    gap: 10px;
+  }
+
+  .game-header__actions {
+    width: 100%;
+  }
+
+  .game-header__actions > * {
+    width: 100%;
+  }
+
+  .game-header__actions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .game-panel {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .game-cover {
+    min-height: 220px;
+  }
+
+  .game-cover__placeholder {
+    min-height: 220px;
+  }
+
+  .game-info__title {
+    font-size: clamp(22px, 8vw, 30px);
+  }
+
+  .game-info__description {
+    font-size: 13px;
+  }
+
+  .game-stat {
+    padding: 10px 12px;
+    min-height: 0;
   }
 
   .game-gallery {
@@ -335,6 +482,13 @@
   }
 
   .game-gallery__image {
-    height: 180px;
+    height: 170px;
+  }
+
+  .game-toast {
+    left: 10px;
+    right: 10px;
+    top: 10px;
+    width: auto;
   }
 }

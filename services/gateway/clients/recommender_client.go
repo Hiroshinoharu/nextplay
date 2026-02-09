@@ -9,10 +9,12 @@ import (
 	"os"
 )
 
+// RecommenderClient is a client for interacting with the Recommender Service.
 type RecommenderClient struct {
 	BaseURL string
 }
 
+// NewRecommenderClient initializes a new RecommenderClient with the base URL from environment variables or defaults.
 func NewRecommenderClient() *RecommenderClient {
 	baseURL := os.Getenv("RECOMMENDER_SERVICE_URL")
 	if baseURL == "" {
@@ -21,8 +23,10 @@ func NewRecommenderClient() *RecommenderClient {
 	return &RecommenderClient{BaseURL: baseURL}
 }
 
+// RecommendFromFeatures fetches recommendations based on provided item features.
 func (c *RecommenderClient) RecommendFromFeatures(req interface{}) ([]byte, error) {
-    url := fmt.Sprintf("%s/recommend", c.BaseURL)
+    // Construct the URL for the recommendation endpoint
+	url := fmt.Sprintf("%s/recommend", c.BaseURL)
 
 	body, _ := json.Marshal(req)
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))

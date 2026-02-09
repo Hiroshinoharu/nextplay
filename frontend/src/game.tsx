@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Button from './components/Button'
+import Lightbox from './components/Lightbox'
 import './game.css'
 
 // Define the structure of a game item based on expected API response fields
@@ -75,6 +76,15 @@ const formatReleaseDate = (value?: string) => {
   });
 };
 
+const formatCommaSeparatedText = (value?: string) => {
+  if (!value) return 'n/a';
+  const parts = value
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return parts.length ? parts.join(', ') : value;
+};
+
 // Main Game component handling individual game detail view
 function Game() {
   // Sets a navigation hook and state variables
@@ -85,6 +95,7 @@ function Game() {
   const [gameError, setGameError] = useState<string | null>(null)
   const [gameLoading, setGameLoading] = useState<boolean>(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
   const numericId = gameId ? Number(gameId) : null
   const isValidId = numericId !== null && !Number.isNaN(numericId)
@@ -146,6 +157,10 @@ function Game() {
   const closeGameDetail = () => {
     navigate('/games')
   }
+
+  const closeLightbox = useCallback(() => {
+    setLightboxIndex(null)
+  }, [])
 
   // Prepare media items for display
   const mediaItems = Array.isArray(game?.media) ? game?.media : []
@@ -221,11 +236,15 @@ function Game() {
                 <div className="game-info__stats">
                   <div className="game-stat">
                     <span className="game-stat__label">Genre</span>
-                    <span className="game-stat__value">{game.genre ?? 'n/a'}</span>
+                    <span className="game-stat__value game-stat__value--wrap">
+                      {formatCommaSeparatedText(game.genre)}
+                    </span>
                   </div>
                   <div className="game-stat">
                     <span className="game-stat__label">Publisher</span>
-                    <span className="game-stat__value">{game.publishers ?? 'n/a'}</span>
+                    <span className="game-stat__value game-stat__value--wrap">
+                      {formatCommaSeparatedText(game.publishers)}
+                    </span>
                   </div>
                   <div className="game-stat">
                     <span className="game-stat__label">Release</span>
@@ -233,7 +252,9 @@ function Game() {
                   </div>
                   <div className="game-stat">
                     <span className="game-stat__label">Platforms</span>
-                    <span className="game-stat__value">{game.platform_names?.join(', ') ?? 'n/a'}</span>
+                    <span className="game-stat__value game-stat__value--wrap">
+                      {game.platform_names?.join(', ') ?? 'n/a'}
+                    </span>
                   </div>
                 </div>
                 <section className="game-panel">
@@ -246,13 +267,19 @@ function Game() {
                   <div className="game-gallery">
                     {mediaGallery.length ? (
                       mediaGallery.slice(0, 4).map((shot, index) => (
-                        <div key={`${shot}-${index}`} className="game-gallery__item">
+                        <button
+                          key={`${shot}-${index}`}
+                          type="button"
+                          className="game-gallery__item game-gallery__item-button"
+                          onClick={() => setLightboxIndex(index)}
+                          aria-label={`Open screenshot ${index + 1} of ${game.name}`}
+                        >
                           <img
                             src={shot}
                             alt={`${game.name} screenshot ${index + 1}`}
                             className="game-gallery__image"
                           />
-                        </div>
+                        </button>
                       ))
                     ) : (
                       <div className="game-gallery__empty">
@@ -300,6 +327,13 @@ function Game() {
           {toastMessage}
         </div>
       )}
+      <Lightbox
+        images={mediaGallery}
+        activeIndex={lightboxIndex}
+        onChangeIndex={setLightboxIndex}
+        onClose={closeLightbox}
+        altContext={game?.name ?? 'game'}
+      />
     </div>
   )
 }

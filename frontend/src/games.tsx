@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import GameCarousel from "./components/GameCarousel";
+import Lightbox from "./components/Lightbox";
 import Navbar from "./components/Navbar";
 import Searchbar from "./components/Searchbar";
+import SiteFooter from "./components/SiteFooter";
 import logoUrl from "./assets/logo.png";
 import "./games.css";
 
@@ -315,45 +317,6 @@ function Games() {
     setLightboxIndex(null);
   }, []);
 
-  const showPrevShot = useCallback(() => {
-    if (!featuredScreenshots.length) return;
-    setLightboxIndex((current) => {
-      if (current === null) return 0;
-      return (
-        (current - 1 + featuredScreenshots.length) % featuredScreenshots.length
-      );
-    });
-  }, [featuredScreenshots.length]);
-
-  const showNextShot = useCallback(() => {
-    if (!featuredScreenshots.length) return;
-    setLightboxIndex((current) => {
-      if (current === null) return 0;
-      return (current + 1) % featuredScreenshots.length;
-    });
-  }, [featuredScreenshots.length]);
-
-  // Keyboard navigation for lightbox controls
-  useEffect(() => {
-    if (lightboxIndex === null) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeLightbox();
-      }
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        showPrevShot();
-      }
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        showNextShot();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [closeLightbox, lightboxIndex, showNextShot, showPrevShot]);
-
   return (
     <div className="games-page">
       <div className="games-shell">
@@ -530,111 +493,17 @@ function Games() {
             </button>
           </div>
         </main>
-        <footer className="landing__footer">
-          <div className="landing__footer-grid">
-            <div className="landing__footer-brand">
-              <div className="landing__logo">
-                <img src={logoUrl} alt="NextPlay Logo" width={56} height={56} />
-                <span>NextPlay</span>
-              </div>
-              <p>
-                Find your next obsession with curated picks, social play, and
-                smart recommendations.
-              </p>
-            </div>
-            <div className="landing__footer-section">
-              <h4>Product</h4>
-              <ul>
-                <li>Discover</li>
-                <li>Collections</li>
-                <li>Party Finder</li>
-                <li>Wishlist</li>
-              </ul>
-            </div>
-            <div className="landing__footer-section">
-              <h4>Company</h4>
-              <ul>
-                <li>About</li>
-                <li>Careers</li>
-                <li>Press</li>
-                <li>Contact</li>
-              </ul>
-            </div>
-            <div className="landing__footer-section">
-              <h4>Resources</h4>
-              <ul>
-                <li>Help Center</li>
-                <li>Community</li>
-                <li>Developers</li>
-                <li>Status</li>
-              </ul>
-            </div>
-            <div className="landing__footer-section">
-              <h4>Stay in the loop</h4>
-              <p>Weekly drops, co-op nights, and hot releases.</p>
-              <div className="landing__footer-form">
-                <input
-                  type="email"
-                  placeholder="you@email.com"
-                  aria-label="Email address"
-                />
-                <button type="button">Subscribe</button>
-              </div>
-            </div>
-          </div>
-          <div className="landing__footer-bottom">
-            <span>© 2026 NextPlay. All rights reserved.</span>
-            <div className="landing__footer-links">
-              <span>Privacy</span>
-              <span>Terms</span>
-              <span>Cookies</span>
-            </div>
-          </div>
-        </footer>
+        <SiteFooter />
       </div>
 
       {toastMessage && <div className="games-toast">{toastMessage}</div>}
-      {lightboxIndex !== null && featuredScreenshots.length ? (
-        <div className="games-lightbox" onClick={closeLightbox}>
-          <div
-            className="games-lightbox__dialog"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="games-lightbox__close"
-              onClick={closeLightbox}
-              aria-label="Close screenshots"
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              className="games-lightbox__nav games-lightbox__nav--prev"
-              onClick={showPrevShot}
-              aria-label="Previous screenshot"
-            >
-              Prev
-            </button>
-            <img
-              src={featuredScreenshots[lightboxIndex]}
-              alt={`Screenshot ${lightboxIndex + 1} of ${featuredGame?.name}`}
-              className="games-lightbox__image"
-            />
-            <button
-              type="button"
-              className="games-lightbox__nav games-lightbox__nav--next"
-              onClick={showNextShot}
-              aria-label="Next screenshot"
-            >
-              Next
-            </button>
-            <div className="games-lightbox__caption">
-              Screenshot {lightboxIndex + 1} of {featuredScreenshots.length}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <Lightbox
+        images={featuredScreenshots}
+        activeIndex={lightboxIndex}
+        onChangeIndex={setLightboxIndex}
+        onClose={closeLightbox}
+        altContext={featuredGame?.name ?? "featured game"}
+      />
     </div>
   );
 }

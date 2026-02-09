@@ -59,7 +59,7 @@ const StyledWrapper = styled.div`
     position: relative;
     width: 100%;
     min-height: 56px;
-    background: rgba(10, 30, 48, 0.7);
+    background: linear-gradient(145deg, rgba(8, 28, 44, 0.84), rgba(8, 22, 35, 0.72));
     display: flex;
     flex-direction: row;
     justify-content: center;
@@ -69,8 +69,8 @@ const StyledWrapper = styled.div`
     flex-wrap: wrap;
     padding: 0.4em 0.6em;
     border-radius: 999px;
-    border: 1px solid var(--games-border, rgba(140, 243, 122, 0.3));
-    box-shadow: 0 16px 28px rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--games-border, rgba(140, 243, 122, 0.32));
+    box-shadow: 0 14px 24px rgba(0, 0, 0, 0.28);
     box-sizing: border-box;
   }
 
@@ -78,7 +78,7 @@ const StyledWrapper = styled.div`
     padding: 0.45em 1.2em;
     color: var(--games-text, #e2f2ff);
     cursor: pointer;
-    transition: 0.2s ease;
+    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
     font-size: 0.9rem;
     border-radius: 999px;
     white-space: nowrap;
@@ -103,7 +103,7 @@ const StyledWrapper = styled.div`
   .btn.is-active {
     background: linear-gradient(135deg, var(--games-accent, #8cf37a), var(--games-accent-strong, #c7f000));
     color: #0b141a;
-    box-shadow: 0 8px 18px rgba(140, 243, 122, 0.35);
+    box-shadow: 0 6px 14px rgba(140, 243, 122, 0.38);
   }
 
   .btn:focus {
@@ -126,22 +126,41 @@ const StyledWrapper = styled.div`
       width: 100%;
     }
 
-    .btn {
-      padding: 0.4em 0.9em;
-      font-size: 0.8rem;
-      flex: 1 1 120px;
+    .container {
+      min-height: 46px;
+      padding: 0.28em 0.32em;
+      border-radius: 14px;
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
     }
 
-    .container {
-      min-height: 52px;
-      border-radius: 18px;
+    .container::-webkit-scrollbar {
+      display: none;
+    }
+
+    .btn {
+      padding: 0.38em 0.7em;
+      font-size: 0.76rem;
+      border: 1px solid transparent;
+      flex: 0 0 auto;
+    }
+
+    .btn.is-active {
+      border-color: rgba(11, 20, 26, 0.2);
     }
   }
 
   @media (max-width: 420px) {
+    .container {
+      gap: 6px;
+    }
+
     .btn {
-      padding: 0.35em 0.75em;
-      font-size: 0.75rem;
+      padding: 0.32em 0.62em;
+      font-size: 0.72rem;
     }
   }`;
 

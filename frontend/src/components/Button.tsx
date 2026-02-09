@@ -60,6 +60,8 @@ const StyledWrapper = styled.div`
     align-items: center;
     font-size: 15px;
     position: relative;
+    min-height: 42px;
+    justify-content: center;
   }
 
   @keyframes movingBorders {
@@ -152,6 +154,20 @@ const StyledWrapper = styled.div`
   button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  @media (max-width: 520px) {
+    button {
+      width: 100%;
+      padding: 10px 14px;
+      font-size: 14px;
+    }
+
+    .button__icon-arrow {
+      width: 28px;
+      height: 28px;
+      margin-left: 8px;
+    }
   }
 `
 

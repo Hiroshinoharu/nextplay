@@ -232,8 +232,9 @@ const StyledWrapper = styled.div`
   }
 
   .switch-row {
+    --switch-pill-width: 64px;
     position: relative;
-    width: 240px;
+    width: min(240px, 100%);
     height: 28px;
     display: flex;
     align-items: center;
@@ -287,8 +288,9 @@ const StyledWrapper = styled.div`
     position: absolute;
     cursor: pointer;
     top: 0;
-    left: 88px;
-    right: 88px;
+    left: calc(50% - (var(--switch-pill-width) / 2));
+    right: auto;
+    width: var(--switch-pill-width);
     height: 28px;
     background-color: var(--bg-color-alt);
     transition: 0.3s;
@@ -315,7 +317,7 @@ const StyledWrapper = styled.div`
   }
 
   .toggle:checked + .switch-row .slider:before {
-    transform: translateX(32px);
+    transform: translateX(calc(var(--switch-pill-width) - 32px));
   }
 
   .toggle:checked + .switch-row .card-side:before {
@@ -370,7 +372,7 @@ const StyledWrapper = styled.div`
   }
 
   .card-stack {
-    width: min(300px, 90vw);
+    width: min(320px, 92vw);
     height: 350px;
     position: relative;
     padding-bottom: 6px;
@@ -389,6 +391,7 @@ const StyledWrapper = styled.div`
     align-items: center;
     gap: 16px;
     pointer-events: auto;
+    width: 100%;
   }
 
   .flip-card__input,
@@ -405,7 +408,7 @@ const StyledWrapper = styled.div`
   }
 
   .flip-card__input {
-    width: min(240px, 78vw);
+    width: min(260px, 100%);
     height: 40px;
     border-radius: 5px;
     border: 1px solid var(--main-color);
@@ -438,7 +441,7 @@ const StyledWrapper = styled.div`
 
   .flip-card__btn {
     margin: 20px 0 20px 0;
-    width: 120px;
+    width: min(140px, 100%);
     height: 40px;
     border-radius: 5px;
     border: 1px solid var(--switch-color);
@@ -492,29 +495,42 @@ const StyledWrapper = styled.div`
   }
 
   @media (max-width: 480px) {
-    .flip-card__inner {
-      margin-top: 32px;
+    .switch {
+      width: min(320px, 94vw);
+      gap: 12px;
+    }
+
+    .switch-row {
+      --switch-pill-width: 58px;
+      width: min(220px, 100%);
+    }
+
+    .card-side::before,
+    .card-side::after {
+      width: 72px;
+      font-size: 13px;
     }
 
     .flip-card__front, .flip-card__back {
-      padding: 16px;
+      padding: 14px;
     }
 
     .title {
       font-size: 22px;
-      margin: 12px 0;
+      margin: 10px 0;
     }
 
     .flip-card__input {
       height: 36px;
       font-size: 14px;
+      width: 100%;
     }
 
     .flip-card__btn {
-      width: 110px;
+      width: 100%;
       height: 36px;
       font-size: 15px;
-      margin: 12px 0;
+      margin: 8px 0 10px;
     }
   }
 

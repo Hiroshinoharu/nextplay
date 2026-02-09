@@ -28,6 +28,7 @@ func NewGameClient() *GameClient {
 	}
 }
 
+// doRequest is a helper method to execute an HTTP request and return the status code, response body, and any error.
 func (gc *GameClient) doRequest(req *http.Request) (int, []byte, error) {
 	resp, err := gc.client.Do(req)
 	if err != nil {

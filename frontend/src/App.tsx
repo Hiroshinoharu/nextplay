@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Route, Routes, useLocation ,useNavigate, Navigate } from "react-router-dom";
 import "./App.css";
 import "./health.css";
+import BrandLogo from "./components/BrandLogo";
 import Button from "./components/Button";
 import Form from "./components/Form";
+import SiteFooter from "./components/SiteFooter";
 import Game from "./game";
 import Games from "./games";
-import logoUrl from "./assets/logo.png";
 import UserPage from "./user";
 
 // Types for authenticated user
@@ -127,14 +128,8 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
   // Define service cards for the home page
   const navigate = useNavigate();
   const [heroEmail, setHeroEmail] = useState("");
-  const cardsRef = useRef<HTMLDivElement | null>(null);
-  const [activeDot, setActiveDot] = useState(0);
-  const pageSize = 4;
   const pageCountTarget = 4;
   const totalLimit = pageCountTarget * 4;
-  const touchStartXRef = useRef<number | null>(null);
-  const touchLastXRef = useRef<number | null>(null);
-  const swipeHandledRef = useRef(false);
   const [popularGames, setPopularGames] = useState<PopularGame[]>([]);
   const popularYear = 2025;
   const [popularLoading, setPopularLoading] = useState(false);
@@ -204,136 +199,11 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
     return () => controller.abort();
   }, [popularYear, totalLimit]);
 
-  // Get metrics for card scrolling calculations
-  const getCardMetrics = () => {
-    const container = cardsRef.current;
-    if (!container) return null;
-    const firstCard = container.querySelector<HTMLElement>(".popular__card");
-    if (!firstCard) return null;
-    const styles = window.getComputedStyle(container);
-    const gapValue = styles.columnGap || styles.gap || "0";
-    const gap = Number.parseFloat(gapValue) || 0;
-    const cardWidth = firstCard.getBoundingClientRect().width;
-    const containerWidth = container.getBoundingClientRect().width;
-    return { container, cardWidth, gap, containerWidth };
-  };
-
-  // Update active dot based on scroll position
-  const updateActiveDot = useCallback(() => {
-    if (popularGames.length === 0) return;
-    const metrics = getCardMetrics();
-    if (!metrics) return;
-    const { container, cardWidth, gap, containerWidth } = metrics;
-    const step = cardWidth + gap;
-    if (step === 0) return;
-    const pageStep = Math.max(containerWidth, step * pageSize);
-    const index = Math.round(container.scrollLeft / pageStep);
-    const pageCount = Math.max(1, Math.ceil(popularGames.length / pageSize));
-    const clamped = Math.max(0, Math.min(pageCount - 1, index));
-    setActiveDot(clamped);
-  }, [popularGames.length, pageSize]);
-
-  const scrollToPage = useCallback(
-    (index: number) => {
-      const metrics = getCardMetrics();
-      if (!metrics) return;
-      const { container, cardWidth, gap, containerWidth } = metrics;
-      const step = cardWidth + gap;
-      if (step === 0) return;
-      const pageStep = Math.max(containerWidth, step * pageSize);
-      container.scrollTo({
-        left: index * pageStep,
-        behavior: "smooth",
-      });
-    },
-    [pageSize],
-  );
-
-  useEffect(() => {
-    if (popularGames.length === 0) return;
-    setActiveDot(0);
-    scrollToPage(0);
-  }, [popularGames.length, scrollToPage]);
-
-  const shiftPage = useCallback(
-    (direction: -1 | 1) => {
-      const pageCount = Math.max(1, Math.ceil(popularGames.length / pageSize));
-      if (pageCount <= 1) return;
-      let nextIndex = activeDot + direction;
-      if (nextIndex < 0) {
-        nextIndex = pageCount - 1;
-      } else if (nextIndex >= pageCount) {
-        nextIndex = 0;
-      }
-      setActiveDot(nextIndex);
-      scrollToPage(nextIndex);
-    },
-    [activeDot, pageSize, popularGames.length, scrollToPage],
-  );
-
-  // Handle touch start to record initial X position
-  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    const touch = event.touches[0];
-    touchStartXRef.current = touch.clientX;
-    touchLastXRef.current = touch.clientX;
-    swipeHandledRef.current = false;
-  };
-
-  // Handle touch move to track last X position
-  const handleTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
-    const touch = event.touches[0];
-    touchLastXRef.current = touch.clientX;
-  };
-
-  const handleTouchEnd = () => {
-    const startX = touchStartXRef.current;
-    const lastX = touchLastXRef.current;
-    touchStartXRef.current = null;
-    touchLastXRef.current = null;
-    if (swipeHandledRef.current) return;
-    if (startX === null || lastX === null) return;
-    const delta = lastX - startX;
-    const threshold = 40;
-    if (Math.abs(delta) < threshold) return;
-    swipeHandledRef.current = true;
-    shiftPage(delta < 0 ? 1 : -1);
-  };
-
-  // Set up scroll and resize event listeners
-  useEffect(() => {
-    const container = cardsRef.current;
-    if (!container) return;
-    let rafId = 0;
-    const onScroll = () => {
-      if (rafId) return;
-      rafId = window.requestAnimationFrame(() => {
-        rafId = 0;
-        updateActiveDot();
-      });
-    };
-    updateActiveDot();
-    container.addEventListener("scroll", onScroll, { passive: true });
-    const onWheel = (event: WheelEvent) => {
-      event.preventDefault();
-    };
-    container.addEventListener("wheel", onWheel, { passive: false });
-    window.addEventListener("resize", updateActiveDot);
-    return () => {
-      container.removeEventListener("scroll", onScroll);
-      container.removeEventListener("wheel", onWheel);
-      window.removeEventListener("resize", updateActiveDot);
-      if (rafId) window.cancelAnimationFrame(rafId);
-    };
-  }, [updateActiveDot]);
-
   return (
     <div className="landing">
       <div className="landing__container">
         <nav className="landing__nav">
-          <div className="landing__logo" onClick={() => navigate("/")}>
-            <img src={logoUrl} alt="NextPlay Logo" width={128} height={128} />
-            <span>NextPlay</span>
-          </div>
+          <BrandLogo onClick={() => navigate("/")} width={128} height={128} />
           <div>
             <div className="landing__nav-actions">
               {authUser ? (
@@ -401,142 +271,29 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
           ) : popularGames.length === 0 ? (
             <p className="popular__status">No popular games found yet.</p>
           ) : (
-            <>
-              <div className="popular__carousel">
-                <button
-                  className="popular__arrow"
-                  type="button"
-                  aria-label="Previous games"
-                  onClick={() => shiftPage(-1)}
-                >
-                  &#8592;
-                </button>
-                <div
-                  className="popular__cards"
-                  ref={cardsRef}
-                  tabIndex={0}
-                  onTouchStart={handleTouchStart}
-                  onTouchMove={handleTouchMove}
-                  onTouchEnd={handleTouchEnd}
-                  onKeyDown={(event) => {
-                    if (event.key === "ArrowLeft") {
-                      event.preventDefault();
-                      shiftPage(-1);
-                    }
-                    if (event.key === "ArrowRight") {
-                      event.preventDefault();
-                      shiftPage(1);
-                    }
-                  }}
-                >
-                  {popularGames.map((game) => (
-                    <div key={game.id} className="popular__card">
-                      <img
-                        src={game.image}
-                        alt={game.title}
-                        className="popular__card-image"
-                        loading="lazy"
-                        onError={(event) => {
-                          const target = event.currentTarget;
-                          target.onerror = null;
-                          target.src = "/landing-bg.webp";
-                        }}
-                      />
-                      <p className="popular__card-title">{game.title}</p>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  className="popular__arrow"
-                  type="button"
-                  aria-label="Next games"
-                  onClick={() => shiftPage(1)}
-                >
-                  &#8594;
-                </button>
-              </div>
-              {popularGames.length > 1 && (
-                <div className="popular__dots">
-                  {Array.from({
-                    length: Math.ceil(popularGames.length / pageSize),
-                  }).map((_, index) => (
-                    <button
-                      type="button"
-                      key={`popular-page-${index + 1}`}
-                      className={`popular__dot${index === activeDot ? " active" : ""}`}
-                      aria-label={`Go to page ${index + 1}`}
-                      onClick={() => {
-                        setActiveDot(index);
-                        scrollToPage(index);
+            <div className="popular__carousel">
+              <div className="popular__cards" tabIndex={0}>
+                {popularGames.map((game) => (
+                  <div key={game.id} className="popular__card">
+                    <img
+                      src={game.image}
+                      alt={game.title}
+                      className="popular__card-image"
+                      loading="lazy"
+                      onError={(event) => {
+                        const target = event.currentTarget;
+                        target.onerror = null;
+                        target.src = "/landing-bg.webp";
                       }}
                     />
-                  ))}
-                </div>
-              )}
-            </>
+                    <p className="popular__card-title">{game.title}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </section>
-        <footer className="landing__footer">
-          <div className="landing__footer-grid">
-            <div className="landing__footer-brand">
-              <div className="landing__logo">
-                <img src={logoUrl} alt="NextPlay Logo" width={56} height={56} />
-                <span>NextPlay</span>
-              </div>
-              <p>
-                Find your next obsession with curated picks, social play, and
-                smart recommendations.
-              </p>
-            </div>
-            <div className="landing__footer-section">
-              <h4>Product</h4>
-              <ul>
-                <li>Discover</li>
-                <li>Collections</li>
-                <li>Party Finder</li>
-                <li>Wishlist</li>
-              </ul>
-            </div>
-            <div className="landing__footer-section">
-              <h4>Company</h4>
-              <ul>
-                <li>About</li>
-                <li>Careers</li>
-                <li>Press</li>
-                <li>Contact</li>
-              </ul>
-            </div>
-            <div className="landing__footer-section">
-              <h4>Resources</h4>
-              <ul>
-                <li>Help Center</li>
-                <li>Community</li>
-                <li>Developers</li>
-                <li>Status</li>
-              </ul>
-            </div>
-            <div className="landing__footer-section">
-              <h4>Stay in the loop</h4>
-              <p>Weekly drops, co-op nights, and hot releases.</p>
-              <div className="landing__footer-form">
-                <input
-                  type="email"
-                  placeholder="you@email.com"
-                  aria-label="Email address"
-                />
-                <button type="button">Subscribe</button>
-              </div>
-            </div>
-          </div>
-          <div className="landing__footer-bottom">
-            <span>© 2026 NextPlay. All rights reserved.</span>
-            <div className="landing__footer-links">
-              <span>Privacy</span>
-              <span>Terms</span>
-              <span>Cookies</span>
-            </div>
-          </div>
-        </footer>
+        <SiteFooter />
       </div>
     </div>
   );
@@ -822,10 +579,7 @@ const LoginRoute = ({ authUser, onAuthSuccess }: AuthHandlers) => {
     <div className="landing landing--auth">
       <div className="landing__container landing__container--auth">
         <nav className="landing__nav">
-          <div className="landing__logo" onClick={() => navigate("/")}>
-            <img src={logoUrl} alt="NextPlay Logo" width={96} height={96} />
-            <span>NextPlay</span>
-          </div>
+          <BrandLogo onClick={() => navigate("/")} />
         </nav>
         <main className="auth-page">
           {authUser && (

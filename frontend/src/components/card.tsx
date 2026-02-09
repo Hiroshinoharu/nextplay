@@ -180,6 +180,32 @@ const StyledWrapper = styled.div`
 
   .card__link:hover {
     text-decoration: underline;
+  }
+
+  @media (max-width: 520px) {
+    .card--poster {
+      width: 100%;
+      min-height: 210px;
+      height: 210px;
+    }
+
+    .card__content {
+      padding: 12px;
+    }
+
+    .card__title {
+      font-size: 14px;
+    }
+
+    .card__description {
+      font-size: 11px;
+      margin-top: 6px;
+    }
+
+    .card--info {
+      width: min(100%, 280px);
+      min-height: 190px;
+    }
   }`;
 
 export default Card;

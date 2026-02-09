@@ -237,3 +237,40 @@
     text-align: left;
   }
 }
+
+@media (max-width: 520px) {
+  .health-shell {
+    width: min(100%, 96vw);
+    padding: 12px 0 56px;
+    gap: 16px;
+  }
+
+  .health-header {
+    gap: 10px;
+  }
+
+  .health-actions {
+    width: 100%;
+  }
+
+  .health-actions > * {
+    width: 100%;
+  }
+
+  .health-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .health-score,
+  .health-meta,
+  .health-card {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .health-grid {
+    gap: 12px;
+    grid-template-columns: 1fr;
+  }
+}

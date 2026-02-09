@@ -1,5 +1,5 @@
 import { Navigate, useNavigate } from "react-router-dom";
-import logoUrl from "./assets/logo.png";
+import BrandLogo from "./components/BrandLogo";
 
 type AuthUser = {
   id?: number;
@@ -29,10 +29,7 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
     <div className="landing landing--auth">
       <div className="landing__container landing__container--auth">
         <nav className="landing__nav">
-          <div className="landing__logo" onClick={() => navigate("/")}>
-            <img src={logoUrl} alt="NextPlay Logo" width={96} height={96} />
-            <span>NextPlay</span>
-          </div>
+          <BrandLogo onClick={() => navigate("/")} />
           <div className="landing__nav-actions">
             <button type="button" onClick={() => navigate("/games")}>
               Back to games

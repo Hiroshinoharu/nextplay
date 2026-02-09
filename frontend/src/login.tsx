@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import Form from './components/Form'
-import logoUrl from './assets/logo.png'
+import BrandLogo from './components/BrandLogo'
 
 
 export default function Login() {
@@ -14,10 +14,7 @@ export default function Login() {
         <div className="landing landing--auth">
             <div className="landing__container landing__container--auth">
             <nav className="landing__nav">
-                <div className="landing__logo" onClick={() => navigate('/')}>
-                    <img src={logoUrl} alt="NextPlay Logo" width={96} height={96} />
-                    <span>NextPlay</span>
-                </div>
+                <BrandLogo onClick={() => navigate('/')} />
             </nav>
             <main className="auth-page">
                 <Form initialEmail={emailFromQuery} />
