@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
 import type { CSSProperties, ReactNode, UIEvent } from 'react'
 import Card from './card'
 
@@ -61,6 +61,17 @@ const GameCarousel = ({
   const rowStyle: CSSProperties = { ...baseRowStyle, gap }
   const itemStyle: CSSProperties = { flex: `0 0 ${itemWidth}px` }
   const hasTriggeredNearEndRef = useRef(false)
+  const carouselItems = useMemo(
+    () =>
+      games.map((game, index) => ({
+        key: `${game.id ?? 'game'}-${index}`,
+        game,
+        index,
+        coverSrc: getCoverUrl(game),
+        description: getDescription(game),
+      })),
+    [games, getCoverUrl, getDescription],
+  )
 
   useEffect(() => {
     if (!isLoadingMore) {
@@ -96,10 +107,7 @@ const GameCarousel = ({
         </header>
       ) : null}
       <div className="games-row" style={rowStyle} onScroll={handleRowScroll}>
-        {games.map((game, index) => {
-          const coverSrc = getCoverUrl(game)
-          const description = getDescription(game)
-          const key = `${game.id ?? 'game'}-${index}`;
+        {carouselItems.map(({ key, game, index, coverSrc, description }) => {
           return (
             <div
               key={key}
@@ -133,4 +141,4 @@ const GameCarousel = ({
   )
 }
 
-export default GameCarousel
+export default memo(GameCarousel)

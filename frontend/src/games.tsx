@@ -285,9 +285,12 @@ function Games() {
     return () => window.clearTimeout(timeout);
   }, [gamesError]);
 
-  const openGameDetail = (targetId: number) => {
-    navigate(`/games/${targetId}`);
-  };
+  const openGameDetail = useCallback(
+    (targetId: number) => {
+      navigate(`/games/${targetId}`);
+    },
+    [navigate],
+  );
 
   const featuredCandidates = useMemo(() => {
     const withReleaseDates = games.filter((game) =>
@@ -652,16 +655,34 @@ function Games() {
     heroEligibleArtworkPool,
     featuredMediaPick,
   ]);
-  const carouselCover = (game: GameItem) => normalizeMediaUrl(game.cover_image);
+  const carouselCover = useCallback(
+    (game: GameItem) => normalizeMediaUrl(game.cover_image),
+    [],
+  );
+  const getReleaseDescription = useCallback((game: GameItem) => {
+    const release = formatReleaseDate(game.release_date);
+    return release ? `Release: ${release}` : "Release: n/a";
+  }, []);
+  const getExploreDescription = useCallback((game: GameItem) => {
+    const release = formatReleaseDate(game.release_date);
+    return [
+      release ? `Release: ${release}` : null,
+      game.genre ? `Genre: ${game.genre}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }, []);
 
   // Prepare game lists for carousels
-  const topTenGames = games.slice(0, 10);
-  const discoveryGames = games.slice(10);
+  const topTenGames = useMemo(() => games.slice(0, 10), [games]);
+  const discoveryGames = useMemo(() => games.slice(10), [games]);
   const upcomingList = upcomingGames;
 
-  const discoveryList = discoveryGames.length
-    ? discoveryGames
-    : games.slice(0, 10);
+  const discoveryList = useMemo(
+    () => (discoveryGames.length ? discoveryGames : games.slice(0, 10)),
+    [discoveryGames, games],
+  );
+  const trendingList = useMemo(() => discoveryList.slice(0, 10), [discoveryList]);
 
   const closeLightbox = useCallback(() => {
     setLightboxIndex(null);
@@ -730,8 +751,8 @@ function Games() {
                   {heroDescription}
                 </p>
                 <div className="games-hero__meta">
-                  <span>{heroGame.genre ?? "Genre: n/a"}</span>
-                  <span>{heroGame.publishers ?? "Publisher: n/a"}</span>
+                  <span>{"Genre: " + (heroGame.genre ?? "n/a")}</span>
+                  <span>{"Publisher: " + (heroGame.publishers ?? "n/a")}</span>
                   <span>
                     {formatReleaseDate(heroGame.release_date)
                       ? `Release: ${formatReleaseDate(heroGame.release_date)}`
@@ -815,11 +836,7 @@ function Games() {
             onLoadMore={loadMoreUpcomingGames}
             canLoadMore={hasMoreUpcoming}
             isLoadingMore={upcomingLoadingMore}
-            getDescription={(game) =>
-              formatReleaseDate(game.release_date)
-                ? `Release: ${formatReleaseDate(game.release_date)}`
-                : "Release: n/a"
-            }
+            getDescription={getReleaseDescription}
           />
 
           <GameCarousel
@@ -830,21 +847,17 @@ function Games() {
             getCoverUrl={carouselCover}
             showRank
             itemWidth={200}
-            getDescription={(game) =>
-              game.genre ? `Genre: ${game.genre}` : "Genre: n/a"
-            }
+            getDescription={getReleaseDescription}
           />
 
           <GameCarousel
             title="Trending Games"
             badge="Hot"
-            games={discoveryList.slice(0, 10)}
+            games={trendingList}
             onSelect={openGameDetail}
             getCoverUrl={carouselCover}
             itemWidth={190}
-            getDescription={(game) =>
-              game.genre ? `Genre: ${game.genre}` : "Genre: n/a"
-            }
+            getDescription={getReleaseDescription}
           />
 
           <GameCarousel
@@ -857,16 +870,7 @@ function Games() {
             onLoadMore={loadMoreGames}
             canLoadMore={hasMoreGames}
             isLoadingMore={gamesLoadingMore}
-            getDescription={(game) =>
-              [
-                formatReleaseDate(game.release_date)
-                  ? `Release: ${formatReleaseDate(game.release_date)}`
-                  : null,
-                game.genre ? `Genre: ${game.genre}` : null,
-              ]
-                .filter(Boolean)
-                .join("\n")
-            }
+            getDescription={getExploreDescription}
           />
         </main>
         <SiteFooter />
