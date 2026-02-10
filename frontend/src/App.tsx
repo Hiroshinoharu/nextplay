@@ -8,7 +8,7 @@ import Form from "./components/Form";
 import SiteFooter from "./components/SiteFooter";
 import Game from "./game";
 import Games from "./games";
-import SearchPage from "./search";
+import SearchPage from "./discover";
 import UserPage from "./user";
 
 // Types for authenticated user
