@@ -70,6 +70,8 @@ func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool) ([]models
 		if err != nil {
 			return nil, err
 		}
+
+		// Handle nullable fields appropriately and assign to the Game struct only if valid
 		if description.Valid {
 			g.Description = description.String
 		}

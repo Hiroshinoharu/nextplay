@@ -304,6 +304,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
 
 
 const HealthPage = () => {
+  // State and handlers for health checks
   const navigate = useNavigate();
   const location = useLocation();
   const statusAllowed =

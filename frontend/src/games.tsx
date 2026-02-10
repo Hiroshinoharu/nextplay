@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import GameCarousel from "./components/GameCarousel";
 import Lightbox from "./components/Lightbox";
@@ -22,6 +22,11 @@ type GameItem = {
   screenshots?: string[];
   trailers?: string[];
   trailer_url?: string;
+  popularity?: number;
+  aggregated_rating?: number;
+  aggregated_rating_count?: number;
+  total_rating?: number;
+  total_rating_count?: number;
   media?: GameMedia[];
 };
 
@@ -99,14 +104,21 @@ const formatReleaseDate = (value?: string) => {
   });
 };
 
+// Collapse consecutive whitespace characters in a string into a single space and trim leading/trailing whitespace, returning an empty string if the input is undefined or null
 const collapseWhitespace = (value?: string) => {
   if (!value) return "";
   return value.replace(/\s+/g, " ").trim();
 };
 
+// Define the CSS styles for the loading spinner component using styled-components
 const truncateText = (value: string, maxLength: number) => {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, maxLength).trimEnd()}...`;
+};
+
+const isReleasedGames = (game: GameItem, now: Date = new Date()) => {
+  const releaseDate = parseReleaseDate(game.release_date);
+  return releaseDate ? releaseDate <= now : true;
 };
 
 type HeroMediaSource = "artwork" | "screenshot" | "cover";
@@ -126,6 +138,7 @@ function Games() {
   // Router and state hooks
   const navigate = useNavigate();
   const baseUrl = API_ROOT;
+  // State for managing toast messages, lightbox index, featured game details, media orientation, and hero media selection
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [featuredGameId, setFeaturedGameId] = useState<number | null>(null);
@@ -208,6 +221,49 @@ function Games() {
     staleTime: 60_000,
   });
 
+  // Use the useQuery hook to fetch a list of recent popular games, with logic to attempt fetching from the current year first and then the previous year if there are not enough results, ensuring that the list of recent popular games is robust and up-to-date while also handling potential API errors gracefully
+  const {
+    data: recentPopularGames = [],
+    error: recentPopularQueryError,
+    isPending: recentPopularLoading,
+    refetch   : refetchRecentPopular,
+  } = useQuery<GameItem[], Error>({
+    queryKey: ["games-recent-popular", baseUrl] as const,
+    queryFn: async ({ signal }) => {
+      const trimmedBaseUrl = baseUrl.replace(/\/+$/, "");
+      const root = trimmedBaseUrl.endsWith("/api")
+        ? trimmedBaseUrl.slice(0, -4)
+        : trimmedBaseUrl;
+      const currentYear = new Date().getFullYear();
+      const fetchPopularByYear = async (year: number) => {
+        const query = new URLSearchParams({
+          year: String(year),
+          limit: String(10),
+          min_rating_count: "10",
+        });
+    const response = await fetch(`${root}/api/games/popular?${query.toString()}`, { signal });
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+    const data = await response.json();
+    if (!Array.isArray(data)) {
+      throw new Error("Invalid API response: expected an array of games");
+    }
+    return data as GameItem[];
+  };
+    // Fetch popular games from the current year, and if there are not enough results, also fetch from the previous year to ensure a robust list of recent popular games
+    const currentYearGames = await fetchPopularByYear(currentYear);
+    if (currentYearGames.length >= 10) {
+      return dedupeGames(currentYearGames).slice(0, 10);
+    }
+    const previousYearGames = await fetchPopularByYear(currentYear - 1);
+    const combined = dedupeGames([...currentYearGames, ...previousYearGames]);
+    return combined.slice(0, 10);
+  },
+  staleTime: 5 * 60_000, // Cache recent popular games for 5 minutes
+  });
+
+  // Use the useInfiniteQuery hook to manage fetching paginated upcoming game data, with support for loading more pages and handling errors, ensuring that users can easily discover new and unreleased games while also providing a seamless experience for loading additional content as needed
   const {
     data: upcomingData,
     error: upcomingQueryError,
@@ -228,9 +284,10 @@ function Games() {
     initialPageParam: 1,
     getNextPageParam: (lastPage: GamesPage): number | undefined =>
       lastPage.hasMore ? lastPage.page + 1 : undefined,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   });
 
+  // Memoize the list of games by merging pages and removing duplicates, ensuring that the list updates efficiently when new data is fetched and that the total number of games does not exceed the specified maximum if one is set
   const games = useMemo(() => {
     const pages = gamesData?.pages ?? [];
     let merged: GameItem[] = [];
@@ -243,26 +300,35 @@ function Games() {
     return merged;
   }, [gamesData?.pages, maxGames]);
 
-  // Memoize the list of upcoming games by merging pages and removing duplicates, ensuring that the list updates efficiently when new data is fetched
+  // Memoize the list of upcoming games by merging pages and removing duplicates, ensuring that the list updates efficiently when new data is fetched and that the total number of upcoming games does not exceed the specified maximum if one is set
   const upcomingGames = useMemo(() => {
     const pages = upcomingData?.pages ?? [];
     let merged: GameItem[] = [];
     for (const page of pages) {
       merged = mergeUniqueGames(merged, page.items);
+      if (maxGames > 0 && merged.length >= maxGames) {
+        return merged.slice(0, maxGames);
+      }
     }
     return merged;
-  }, [upcomingData?.pages]);
-
+  }, [upcomingData?.pages, maxGames]);
+  
+  // Combine errors from different queries into a single error message for easier handling and display in the UI, ensuring that users are informed of any issues that occur during data fetching while also providing a clear and concise error message when multiple queries may have failed
   const gamesError =
-    gamesQueryError?.message ?? upcomingQueryError?.message ?? null;
+    gamesQueryError?.message ?? 
+    upcomingQueryError?.message ??
+    recentPopularQueryError?.message ??
+    null;
   const hasMoreGames = Boolean(hasNextPage);
   const hasMoreUpcoming = Boolean(hasMoreUpcomingGames);
 
+  // Callback functions for loading more games and upcoming games, with checks to prevent multiple simultaneous fetches and to ensure that there are more pages to load before attempting to fetch additional data, providing a smooth and responsive experience for users as they explore the game library and discover new content without encountering issues related to excessive or redundant API calls
   const loadMoreGames = useCallback(async () => {
     if (!hasMoreGames || gamesLoadingMore || gamesLoading) return;
     await fetchNextPage();
   }, [fetchNextPage, hasMoreGames, gamesLoadingMore, gamesLoading]);
 
+  // Callback function for loading more upcoming games, with checks to prevent multiple simultaneous fetches and to ensure that there are more pages to load before attempting to fetch additional data, providing a smooth and responsive experience for users as they explore the upcoming game library and discover new content without encountering issues related to excessive or redundant API calls
   const loadMoreUpcomingGames = useCallback(async () => {
     if (!hasMoreUpcoming || upcomingLoadingMore || upcomingLoading) return;
     await fetchNextUpcomingPage();
@@ -285,6 +351,7 @@ function Games() {
     return () => window.clearTimeout(timeout);
   }, [gamesError]);
 
+  // useCallback function for navigating to the game detail page when a game item is clicked, providing a seamless transition for users as they explore individual game details and ensuring that the correct game ID is included in the URL for proper routing and data fetching on the detail page
   const openGameDetail = useCallback(
     (targetId: number) => {
       navigate(`/games/${targetId}`);
@@ -292,6 +359,7 @@ function Games() {
     [navigate],
   );
 
+  // useCallback function for opening the lightbox to display a selected media item, with logic to determine the index of the selected media within the list of featured media candidates and to set the lightbox index accordingly, providing an immersive experience for users as they view game media in a larger format while ensuring that the correct media item is displayed based on user interaction
   const featuredCandidates = useMemo(() => {
     const withReleaseDates = games.filter((game) =>
       Boolean(parseReleaseDate(game.release_date)),
@@ -299,6 +367,7 @@ function Games() {
     return withReleaseDates.length ? withReleaseDates : games;
   }, [games]);
 
+  // useEffect for selecting a featured game when the list of featured candidates changes, with logic to maintain the current featured game if it is still in the list of candidates or to randomly select a new featured game if the current one is no longer available, ensuring that the hero section of the page remains dynamic and engaging while also providing consistency for users as they explore the game library
   useEffect(() => {
     // Scroll to top when the featured game changes
     if (!featuredCandidates.length) {
@@ -307,6 +376,7 @@ function Games() {
       return;
     }
 
+    // If the current featured game is still in the list of candidates, keep it as the featured game. Otherwise, randomly select a new featured game from the candidates. This logic ensures that the featured game remains consistent for users as long as it is still relevant, while also allowing for dynamic updates to the hero section when the list of candidates changes due to new data being fetched or other factors.
     setFeaturedGameId((prevId) => {
       if (prevId && featuredCandidates.some((game) => game.id === prevId)) {
         return prevId;
@@ -316,6 +386,7 @@ function Games() {
     });
   }, [featuredCandidates]);
 
+  // useEffect for fetching detailed information about the featured game when the featuredGameId changes, with logic to handle API requests and responses, update the featuredDetail state, and manage potential errors gracefully, ensuring that users have access to comprehensive information about the featured game while also providing a responsive experience as they explore the hero section of the page
   useEffect(() => {
     if (!featuredGameId) {
       setFeaturedDetail(null);
@@ -470,6 +541,7 @@ function Games() {
     };
   }, [featuredMediaCandidates, landscapeByUrl]);
 
+  // Use useMemo to create filtered lists of media URLs that are eligible for use as hero images based on their dimensions, and to determine the preferred pool of media for the hero section. This allows the component to efficiently select an appropriate hero image from the available media while avoiding URLs that have been determined to be ineligible or have failed to load. The effect also includes logic to randomly pick a featured media URL from the preferred pool whenever the hero game changes or when the eligibility of media URLs is updated.
   const heroEligibleArtworkMedia = useMemo(
     () =>
       featuredArtworkMedia.filter((url) => landscapeByUrl[url] === true),
@@ -655,14 +727,18 @@ function Games() {
     heroEligibleArtworkPool,
     featuredMediaPick,
   ]);
+  // useCallback functions for rendering game items in carousels, including logic to determine the appropriate cover image and description for each game based on available data. These functions are passed as props to the GameCarousel components to ensure consistent rendering of game items across different carousels while allowing for dynamic content based on the specific media and metadata of each game.
   const carouselCover = useCallback(
     (game: GameItem) => normalizeMediaUrl(game.cover_image),
     [],
   );
+  // The getReleaseDescription function formats the release date of a game into a human-readable string, or returns "n/a" if the release date is not available or invalid. This function is used to provide consistent release information for games displayed in the carousels.
   const getReleaseDescription = useCallback((game: GameItem) => {
     const release = formatReleaseDate(game.release_date);
     return release ? `Release: ${release}` : "Release: n/a";
   }, []);
+  
+  // The getExploreDescription function constructs a multi-line description for a game that includes its release date and genre if available. It filters out any null values to ensure that only valid information is included in the final description string, which is used in the "Explore" carousel to provide users with key details about each game at a glance.
   const getExploreDescription = useCallback((game: GameItem) => {
     const release = formatReleaseDate(game.release_date);
     return [
@@ -674,15 +750,33 @@ function Games() {
   }, []);
 
   // Prepare game lists for carousels
-  const topTenGames = useMemo(() => games.slice(0, 10), [games]);
-  const discoveryGames = useMemo(() => games.slice(10), [games]);
+  const releasedGames = useMemo(
+    () =>  games.filter((game) => isReleasedGames(game)),
+    [games],
+    );
+  // The topTenGames list is created by slicing the first 10 games from the releasedGames list, which contains only games that have been released based on their release dates. This list is used for the "Top Ten" carousel to showcase a curated selection of recently released games, providing users with a quick overview of popular titles that are currently available to play.
+  const topTenGames = useMemo(() => releasedGames.slice(0, 10), [releasedGames]);
+  const discoveryGames = useMemo(() => releasedGames.slice(10), [releasedGames]);
   const upcomingList = upcomingGames;
 
   const discoveryList = useMemo(
-    () => (discoveryGames.length ? discoveryGames : games.slice(0, 10)),
-    [discoveryGames, games],
+    () => 
+      (discoveryGames.length 
+        ? discoveryGames 
+        : releasedGames.slice(0, 10)),
+    [discoveryGames, releasedGames],
   );
-  const trendingList = useMemo(() => discoveryList.slice(0, 10), [discoveryList]);
+
+  // The trendingList is determined by checking if there are any recent popular games available. If there are, it uses that list; otherwise, 
+  // it falls back to using the first 10 games from the discovery list. This logic ensures that the "Trending" carousel always has content to display, 
+  // prioritizing recent popular games when available while still providing a fallback option to maintain an engaging user experience.
+  const trendingList = useMemo(
+    () => 
+      recentPopularGames.length
+        ? recentPopularGames
+        : discoveryList.slice(0, 10),
+    [recentPopularGames, discoveryList],
+  );
 
   const closeLightbox = useCallback(() => {
     setLightboxIndex(null);
@@ -787,11 +881,12 @@ function Games() {
                       void Promise.all([
                         refetchGames(),
                         refetchUpcomingGames(),
+                        refetchRecentPopular(),
                       ]);
                     }}
-                    disabled={gamesLoading || upcomingLoading}
+                    disabled={gamesLoading || upcomingLoading || recentPopularLoading}
                   >
-                    {gamesLoading || upcomingLoading
+                    {gamesLoading || upcomingLoading || recentPopularLoading
                       ? "Refreshing..."
                       : "Refresh list"}
                   </button>
