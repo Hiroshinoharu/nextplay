@@ -164,16 +164,19 @@ func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool, searchQue
 }
 
 // SearchGamesByName retrieves games by name ordered by game_id.
-func SearchGamesByName(query string, mode string, limit int, includeMedia bool) ([]models.Game, error) {
+func SearchGamesByName(query string, mode string, limit int, offset int, includeMedia bool) ([]models.Game, error) {
 	trimmedQuery := strings.TrimSpace(query)
 	if trimmedQuery == "" {
 		return []models.Game{}, nil
 	}
-	if limit <= 0 {
-		limit = 200
+	if limit < 0 {
+		limit = 0
 	}
 	if limit > 1000 {
 		limit = 1000
+	}
+	if offset < 0 {
+		offset = 0
 	}
 
 	whereClause := "g.game_name ILIKE $1"
@@ -196,22 +199,31 @@ func SearchGamesByName(query string, mode string, limit int, includeMedia bool) 
 		FROM games g
 		WHERE %s
 		ORDER BY g.game_id
-		LIMIT $2;
 	`,
 		whereClause,
 	)
+	args := []interface{}{argValue}
+	if limit > 0 {
+		args = append(args, limit, offset)
+		querySQL += fmt.Sprintf(" LIMIT $%d OFFSET $%d;", len(args)-1, len(args))
+	} else if offset > 0 {
+		args = append(args, offset)
+		querySQL += fmt.Sprintf(" OFFSET $%d;", len(args))
+	} else {
+		querySQL += ";"
+	}
 
-	rows, err := DB.Query(
-		querySQL,
-		argValue,
-		limit,
-	)
+	rows, err := DB.Query(querySQL, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	games := make([]models.Game, 0, limit)
+	initialCap := limit
+	if initialCap <= 0 {
+		initialCap = 256
+	}
+	games := make([]models.Game, 0, initialCap)
 	for rows.Next() {
 		var g models.Game
 		var description sql.NullString

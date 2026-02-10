@@ -42,16 +42,20 @@ func SearchGamesByName(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "query parameter q is required"})
 	}
 	limit := c.QueryInt("limit", 200)
-	if limit <= 0 {
-		limit = 200
+	if limit < 0 {
+		limit = 0
 	}
 	if limit > 1000 {
 		limit = 1000
 	}
+	offset := c.QueryInt("offset", 0)
+	if offset < 0 {
+		offset = 0
+	}
 	includeMedia := c.Query("include_media") == "true" || c.Query("include_media") == "1"
 	mode := strings.TrimSpace(c.Query("mode"))
 
-	games, err := db.SearchGamesByName(query, mode, limit, includeMedia)
+	games, err := db.SearchGamesByName(query, mode, limit, offset, includeMedia)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}

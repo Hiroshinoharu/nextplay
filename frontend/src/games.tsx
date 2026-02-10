@@ -42,6 +42,11 @@ type GamesPage = {
   hasMore: boolean;
 };
 
+type SearchPageResult = {
+  items: GameItem[];
+  hasMore: boolean;
+};
+
 // Utility function to remove duplicate games from a list based on their unique IDs
 const dedupeGames = (items: GameItem[]) => {
   const seen = new Set<number>();
@@ -110,34 +115,6 @@ const collapseWhitespace = (value?: string) => {
   if (!value) return "";
   return value.replace(/\s+/g, " ").trim();
 };
-const tokenizeSearchQuery = (value: string) =>
-  value
-    .split(" ")
-    .map((part) => part.trim())
-    .filter((part) => part.length >= 1);
-
-const scoreGameSimilarity = (game: GameItem, terms: string[]) => {
-  if (!terms.length) return 0;
-  const name = (game.name ?? "").toLowerCase();
-  const genre = (game.genre ?? "").toLowerCase();
-  const publishers = (game.publishers ?? "").toLowerCase();
-  const description = collapseWhitespace(
-    [game.description, game.story].filter(Boolean).join(" "),
-  ).toLowerCase();
-  let score = 0;
-
-  for (const term of terms) {
-    if (name === term) score += 100;
-    else if (name.startsWith(term)) score += 45;
-    else if (name.includes(term)) score += 28;
-
-    if (genre.includes(term)) score += 16;
-    if (publishers.includes(term)) score += 12;
-    if (description.includes(term)) score += 8;
-  }
-
-  return score;
-};
 
 // Define the CSS styles for the loading spinner component using styled-components
 const truncateText = (value: string, maxLength: number) => {
@@ -179,9 +156,11 @@ function Games() {
   const [featuredMediaPick, setFeaturedMediaPick] = useState<number>(0);
   const [searchInput, setSearchInput] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>(""); // Separate state for the actual search query to trigger searches on submit rather than on every keystroke
+  const [searchPage, setSearchPage] = useState<number>(1);
   const normalizedSearchQuery = collapseWhitespace(searchQuery).toLowerCase();
   const pageSize = 48; // Number of games to fetch per page for general lists
   const upcomingPageSize = 24; // Number of unreleased games per page
+  const searchPageSize = 24;
   const maxGames = 0; // Maximum number of games to load in total
 
   const fetchGamesPage = useCallback(
@@ -322,6 +301,51 @@ function Games() {
     staleTime: 5 * 60_000,
   });
 
+  const searchOffset = (searchPage - 1) * searchPageSize;
+
+  const {
+    data: serverSearchResults,
+    error: searchQueryError,
+    isPending: searchLoading,
+    isFetching: searchFetching,
+  } = useQuery<SearchPageResult, Error>({
+    queryKey: [
+      "games-search-page",
+      baseUrl,
+      normalizedSearchQuery,
+      searchPage,
+      searchPageSize,
+    ] as const,
+    enabled: normalizedSearchQuery.length > 0,
+    queryFn: async ({ signal }) => {
+      const trimmedBaseUrl = baseUrl.replace(/\/+$/, "");
+      const root = trimmedBaseUrl.endsWith("/api")
+        ? trimmedBaseUrl.slice(0, -4)
+        : trimmedBaseUrl;
+      const params = new URLSearchParams({
+        q: normalizedSearchQuery,
+        mode: "contains",
+        limit: String(searchPageSize),
+        offset: String(searchOffset),
+        include_media: "1",
+      });
+      const response = await fetch(`${root}/api/games/search?${params.toString()}`, { signal });
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      const payload = await response.json();
+      if (!Array.isArray(payload)) {
+        throw new Error("Invalid API response: expected an array of games");
+      }
+      const items = dedupeGames(payload as GameItem[]);
+      return {
+        items,
+        hasMore: items.length === searchPageSize,
+      };
+    },
+    staleTime: 60_000,
+  });
+
   // Memoize the list of games by merging pages and removing duplicates, ensuring that the list updates efficiently when new data is fetched and that the total number of games does not exceed the specified maximum if one is set
   const games = useMemo(() => {
     const pages = gamesData?.pages ?? [];
@@ -348,48 +372,15 @@ function Games() {
     return merged;
   }, [upcomingData?.pages, maxGames]);
 
-  const searchTerms = useMemo(
-    () => tokenizeSearchQuery(normalizedSearchQuery),
-    [normalizedSearchQuery],
-  );
-
-  const matchesSearchQuery = useCallback(
-    (game: GameItem) => {
-      if (!normalizedSearchQuery) return true;
-      const searchableText = [
-        game.name,
-        game.genre,
-        game.publishers,
-        game.description,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-      return searchableText.includes(normalizedSearchQuery);
-    },
-    [normalizedSearchQuery]
-  );
   const searchResults = useMemo(() => {
     if (!normalizedSearchQuery) return [] as GameItem[];
-    const ranked = games
-      .map((game) => ({
-        game,
-        score: scoreGameSimilarity(game, searchTerms),
-      }))
-      .filter((entry) => entry.score > 0);
-    ranked.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      const bPopularity = b.game.popularity ?? 0;
-      const aPopularity = a.game.popularity ?? 0;
-      return bPopularity - aPopularity;
-    });
-    return ranked.map((entry) => entry.game);
-  }, [games, normalizedSearchQuery, searchTerms]);
+    return serverSearchResults?.items ?? [];
+  }, [normalizedSearchQuery, serverSearchResults]);
+  const hasMoreSearchResults = Boolean(serverSearchResults?.hasMore);
 
   const filteredGames = useMemo(
-    () =>
-      normalizedSearchQuery ? searchResults : games.filter(matchesSearchQuery),
-    [games, matchesSearchQuery, normalizedSearchQuery, searchResults]
+    () => (normalizedSearchQuery ? searchResults : games),
+    [games, normalizedSearchQuery, searchResults]
   );
 
   const filteredUpcomingGames = useMemo(() => upcomingGames, [upcomingGames]);
@@ -399,6 +390,7 @@ function Games() {
     gamesQueryError?.message ?? 
     upcomingQueryError?.message ??
     trendingQueryError?.message ??
+    searchQueryError?.message ??
     null;
   const hasMoreUpcoming = Boolean(hasMoreUpcomingGames);
 
@@ -848,6 +840,7 @@ function Games() {
   }, []);
 
   const handleSearchSubmit = useCallback(() => {
+    setSearchPage(1);
     setSearchQuery(collapseWhitespace(searchInput));
   }, [searchInput]);
 
@@ -957,9 +950,15 @@ function Games() {
                         refetchTrendingGames(),
                       ]);
                     }}
-                    disabled={gamesLoading || upcomingLoading || trendingLoading}
+                    disabled={
+                      gamesLoading ||
+                      upcomingLoading ||
+                      trendingLoading ||
+                      searchLoading ||
+                      searchFetching
+                    }
                   >
-                    {gamesLoading || upcomingLoading || trendingLoading
+                    {gamesLoading || upcomingLoading || trendingLoading || searchLoading || searchFetching
                       ? "Refreshing..."
                       : "Refresh list"}
                   </button>
@@ -1001,8 +1000,9 @@ function Games() {
                   Search results for "{normalizedSearchQuery}"
                 </p>
                 <p className="games-search-results__count">
-                  Showing {searchResults.length} related game
-                  {searchResults.length === 1 ? "" : "s"}.
+                  {searchLoading || searchFetching
+                    ? "Searching..."
+                    : `Showing ${searchResults.length === 0 ? 0 : searchOffset + 1}-${searchOffset + searchResults.length} on page ${searchPage}.`}
                 </p>
               </>
             ) : (
@@ -1016,7 +1016,7 @@ function Games() {
             <section className="games-search-grid-section" aria-live="polite">
               {searchResults.length ? (
                 <div className="games-search-grid">
-                  {searchResults.slice(0, 24).map((game) => (
+                  {searchResults.map((game) => (
                     <Card
                       key={`search-grid-${game.id}`}
                       title={game.name || "Untitled"}
@@ -1041,42 +1041,69 @@ function Games() {
                   No games matched that query. Try a shorter or broader term.
                 </p>
               )}
+              {searchResults.length > 0 && (searchPage > 1 || hasMoreSearchResults) ? (
+                <div className="games-pagination">
+                  <button
+                    type="button"
+                    className="games-pagination__button"
+                    onClick={() => setSearchPage((current) => Math.max(1, current - 1))}
+                    disabled={searchPage <= 1}
+                  >
+                    Previous
+                  </button>
+                  <span className="games-pagination__status">
+                    Page {searchPage}
+                  </span>
+                  <button
+                    type="button"
+                    className="games-pagination__button"
+                    onClick={() => setSearchPage((current) => current + 1)}
+                    disabled={!hasMoreSearchResults || searchLoading || searchFetching}
+                  >
+                    Next
+                  </button>
+                </div>
+              ) : null}
             </section>
           ) : null}
 
-          <GameCarousel
-            title="Upcoming Games"
-            badge="Preview"
-            games={upcomingList}
-            onSelect={openGameDetail}
-            getCoverUrl={carouselCover}
-            itemWidth={190}
-            onLoadMore={loadMoreUpcomingGames}
-            canLoadMore={hasMoreUpcoming}
-            isLoadingMore={upcomingLoadingMore}
-            getDescription={getReleaseDescription}
-          />
+          {!normalizedSearchQuery ? (
+            <>
+              <GameCarousel
+                title="Upcoming Games"
+                badge="Preview"
+                games={upcomingList}
+                onSelect={openGameDetail}
+                getCoverUrl={carouselCover}
+                itemWidth={190}
+                onLoadMore={loadMoreUpcomingGames}
+                canLoadMore={hasMoreUpcoming}
+                isLoadingMore={upcomingLoadingMore}
+                getDescription={getReleaseDescription}
+              />
 
-          <GameCarousel
-            title="Top 10 of all time"
-            badge="Ranked"
-            games={topTenGames}
-            onSelect={openGameDetail}
-            getCoverUrl={carouselCover}
-            showRank
-            itemWidth={200}
-            getDescription={getReleaseDescription}
-          />
+              <GameCarousel
+                title="Top 10 of all time"
+                badge="Ranked"
+                games={topTenGames}
+                onSelect={openGameDetail}
+                getCoverUrl={carouselCover}
+                showRank
+                itemWidth={200}
+                getDescription={getReleaseDescription}
+              />
 
-          <GameCarousel
-            title="Trending Games"
-            badge="Hot"
-            games={trendingList}
-            onSelect={openGameDetail}
-            getCoverUrl={carouselCover}
-            itemWidth={190}
-            getDescription={getReleaseDescription}
-          />
+              <GameCarousel
+                title="Trending Games"
+                badge="Hot"
+                games={trendingList}
+                onSelect={openGameDetail}
+                getCoverUrl={carouselCover}
+                itemWidth={190}
+                getDescription={getReleaseDescription}
+              />
+            </>
+          ) : null}
 
         </main>
         <SiteFooter />
