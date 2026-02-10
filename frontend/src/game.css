@@ -163,6 +163,11 @@
   font-size: clamp(26px, 3.4vw, 38px);
   color: var(--game-accent-strong);
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 
 .game-info__description {
@@ -171,6 +176,12 @@
   line-height: 1.6;
   color: var(--game-text);
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 10;
+  line-clamp: 10;
+  overflow: hidden;
+  text-wrap: pretty;
 }
 
 .game-info__stats {
@@ -389,6 +400,8 @@
   .game-info__description {
     font-size: 13px;
     line-height: 1.55;
+    -webkit-line-clamp: 7;
+    line-clamp: 7;
   }
 
   .game-info__stats {
@@ -470,6 +483,8 @@
 
   .game-info__description {
     font-size: 13px;
+    -webkit-line-clamp: 6;
+    line-clamp: 6;
   }
 
   .game-stat {

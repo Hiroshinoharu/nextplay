@@ -36,6 +36,7 @@ type GamesPage = {
   hasMore: boolean;
 };
 
+// Utility function to remove duplicate games from a list based on their unique IDs
 const dedupeGames = (items: GameItem[]) => {
   const seen = new Set<number>();
   return items.filter((item) => {
@@ -98,6 +99,28 @@ const formatReleaseDate = (value?: string) => {
   });
 };
 
+const collapseWhitespace = (value?: string) => {
+  if (!value) return "";
+  return value.replace(/\s+/g, " ").trim();
+};
+
+const truncateText = (value: string, maxLength: number) => {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength).trimEnd()}...`;
+};
+
+type HeroMediaSource = "artwork" | "screenshot" | "cover";
+
+type HeroMediaCandidate = {
+  url: string;
+  source: HeroMediaSource;
+};
+
+const HERO_MIN_WIDTH = 720;
+const HERO_MIN_HEIGHT = 400;
+const HERO_MIN_ASPECT = 1.3;
+const HERO_MAX_ASPECT = 2.2;
+
 // Main Games component handling game list view
 function Games() {
   // Router and state hooks
@@ -107,6 +130,10 @@ function Games() {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [featuredGameId, setFeaturedGameId] = useState<number | null>(null);
   const [featuredDetail, setFeaturedDetail] = useState<GameItem | null>(null);
+  const [landscapeByUrl, setLandscapeByUrl] = useState<Record<string, boolean>>(
+    {},
+  );
+  const [featuredMediaPick, setFeaturedMediaPick] = useState<number>(0);
   const pageSize = 48; // Number of games to fetch per page for general lists
   const upcomingPageSize = 24; // Number of unreleased games per page
   const maxGames = 0; // Maximum number of games to load in total
@@ -137,9 +164,9 @@ function Games() {
         query.set("upcoming", "true");
       }
       console.debug(
-        `Fetching games from: ${root}/api/games?${query.toString()}`,
+        `Fetching games from: ${root}/api/games?include_media=1&${query.toString()}`,
       );
-      const url = `${root}/api/games?${query.toString()}`;
+      const url = `${root}/api/games?include_media=1&${query.toString()}`;
       const response = await fetch(url, { signal });
       if (!response.ok) {
         throw new Error(`API error: ${response.status} ${response.statusText}`);
@@ -215,6 +242,7 @@ function Games() {
     return merged;
   }, [gamesData?.pages, maxGames]);
 
+  // Memoize the list of upcoming games by merging pages and removing duplicates, ensuring that the list updates efficiently when new data is fetched
   const upcomingGames = useMemo(() => {
     const pages = upcomingData?.pages ?? [];
     let merged: GameItem[] = [];
@@ -224,7 +252,8 @@ function Games() {
     return merged;
   }, [upcomingData?.pages]);
 
-  const gamesError = gamesQueryError?.message ?? upcomingQueryError?.message ?? null;
+  const gamesError =
+    gamesQueryError?.message ?? upcomingQueryError?.message ?? null;
   const hasMoreGames = Boolean(hasNextPage);
   const hasMoreUpcoming = Boolean(hasMoreUpcomingGames);
 
@@ -326,28 +355,256 @@ function Games() {
     featuredDetail && featuredDetail.id === featuredGameId
       ? featuredDetail
       : featuredGame;
+  const heroDescriptionSource = collapseWhitespace(
+    heroGame?.description || heroGame?.story,
+  );
+  const heroDescription = heroDescriptionSource
+    ? truncateText(heroDescriptionSource, 420)
+    : "A fresh pick from your library.";
 
   const featuredCover = normalizeMediaUrl(heroGame?.cover_image ?? undefined);
-  const featuredMedia = Array.isArray(heroGame?.media) ? heroGame?.media : [];
-  const featuredMediaItems = featuredMedia
-    .filter(
-      (item) =>
-        item.media_type === "screenshot" || item.media_type === "artwork",
-    )
-    .map((item) => ({
-      type: item.media_type ?? "screenshot",
-      url: normalizeMediaUrl(item.url),
-    }))
-    .filter((item): item is { type: string; url: string } => Boolean(item.url));
-  const heroMediaUrl =
-    featuredMediaItems.find((item) => item.type === "artwork")?.url ??
-    featuredMediaItems[0]?.url ??
-    upgradeIgdbSize(featuredCover, "t_1080p");
-  const featuredScreenshots = featuredMediaItems.length
-    ? featuredMediaItems.map((item) => item.url)
-    : (heroGame?.screenshots ?? [])
-        .map((screenshot) => normalizeMediaUrl(screenshot))
-        .filter((screenshot): screenshot is string => Boolean(screenshot));
+  const featuredMedia = useMemo(
+    () => (Array.isArray(heroGame?.media) ? heroGame.media : []),
+    [heroGame?.media],
+  );
+  const featuredScreenshotMedia = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          featuredMedia
+            .filter((item) => item.media_type === "screenshot")
+            .map((item) => normalizeMediaUrl(item.url))
+            .filter((url): url is string => Boolean(url)),
+        ),
+      ),
+    [featuredMedia],
+  );
+  const featuredArtworkMedia = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          featuredMedia
+            .filter((item) => item.media_type === "artwork")
+            .map((item) => normalizeMediaUrl(item.url))
+            .filter((url): url is string => Boolean(url)),
+        ),
+      ),
+    [featuredMedia],
+  );
+  const featuredFallbackScreenshots = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (heroGame?.screenshots ?? [])
+            .map((screenshot) => normalizeMediaUrl(screenshot))
+            .filter((screenshot): screenshot is string => Boolean(screenshot)),
+        ),
+      ),
+    [heroGame?.screenshots],
+  );
+  const coverFallbackUrl = upgradeIgdbSize(featuredCover, "t_1080p");
+  const featuredMediaCandidates = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...featuredArtworkMedia,
+          ...featuredScreenshotMedia,
+          ...featuredFallbackScreenshots,
+          ...(coverFallbackUrl ? [coverFallbackUrl] : []),
+        ]),
+      ),
+    [
+      coverFallbackUrl,
+      featuredArtworkMedia,
+      featuredFallbackScreenshots,
+      featuredScreenshotMedia,
+    ],
+  );
+
+  useEffect(() => {
+    if (typeof Image === "undefined") return;
+    const pending = featuredMediaCandidates.filter(
+      (url) => landscapeByUrl[url] === undefined,
+    );
+    if (!pending.length) return;
+
+    let isActive = true;
+    for (const url of pending) {
+      const image = new Image();
+      image.onload = () => {
+        if (!isActive) return;
+        const width = image.naturalWidth;
+        const height = image.naturalHeight;
+        const aspect = height > 0 ? width / height : 0;
+        const isLandscape = width > height;
+        const hasHeroLikeSize =
+          width >= HERO_MIN_WIDTH && height >= HERO_MIN_HEIGHT;
+        const hasHeroLikeAspect =
+          aspect >= HERO_MIN_ASPECT && aspect <= HERO_MAX_ASPECT;
+        // Treat very wide, short assets as logo/title strips and exclude them.
+        const isHeroEligible =
+          isLandscape && hasHeroLikeSize && hasHeroLikeAspect;
+        setLandscapeByUrl((current) => {
+          if (current[url] !== undefined) return current;
+          return { ...current, [url]: isHeroEligible };
+        });
+      };
+      image.onerror = () => {
+        if (!isActive) return;
+        setLandscapeByUrl((current) => {
+          if (current[url] !== undefined) return current;
+          return { ...current, [url]: false };
+        });
+      };
+      image.src = url;
+    }
+
+    return () => {
+      isActive = false;
+    };
+  }, [featuredMediaCandidates, landscapeByUrl]);
+
+  const landscapeArtworkMedia = useMemo(
+    () =>
+      featuredArtworkMedia.filter((url) => landscapeByUrl[url] !== false),
+    [featuredArtworkMedia, landscapeByUrl],
+  );
+  const landscapeScreenshotMedia = useMemo(
+    () =>
+      featuredScreenshotMedia.filter((url) => landscapeByUrl[url] !== false),
+    [featuredScreenshotMedia, landscapeByUrl],
+  );
+  const landscapeFallbackScreenshots = useMemo(
+    () =>
+      featuredFallbackScreenshots.filter((url) => landscapeByUrl[url] !== false),
+    [featuredFallbackScreenshots, landscapeByUrl],
+  );
+
+  const landscapeArtworkKey = useMemo(
+    () => landscapeArtworkMedia.join("|"),
+    [landscapeArtworkMedia],
+  );
+  const landscapeScreenshotsKey = useMemo(
+    () => landscapeScreenshotMedia.join("|"),
+    [landscapeScreenshotMedia],
+  );
+  const landscapeFallbackKey = useMemo(
+    () => landscapeFallbackScreenshots.join("|"),
+    [landscapeFallbackScreenshots],
+  );
+  const featuredArtworkKey = useMemo(
+    () => featuredArtworkMedia.join("|"),
+    [featuredArtworkMedia],
+  );
+  const featuredScreenshotsKey = useMemo(
+    () => featuredScreenshotMedia.join("|"),
+    [featuredScreenshotMedia],
+  );
+  const featuredFallbackScreenshotsKey = useMemo(
+    () => featuredFallbackScreenshots.join("|"),
+    [featuredFallbackScreenshots],
+  );
+
+  useEffect(() => {
+    const preferredPool =
+      landscapeArtworkMedia.length
+        ? landscapeArtworkMedia
+        : landscapeScreenshotMedia.length
+          ? landscapeScreenshotMedia
+          : landscapeFallbackScreenshots.length
+            ? landscapeFallbackScreenshots
+            : featuredArtworkMedia.length
+              ? featuredArtworkMedia
+              : featuredScreenshotMedia.length
+                ? featuredScreenshotMedia
+                : featuredFallbackScreenshots;
+
+    if (!preferredPool.length) {
+      setFeaturedMediaPick((current) => (current === 0 ? current : 0));
+      return;
+    }
+
+    setFeaturedMediaPick((current) => {
+      const next = Math.floor(Math.random() * preferredPool.length);
+      if (preferredPool.length === 1) return 0;
+      if (next === current) {
+        return (current + 1) % preferredPool.length;
+      }
+      return next;
+    });
+  }, [
+    heroGame?.id,
+    landscapeArtworkKey,
+    landscapeFallbackKey,
+    landscapeScreenshotsKey,
+    featuredArtworkKey,
+    featuredFallbackScreenshotsKey,
+    featuredScreenshotsKey,
+  ]);
+
+  const activeHeroMedia: HeroMediaCandidate | null = useMemo(() => {
+    if (landscapeArtworkMedia.length) {
+      return {
+        url: landscapeArtworkMedia[featuredMediaPick % landscapeArtworkMedia.length],
+        source: "artwork",
+      };
+    }
+    if (landscapeScreenshotMedia.length) {
+      return {
+        url: landscapeScreenshotMedia[
+          featuredMediaPick % landscapeScreenshotMedia.length
+        ],
+        source: "screenshot",
+      };
+    }
+    if (landscapeFallbackScreenshots.length) {
+      return {
+        url: landscapeFallbackScreenshots[
+          featuredMediaPick % landscapeFallbackScreenshots.length
+        ],
+        source: "screenshot",
+      };
+    }
+    if (coverFallbackUrl && landscapeByUrl[coverFallbackUrl] !== false) {
+      return { url: coverFallbackUrl, source: "cover" };
+    }
+    // Keep hero empty rather than showing a known non-eligible logo/strip image.
+    return null;
+  }, [
+    coverFallbackUrl,
+    featuredMediaPick,
+    landscapeArtworkMedia,
+    landscapeByUrl,
+    landscapeFallbackScreenshots,
+    landscapeScreenshotMedia,
+    featuredArtworkMedia,
+    featuredFallbackScreenshots,
+    featuredScreenshotMedia,
+  ]);
+
+  const heroMediaUrl = activeHeroMedia?.url ?? null;
+  const heroMediaClassName =
+    activeHeroMedia?.source === "cover"
+      ? "games-hero__image games-hero__image--cover"
+      : activeHeroMedia?.source === "artwork"
+        ? "games-hero__image games-hero__image--artwork"
+        : "games-hero__image games-hero__image--screenshot";
+  const featuredScreenshotsBase = landscapeScreenshotMedia.length
+    ? landscapeScreenshotMedia
+    : landscapeFallbackScreenshots.length
+      ? landscapeFallbackScreenshots
+      : landscapeArtworkMedia.length
+        ? landscapeArtworkMedia
+        : [];
+  const featuredScreenshots = useMemo(() => {
+    if (!featuredScreenshotsBase.length) return [];
+    const offset = featuredMediaPick % featuredScreenshotsBase.length;
+    if (offset === 0) return featuredScreenshotsBase;
+    return [
+      ...featuredScreenshotsBase.slice(offset),
+      ...featuredScreenshotsBase.slice(0, offset),
+    ];
+  }, [featuredScreenshotsBase, featuredMediaPick]);
   const carouselCover = (game: GameItem) => normalizeMediaUrl(game.cover_image);
 
   // Prepare game lists for carousels
@@ -397,7 +654,11 @@ function Games() {
         <section className="games-hero">
           <div className="games-hero__media">
             {heroMediaUrl ? (
-              <img src={heroMediaUrl} alt={heroGame?.name || "Featured game"} />
+              <img
+                src={heroMediaUrl}
+                alt={heroGame?.name || "Featured game"}
+                className={heroMediaClassName}
+              />
             ) : null}
             <div className="games-hero__shade" />
           </div>
@@ -405,9 +666,14 @@ function Games() {
             {heroGame ? (
               <>
                 <p className="games-hero__eyebrow">Featured today</p>
-                <h1 className="games-hero__title">{heroGame.name}</h1>
-                <p className="games-hero__desc">
-                  {heroGame.description || "A fresh pick from your library."}
+                <h1 className="games-hero__title" title={heroGame.name}>
+                  {heroGame.name}
+                </h1>
+                <p
+                  className="games-hero__desc"
+                  title={heroDescriptionSource || undefined}
+                >
+                  {heroDescription}
                 </p>
                 <div className="games-hero__meta">
                   <span>{heroGame.genre ?? "Genre: n/a"}</span>
@@ -443,7 +709,10 @@ function Games() {
                     type="button"
                     className="games-hero__button games-hero__button--ghost"
                     onClick={() => {
-                      void Promise.all([refetchGames(), refetchUpcomingGames()]);
+                      void Promise.all([
+                        refetchGames(),
+                        refetchUpcomingGames(),
+                      ]);
                     }}
                     disabled={gamesLoading || upcomingLoading}
                   >
@@ -513,6 +782,18 @@ function Games() {
           />
 
           <GameCarousel
+            title="Trending Games"
+            badge="Hot"
+            games={discoveryList.slice(0, 10)}
+            onSelect={openGameDetail}
+            getCoverUrl={carouselCover}
+            itemWidth={190}
+            getDescription={(game) =>
+              game.genre ? `Genre: ${game.genre}` : "Genre: n/a"
+            }
+          />
+
+          <GameCarousel
             title="Explore more"
             badge="Discover"
             games={discoveryList}
@@ -533,7 +814,6 @@ function Games() {
                 .join("\n")
             }
           />
-
         </main>
         <SiteFooter />
       </div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Button from './components/Button'
 import Lightbox from './components/Lightbox'
+import TrailerGallery from './components/TrailerGallery'
 import './game.css'
 
 // Define the structure of a game item based on expected API response fields
@@ -39,25 +40,6 @@ const normalizeCoverUrl = (url?: string) => {
   return url
 }
 
-// Convert standard YouTube URLs into embed URLs for iframe usage
-const toEmbedUrl = (value: string) => {
-  if (!value) return null
-  if (value.includes('youtube.com/watch')) {
-    try {
-      const url = new URL(value)
-      const videoId = url.searchParams.get('v')
-      return videoId ? `https://www.youtube.com/embed/${videoId}` : value
-    } catch {
-      return value
-    }
-  }
-  if (value.includes('youtu.be/')) {
-    const id = value.split('youtu.be/')[1]?.split(/[?&]/)[0]
-    return id ? `https://www.youtube.com/embed/${id}` : value
-  }
-  return value
-}
-
 // Parse release date strings into Date objects, returning null for invalid or missing dates
 const parseReleaseDate = (value?: string) => {
   if (!value) return null;
@@ -76,13 +58,25 @@ const formatReleaseDate = (value?: string) => {
   });
 };
 
+const collapseWhitespace = (value?: string) => {
+  if (!value) return "";
+  return value.replace(/\s+/g, " ").trim();
+};
+
+const truncateText = (value: string, maxLength: number) => {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength).trimEnd()}...`;
+};
+
 const formatCommaSeparatedText = (value?: string) => {
   if (!value) return 'n/a';
   const parts = value
     .split(',')
-    .map((part) => part.trim())
+    .map((part) => collapseWhitespace(part))
     .filter(Boolean);
-  return parts.length ? parts.join(', ') : value;
+  const normalized = parts.length ? parts.join(', ') : collapseWhitespace(value);
+  if (!normalized) return 'n/a';
+  return normalized;
 };
 
 // Main Game component handling individual game detail view
@@ -168,12 +162,19 @@ function Game() {
     .filter((item) => item.media_type === 'screenshot' || item.media_type === 'artwork')
     .map((item) => normalizeCoverUrl(item.url))
     .filter(Boolean) as string[]
-  const trailerFromMedia =
-    mediaItems.find((item) => item.media_type === 'trailer')?.url ?? null
+  const trailerFromMedia = mediaItems
+    .filter((item) => item.media_type === 'trailer')
+    .map((item) => item.url?.trim())
+    .filter((value): value is string => Boolean(value))
 
   const detailCover = normalizeCoverUrl(game?.cover_image ?? undefined)
-  const trailerUrl = game?.trailer_url || game?.trailers?.[0] || trailerFromMedia
-  const embedUrl = trailerUrl ? toEmbedUrl(trailerUrl) : null
+  const trailerUrls = Array.from(
+    new Set(
+      [game?.trailer_url, ...(game?.trailers ?? []), ...trailerFromMedia]
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  )
   const screenshots =
     game?.screenshots?.map(normalizeCoverUrl).filter(Boolean) as string[] | undefined
   const mediaGallery = screenshots && screenshots.length
@@ -183,6 +184,20 @@ function Game() {
       : detailCover
         ? [detailCover]
         : []
+  const detailTitle = collapseWhitespace(game?.name) || 'Untitled game'
+  const detailDescriptionSource = collapseWhitespace(game?.description || game?.story)
+  const detailDescription = detailDescriptionSource
+    ? truncateText(detailDescriptionSource, 1000)
+    : 'No description available yet.'
+  const genreText = formatCommaSeparatedText(game?.genre)
+  const publisherText = formatCommaSeparatedText(game?.publishers)
+  const platformsTextFull = (game?.platform_names ?? [])
+    .map((name) => collapseWhitespace(name))
+    .filter(Boolean)
+    .join(', ')
+  const platformsText = platformsTextFull
+    ? platformsTextFull
+    : 'n/a'
 
   return (
     <div className="game-page">
@@ -228,22 +243,30 @@ function Game() {
               <div className="game-info">
                 <div className="game-info__header">
                   <p className="game-info__eyebrow">Selected game</p>
-                  <h1 className="game-info__title">{game.name}</h1>
+                  <h1 className="game-info__title" title={detailTitle}>
+                    {detailTitle}
+                  </h1>
                 </div>
-                <p className="game-info__description">
-                  {game.description || game.story || 'No description available yet.'}
+                <p className="game-info__description" title={detailDescriptionSource || undefined}>
+                  {detailDescription}
                 </p>
                 <div className="game-info__stats">
                   <div className="game-stat">
                     <span className="game-stat__label">Genre</span>
-                    <span className="game-stat__value game-stat__value--wrap">
-                      {formatCommaSeparatedText(game.genre)}
+                    <span
+                      className="game-stat__value game-stat__value--wrap"
+                      title={genreText !== 'n/a' ? genreText : undefined}
+                    >
+                      {genreText}
                     </span>
                   </div>
                   <div className="game-stat">
                     <span className="game-stat__label">Publisher</span>
-                    <span className="game-stat__value game-stat__value--wrap">
-                      {formatCommaSeparatedText(game.publishers)}
+                    <span
+                      className="game-stat__value game-stat__value--wrap"
+                      title={publisherText !== 'n/a' ? publisherText : undefined}
+                    >
+                      {publisherText}
                     </span>
                   </div>
                   <div className="game-stat">
@@ -252,8 +275,11 @@ function Game() {
                   </div>
                   <div className="game-stat">
                     <span className="game-stat__label">Platforms</span>
-                    <span className="game-stat__value game-stat__value--wrap">
-                      {game.platform_names?.join(', ') ?? 'n/a'}
+                    <span
+                      className="game-stat__value game-stat__value--wrap"
+                      title={platformsTextFull || undefined}
+                    >
+                      {platformsText}
                     </span>
                   </div>
                 </div>
@@ -290,28 +316,21 @@ function Game() {
                 </section>
                 <section className="game-panel">
                   <div className="game-panel__header">
-                    <h2 className="game-panel__title">Trailer</h2>
+                    <h2 className="game-panel__title">Trailers</h2>
                     <span className="game-panel__meta">
-                      {embedUrl ? 'Now playing' : 'No trailer'}
+                      {trailerUrls.length
+                        ? `${trailerUrls.length} available`
+                        : 'No trailers'}
                     </span>
                   </div>
-                  <div className="game-trailer">
-                    {embedUrl ? (
-                      <div className="game-trailer__frame">
-                        <iframe
-                          src={embedUrl}
-                          title={`${game.name} trailer`}
-                          className="game-trailer__iframe"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
-                      </div>
+                  {trailerUrls.length ? (
+                    <TrailerGallery trailers={trailerUrls} gameName={game.name} />
                     ) : (
                       <div className="game-gallery__empty">
-                        Trailer link not available yet.
+                        Trailer links are not available yet.
                       </div>
-                    )}
-                  </div>
+                    )
+                  }
                 </section>
                 <div className="game-info__actions">
                   <Button label="Back to list" showIcon={false} onClick={closeGameDetail} />

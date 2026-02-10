@@ -12,7 +12,11 @@ func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool) ([]models
 	query := `
 		SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url, aggregated_rating, aggregated_rating_count, total_rating, total_rating_count, popularity
 		FROM games
-		ORDER BY game_id
+		ORDER BY
+			COALESCE(popularity, 0 ) DESC,
+			COALESCE(aggregated_rating_count, total_rating_count, 0) DESC,
+			COALESCE(aggregated_rating, total_rating, 0) DESC,
+			game_id ASC
 		LIMIT $1 OFFSET $2;
 	`
 	if upcomingOnly {
