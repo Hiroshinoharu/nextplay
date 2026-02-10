@@ -68,7 +68,13 @@
   background: rgba(8, 22, 34, 0.8);
   border-radius: 999px;
   cursor: pointer;
-  transition: background 0.2s ease, transform 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.22s ease,
+    filter 0.22s ease,
+    translate 0.22s ease,
+    scale 0.14s ease;
 }
 
 .media-lightbox__close {
@@ -99,6 +105,7 @@
 .media-lightbox__close:hover,
 .media-lightbox__nav:hover {
   background: rgba(140, 243, 122, 0.2);
+  border-color: rgba(140, 243, 122, 0.56);
 }
 
 .media-lightbox__thumbs {
@@ -121,6 +128,13 @@
   background: #040b12;
   cursor: pointer;
   opacity: 0.8;
+  transition:
+    border-color 0.2s ease,
+    opacity 0.2s ease,
+    box-shadow 0.22s ease,
+    filter 0.22s ease,
+    translate 0.22s ease,
+    scale 0.14s ease;
 }
 
 .media-lightbox__thumb.is-active {

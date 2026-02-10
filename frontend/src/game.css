@@ -78,6 +78,11 @@
   letter-spacing: 0.3em;
   text-transform: uppercase;
   cursor: pointer;
+  transition:
+    color 0.2s ease,
+    filter 0.2s ease,
+    translate 0.2s ease,
+    scale 0.14s ease;
 }
 
 .game-header__link:hover {
@@ -261,6 +266,16 @@
   padding: 0;
   cursor: pointer;
   text-align: left;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.22s ease,
+    filter 0.22s ease,
+    translate 0.22s ease,
+    scale 0.14s ease;
+}
+
+.game-gallery__item-button:hover {
+  box-shadow: 0 0 0 1px rgba(140, 243, 122, 0.35);
 }
 
 .game-gallery__item-button:focus-visible {

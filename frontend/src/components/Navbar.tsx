@@ -2,8 +2,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 
 const NAV_ITEMS = [
-  { label: 'Home', path: '/' },
-  { label: 'Discover', path: '/games' },
+  { label: 'Home', path: '/games' },
+  { label: 'Discover', path: '/discover' },
   { label: 'My List', path: '/user' },
   ...(import.meta.env.DEV && import.meta.env.VITE_ENABLE_STATUS === 'true'
     ? [{ label: 'Status', path: '/health', to: '/health?status=1' }]
@@ -16,11 +16,13 @@ const Navbar = () => {
 
   const activePath = location.pathname.startsWith('/games')
     ? '/games'
+    : location.pathname.startsWith('/discover')
+      ? '/discover'
     : location.pathname.startsWith('/user')
       ? '/user'
       : location.pathname.startsWith('/health')
         ? '/health'
-        : '/';
+        : '/games';
 
   return (
     <StyledWrapper>
@@ -78,7 +80,13 @@ const StyledWrapper = styled.div`
     padding: 0.45em 1.2em;
     color: var(--games-text, #e2f2ff);
     cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease,
+      box-shadow 0.22s ease,
+      filter 0.22s ease,
+      translate 0.22s ease,
+      scale 0.14s ease;
     font-size: 0.9rem;
     border-radius: 999px;
     white-space: nowrap;
@@ -98,6 +106,7 @@ const StyledWrapper = styled.div`
   .btn:hover {
     background: rgba(140, 243, 122, 0.18);
     color: var(--games-text, #e2f2ff);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
   }
 
   .btn.is-active {

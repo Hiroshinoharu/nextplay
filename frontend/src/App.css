@@ -158,7 +158,19 @@
   font-size: 15px;
   border-radius: 999px;
   cursor: pointer;
-  transition: background 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.24s ease,
+    filter 0.24s ease,
+    translate 0.24s ease,
+    scale 0.16s ease;
+}
+
+.landing__nav-actions button:hover {
+  background: rgba(140, 243, 122, 0.18);
+  border-color: rgba(140, 243, 122, 0.8);
 }
 
 .hero{
@@ -229,8 +241,18 @@
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  transition: background 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.24s ease,
+    filter 0.24s ease,
+    translate 0.24s ease,
+    scale 0.16s ease;
   font-size: 14px;
+}
+
+.hero__button:hover {
+  background: #dcff30;
 }
 
 .hero__button span {
@@ -313,7 +335,18 @@
   display: grid;
   place-items: center;
   cursor: pointer;
-  transition: background 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.24s ease,
+    filter 0.24s ease,
+    translate 0.24s ease,
+    scale 0.16s ease;
+}
+
+.popular__arrow:hover {
+  background: rgba(140, 243, 122, 0.2);
+  border-color: rgba(140, 243, 122, 0.6);
 }
 
 .popular__card-image {
@@ -361,7 +394,16 @@
   padding: 0;
   appearance: none;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    scale 0.14s ease;
+}
+
+.popular__dot:hover {
+  background: rgba(166, 240, 138, 0.8);
+  box-shadow: 0 0 0 4px rgba(140, 243, 122, 0.16);
+  scale: 1.08;
 }
 
 .popular__dot.active {
@@ -440,6 +482,16 @@
   color: #0b141a;
   font-weight: 600;
   cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.24s ease,
+    filter 0.24s ease,
+    translate 0.24s ease,
+    scale 0.16s ease;
+}
+
+.landing__footer-form button:hover {
+  background: #9ff88e;
 }
 
 .landing__footer-bottom {

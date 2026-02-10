@@ -6,6 +6,9 @@
   font-weight: 400;
   color: #e2e8f0;
   background-color: #0b141a;
+  --np-btn-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --np-btn-shadow-hover: 0 10px 22px rgba(3, 11, 18, 0.35);
+  --np-btn-shadow-active: 0 4px 12px rgba(3, 11, 18, 0.24);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -30,4 +33,44 @@ h4 {
 
 a {
   color: inherit;
+}
+
+button {
+  transition:
+    background-color 180ms var(--np-btn-ease),
+    color 180ms var(--np-btn-ease),
+    border-color 180ms var(--np-btn-ease),
+    box-shadow 220ms var(--np-btn-ease),
+    filter 220ms var(--np-btn-ease),
+    translate 220ms var(--np-btn-ease),
+    scale 140ms var(--np-btn-ease);
+}
+
+button:not(:disabled):hover {
+  translate: 0 -1px;
+  filter: saturate(1.06);
+  box-shadow: var(--np-btn-shadow-hover);
+}
+
+button:not(:disabled):active {
+  translate: 0 0;
+  scale: 0.985;
+  box-shadow: var(--np-btn-shadow-active);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button {
+    transition:
+      background-color 1ms linear,
+      color 1ms linear,
+      border-color 1ms linear;
+  }
+
+  button:not(:disabled):hover,
+  button:not(:disabled):active {
+    translate: none;
+    scale: 1;
+    filter: none;
+    box-shadow: none;
+  }
 }

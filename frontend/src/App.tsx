@@ -529,6 +529,7 @@ function App() {
         }
       />
       <Route path="/games" element={<Games />} />
+      <Route path="/discover" element={<Games />} />
       <Route path="/games/:gameId" element={<Game />} />
       <Route
         path="/login"

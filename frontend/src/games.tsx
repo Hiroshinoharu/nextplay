@@ -133,6 +133,7 @@ function Games() {
   const [landscapeByUrl, setLandscapeByUrl] = useState<Record<string, boolean>>(
     {},
   );
+  const [failedHeroUrls, setFailedHeroUrls] = useState<Record<string, true>>({});
   const [featuredMediaPick, setFeaturedMediaPick] = useState<number>(0);
   const pageSize = 48; // Number of games to fetch per page for general lists
   const upcomingPageSize = 24; // Number of unreleased games per page
@@ -421,6 +422,8 @@ function Games() {
     ],
   );
 
+  // Analyze the dimensions of candidate media URLs to determine which ones are suitable for use as hero images, and store the results in the landscapeByUrl state for efficient lookup when rendering the hero section
+  // This effect creates Image objects for each candidate URL and checks their dimensions when they load. It updates the landscapeByUrl state to indicate whether each URL is landscape-oriented and meets certain size and aspect ratio criteria for use as a hero image. The effect also handles cleanup to avoid updating state after unmounting.
   useEffect(() => {
     if (typeof Image === "undefined") return;
     const pending = featuredMediaCandidates.filter(
@@ -464,122 +467,155 @@ function Games() {
     };
   }, [featuredMediaCandidates, landscapeByUrl]);
 
-  const landscapeArtworkMedia = useMemo(
+  const heroEligibleArtworkMedia = useMemo(
     () =>
-      featuredArtworkMedia.filter((url) => landscapeByUrl[url] !== false),
+      featuredArtworkMedia.filter((url) => landscapeByUrl[url] === true),
     [featuredArtworkMedia, landscapeByUrl],
   );
-  const landscapeScreenshotMedia = useMemo(
+  const heroEligibleScreenshotMedia = useMemo(
+    () =>
+      featuredScreenshotMedia.filter((url) => landscapeByUrl[url] === true),
+    [featuredScreenshotMedia, landscapeByUrl],
+  );
+  const heroEligibleFallbackScreenshots = useMemo(
+    () =>
+      featuredFallbackScreenshots.filter((url) => landscapeByUrl[url] === true),
+    [featuredFallbackScreenshots, landscapeByUrl],
+  );
+  // Provisional pools (unknown size yet) keep hero from going black while dimensions load.
+  const provisionalScreenshotMedia = useMemo(
     () =>
       featuredScreenshotMedia.filter((url) => landscapeByUrl[url] !== false),
     [featuredScreenshotMedia, landscapeByUrl],
   );
-  const landscapeFallbackScreenshots = useMemo(
+  const provisionalFallbackScreenshots = useMemo(
     () =>
       featuredFallbackScreenshots.filter((url) => landscapeByUrl[url] !== false),
     [featuredFallbackScreenshots, landscapeByUrl],
   );
-
-  const landscapeArtworkKey = useMemo(
-    () => landscapeArtworkMedia.join("|"),
-    [landscapeArtworkMedia],
+  const heroEligibleArtworkPool = useMemo(
+    () =>
+      heroEligibleArtworkMedia.filter((url) => !failedHeroUrls[url]),
+    [heroEligibleArtworkMedia, failedHeroUrls],
   );
-  const landscapeScreenshotsKey = useMemo(
-    () => landscapeScreenshotMedia.join("|"),
-    [landscapeScreenshotMedia],
+  const heroEligibleScreenshotPool = useMemo(
+    () =>
+      heroEligibleScreenshotMedia.filter((url) => !failedHeroUrls[url]),
+    [heroEligibleScreenshotMedia, failedHeroUrls],
   );
-  const landscapeFallbackKey = useMemo(
-    () => landscapeFallbackScreenshots.join("|"),
-    [landscapeFallbackScreenshots],
+  const heroEligibleFallbackScreenshotPool = useMemo(
+    () =>
+      heroEligibleFallbackScreenshots.filter((url) => !failedHeroUrls[url]),
+    [heroEligibleFallbackScreenshots, failedHeroUrls],
   );
-  const featuredArtworkKey = useMemo(
-    () => featuredArtworkMedia.join("|"),
-    [featuredArtworkMedia],
+  const provisionalScreenshotPool = useMemo(
+    () =>
+      provisionalScreenshotMedia.filter((url) => !failedHeroUrls[url]),
+    [provisionalScreenshotMedia, failedHeroUrls],
   );
-  const featuredScreenshotsKey = useMemo(
-    () => featuredScreenshotMedia.join("|"),
-    [featuredScreenshotMedia],
+  const provisionalFallbackScreenshotPool = useMemo(
+    () =>
+      provisionalFallbackScreenshots.filter((url) => !failedHeroUrls[url]),
+    [provisionalFallbackScreenshots, failedHeroUrls],
   );
-  const featuredFallbackScreenshotsKey = useMemo(
-    () => featuredFallbackScreenshots.join("|"),
-    [featuredFallbackScreenshots],
+  const coverHeroCandidate =
+    coverFallbackUrl && !failedHeroUrls[coverFallbackUrl]
+      ? coverFallbackUrl
+      : null;
+  const heroPreferredPool = useMemo(() => {
+    if (heroEligibleScreenshotPool.length) return heroEligibleScreenshotPool;
+    if (heroEligibleFallbackScreenshotPool.length) {
+      return heroEligibleFallbackScreenshotPool;
+    }
+    if (provisionalScreenshotPool.length) return provisionalScreenshotPool;
+    if (provisionalFallbackScreenshotPool.length) {
+      return provisionalFallbackScreenshotPool;
+    }
+    if (heroEligibleArtworkPool.length) {
+      return heroEligibleArtworkPool;
+    }
+    return [];
+  }, [
+    heroEligibleArtworkPool,
+    heroEligibleFallbackScreenshotPool,
+    heroEligibleScreenshotPool,
+    provisionalFallbackScreenshotPool,
+    provisionalScreenshotPool,
+  ]);
+  const heroPreferredPoolKey = useMemo(
+    () => heroPreferredPool.join("|"),
+    [heroPreferredPool],
   );
 
   useEffect(() => {
-    const preferredPool =
-      landscapeArtworkMedia.length
-        ? landscapeArtworkMedia
-        : landscapeScreenshotMedia.length
-          ? landscapeScreenshotMedia
-          : landscapeFallbackScreenshots.length
-            ? landscapeFallbackScreenshots
-            : featuredArtworkMedia.length
-              ? featuredArtworkMedia
-              : featuredScreenshotMedia.length
-                ? featuredScreenshotMedia
-                : featuredFallbackScreenshots;
-
-    if (!preferredPool.length) {
+    if (!heroPreferredPool.length) {
       setFeaturedMediaPick((current) => (current === 0 ? current : 0));
       return;
     }
 
     setFeaturedMediaPick((current) => {
-      const next = Math.floor(Math.random() * preferredPool.length);
-      if (preferredPool.length === 1) return 0;
+      const next = Math.floor(Math.random() * heroPreferredPool.length);
+      if (heroPreferredPool.length === 1) return 0;
       if (next === current) {
-        return (current + 1) % preferredPool.length;
+        return (current + 1) % heroPreferredPool.length;
       }
       return next;
     });
-  }, [
-    heroGame?.id,
-    landscapeArtworkKey,
-    landscapeFallbackKey,
-    landscapeScreenshotsKey,
-    featuredArtworkKey,
-    featuredFallbackScreenshotsKey,
-    featuredScreenshotsKey,
-  ]);
+  }, [heroGame?.id, heroPreferredPool.length, heroPreferredPoolKey]);
 
   const activeHeroMedia: HeroMediaCandidate | null = useMemo(() => {
-    if (landscapeArtworkMedia.length) {
+    if (heroEligibleScreenshotPool.length) {
       return {
-        url: landscapeArtworkMedia[featuredMediaPick % landscapeArtworkMedia.length],
+        url: heroEligibleScreenshotPool[
+          featuredMediaPick % heroEligibleScreenshotPool.length
+        ],
+        source: "screenshot",
+      };
+    }
+    if (heroEligibleFallbackScreenshotPool.length) {
+      return {
+        url: heroEligibleFallbackScreenshotPool[
+          featuredMediaPick % heroEligibleFallbackScreenshotPool.length
+        ],
+        source: "screenshot",
+      };
+    }
+    if (provisionalScreenshotPool.length) {
+      return {
+        url: provisionalScreenshotPool[
+          featuredMediaPick % provisionalScreenshotPool.length
+        ],
+        source: "screenshot",
+      };
+    }
+    if (provisionalFallbackScreenshotPool.length) {
+      return {
+        url: provisionalFallbackScreenshotPool[
+          featuredMediaPick % provisionalFallbackScreenshotPool.length
+        ],
+        source: "screenshot",
+      };
+    }
+    if (heroEligibleArtworkPool.length) {
+      return {
+        url: heroEligibleArtworkPool[
+          featuredMediaPick % heroEligibleArtworkPool.length
+        ],
         source: "artwork",
       };
     }
-    if (landscapeScreenshotMedia.length) {
-      return {
-        url: landscapeScreenshotMedia[
-          featuredMediaPick % landscapeScreenshotMedia.length
-        ],
-        source: "screenshot",
-      };
+    if (coverHeroCandidate) {
+      return { url: coverHeroCandidate, source: "cover" };
     }
-    if (landscapeFallbackScreenshots.length) {
-      return {
-        url: landscapeFallbackScreenshots[
-          featuredMediaPick % landscapeFallbackScreenshots.length
-        ],
-        source: "screenshot",
-      };
-    }
-    if (coverFallbackUrl && landscapeByUrl[coverFallbackUrl] !== false) {
-      return { url: coverFallbackUrl, source: "cover" };
-    }
-    // Keep hero empty rather than showing a known non-eligible logo/strip image.
     return null;
   }, [
-    coverFallbackUrl,
+    coverHeroCandidate,
     featuredMediaPick,
-    landscapeArtworkMedia,
-    landscapeByUrl,
-    landscapeFallbackScreenshots,
-    landscapeScreenshotMedia,
-    featuredArtworkMedia,
-    featuredFallbackScreenshots,
-    featuredScreenshotMedia,
+    heroEligibleArtworkPool,
+    heroEligibleFallbackScreenshotPool,
+    heroEligibleScreenshotPool,
+    provisionalFallbackScreenshotPool,
+    provisionalScreenshotPool,
   ]);
 
   const heroMediaUrl = activeHeroMedia?.url ?? null;
@@ -589,22 +625,33 @@ function Games() {
       : activeHeroMedia?.source === "artwork"
         ? "games-hero__image games-hero__image--artwork"
         : "games-hero__image games-hero__image--screenshot";
-  const featuredScreenshotsBase = landscapeScreenshotMedia.length
-    ? landscapeScreenshotMedia
-    : landscapeFallbackScreenshots.length
-      ? landscapeFallbackScreenshots
-      : landscapeArtworkMedia.length
-        ? landscapeArtworkMedia
-        : [];
   const featuredScreenshots = useMemo(() => {
-    if (!featuredScreenshotsBase.length) return [];
-    const offset = featuredMediaPick % featuredScreenshotsBase.length;
-    if (offset === 0) return featuredScreenshotsBase;
+    const base = heroEligibleScreenshotPool.length
+      ? heroEligibleScreenshotPool
+      : heroEligibleFallbackScreenshotPool.length
+        ? heroEligibleFallbackScreenshotPool
+        : provisionalScreenshotPool.length
+          ? provisionalScreenshotPool
+          : provisionalFallbackScreenshotPool.length
+            ? provisionalFallbackScreenshotPool
+            : heroEligibleArtworkPool.length
+              ? heroEligibleArtworkPool
+              : [];
+    if (!base.length) return [];
+    const offset = featuredMediaPick % base.length;
+    if (offset === 0) return base;
     return [
-      ...featuredScreenshotsBase.slice(offset),
-      ...featuredScreenshotsBase.slice(0, offset),
+      ...base.slice(offset),
+      ...base.slice(0, offset),
     ];
-  }, [featuredScreenshotsBase, featuredMediaPick]);
+  }, [
+    heroEligibleScreenshotPool,
+    heroEligibleFallbackScreenshotPool,
+    provisionalScreenshotPool,
+    provisionalFallbackScreenshotPool,
+    heroEligibleArtworkPool,
+    featuredMediaPick,
+  ]);
   const carouselCover = (game: GameItem) => normalizeMediaUrl(game.cover_image);
 
   // Prepare game lists for carousels
@@ -658,6 +705,13 @@ function Games() {
                 src={heroMediaUrl}
                 alt={heroGame?.name || "Featured game"}
                 className={heroMediaClassName}
+                onError={() => {
+                  if (!heroMediaUrl) return;
+                  setFailedHeroUrls((current) => {
+                    if (current[heroMediaUrl]) return current;
+                    return { ...current, [heroMediaUrl]: true };
+                  });
+                }}
               />
             ) : null}
             <div className="games-hero__shade" />
