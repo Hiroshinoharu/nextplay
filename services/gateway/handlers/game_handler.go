@@ -21,6 +21,15 @@ func GetAllGames(c *fiber.Ctx) error {
 	return c.Status(status).Send(data)
 }
 
+func SearchGamesByName(c *fiber.Ctx) error {
+	query := c.Context().QueryArgs().String()
+	status, data, err := gameClient.SearchGamesByName(query)
+	if err != nil {
+		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.Status(status).Send(data)
+}
+
 func GetPopularGames(c *fiber.Ctx) error {
 	// Extract query parameters as a string to pass to the Game Service
 	// It can include filters like ?genre=action&platform=pc, etc.
@@ -45,6 +54,7 @@ func GetGameByID(c *fiber.Ctx) error {
 	// The Game Service will return the game details in the response body, which we send back to the client
 	return c.Status(status).Send(data)
 }
+
 // CreateGame creates a new game using the data provided in the request body.
 func CreateGame(c *fiber.Ctx) error {
 	// The request body should contain the game details in JSON format, which we read and pass to the Game Service
@@ -185,7 +195,7 @@ func GetGameFranchises(c *fiber.Ctx) error {
 	return c.Status(status).Send(data)
 }
 
-// 
+//
 func AddGameFranchise(c *fiber.Ctx) error {
 	id := c.Params("id")
 	body := c.Body()

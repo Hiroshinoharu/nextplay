@@ -144,16 +144,20 @@ func doDelete(url string, headers map[string]string) (interface{}, error) {
 
 // Helper function to perform GET requests returning raw response data
 func doGetRaw(url string) (int, []byte, error) {
+	// Create the GET request
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return 0, nil, err
 	}
+
+	// Perform the request
 	resp, err := HttpClient.Do(req)
 	if err != nil {
 		return 0, nil, err
 	}
 	defer resp.Body.Close()
 
+	// Read the response body
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return resp.StatusCode, nil, err

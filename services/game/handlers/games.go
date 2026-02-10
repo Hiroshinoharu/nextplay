@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/maxceban/nextplay/services/game/db"
@@ -25,8 +26,32 @@ func GetAllGames(c *fiber.Ctx) error {
 	}
 	includeMedia := c.Query("include_media") == "true" || c.Query("include_media") == "1"
 	upcomingOnly := c.Query("upcoming") == "true" || c.Query("upcoming") == "1"
+	searchQuery := strings.TrimSpace(c.Query("q"))
 
-	games, err := db.GetGames(limit, offset, includeMedia, upcomingOnly)
+	games, err := db.GetGames(limit, offset, includeMedia, upcomingOnly, searchQuery)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(games)
+}
+
+// GET /api/games/search - retrieves games by name using a direct DB query
+func SearchGamesByName(c *fiber.Ctx) error {
+	query := strings.TrimSpace(c.Query("q"))
+	if query == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "query parameter q is required"})
+	}
+	limit := c.QueryInt("limit", 200)
+	if limit <= 0 {
+		limit = 200
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	includeMedia := c.Query("include_media") == "true" || c.Query("include_media") == "1"
+	mode := strings.TrimSpace(c.Query("mode"))
+
+	games, err := db.SearchGamesByName(query, mode, limit, includeMedia)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -37,14 +62,19 @@ func GetAllGames(c *fiber.Ctx) error {
 func GetPopularGames(c *fiber.Ctx) error {
 	year := c.QueryInt("year", 0)
 	limit := c.QueryInt("limit", 4)
+	offset := c.QueryInt("offset", 0)
 	minRatingCount := c.QueryInt("min_rating_count", 1000)
-	if limit > 16 {
-		limit = 16
+	if limit > 300 {
+		limit = 300
+	}
+	if offset < 0 {
+		offset = 0
 	}
 	if minRatingCount < 0 {
 		minRatingCount = 0
 	}
-	games, err := db.GetPopularGames(year, limit, minRatingCount)
+	includeMedia := c.Query("include_media") == "true" || c.Query("include_media") == "1"
+	games, err := db.GetPopularGames(year, limit, offset, minRatingCount, includeMedia)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}

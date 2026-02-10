@@ -1,10 +1,24 @@
 import styled from 'styled-components';
 
+type SearchbarProps = {
+  // Props can be added here if needed in the future, such as onChange handlers or value for controlled input
+  value?: string;
+  onValueChange?: (newValue: string) => void;
+  onSubmit?: () => void;
+};
+
 // A reusable search input component with an icon and styled container.
-const Input = () => {
+const Input = ({ value, onValueChange, onSubmit }: SearchbarProps) => {
   return (
     <StyledWrapper>
-      <div className="search">
+      <form
+        className="search"
+        role ="search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit?.();
+        }}
+      >
         <div className="iconContainer" aria-hidden="true">
           <svg
             viewBox="0 0 512 512"
@@ -20,8 +34,15 @@ const Input = () => {
           placeholder="Search games"
           type="text"
           aria-label="Search games"
+          value={value}
+          onChange={(e) => onValueChange?.(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              onSubmit?.();
+            }
+          }}
         />
-      </div>
+      </form>
     </StyledWrapper>
   );
 }

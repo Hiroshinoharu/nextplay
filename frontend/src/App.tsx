@@ -8,6 +8,7 @@ import Form from "./components/Form";
 import SiteFooter from "./components/SiteFooter";
 import Game from "./game";
 import Games from "./games";
+import SearchPage from "./search";
 import UserPage from "./user";
 
 // Types for authenticated user
@@ -152,6 +153,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
             limit: String(totalLimit),
             t: String(cacheBust),
             min_rating_count: "1",
+            include_media: "1",
           });
           if (year > 0) {
             params.set("year", String(year));
@@ -533,7 +535,7 @@ function App() {
         }
       />
       <Route path="/games" element={<Games />} />
-      <Route path="/discover" element={<Games />} />
+      <Route path="/discover" element={<SearchPage />} />
       <Route path="/games/:gameId" element={<Game />} />
       <Route
         path="/login"

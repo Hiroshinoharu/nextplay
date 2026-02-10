@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import Card from "./components/card";
 import GameCarousel from "./components/GameCarousel";
 import Lightbox from "./components/Lightbox";
 import Navbar from "./components/Navbar";
@@ -109,6 +110,34 @@ const collapseWhitespace = (value?: string) => {
   if (!value) return "";
   return value.replace(/\s+/g, " ").trim();
 };
+const tokenizeSearchQuery = (value: string) =>
+  value
+    .split(" ")
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 1);
+
+const scoreGameSimilarity = (game: GameItem, terms: string[]) => {
+  if (!terms.length) return 0;
+  const name = (game.name ?? "").toLowerCase();
+  const genre = (game.genre ?? "").toLowerCase();
+  const publishers = (game.publishers ?? "").toLowerCase();
+  const description = collapseWhitespace(
+    [game.description, game.story].filter(Boolean).join(" "),
+  ).toLowerCase();
+  let score = 0;
+
+  for (const term of terms) {
+    if (name === term) score += 100;
+    else if (name.startsWith(term)) score += 45;
+    else if (name.includes(term)) score += 28;
+
+    if (genre.includes(term)) score += 16;
+    if (publishers.includes(term)) score += 12;
+    if (description.includes(term)) score += 8;
+  }
+
+  return score;
+};
 
 // Define the CSS styles for the loading spinner component using styled-components
 const truncateText = (value: string, maxLength: number) => {
@@ -148,6 +177,9 @@ function Games() {
   );
   const [failedHeroUrls, setFailedHeroUrls] = useState<Record<string, true>>({});
   const [featuredMediaPick, setFeaturedMediaPick] = useState<number>(0);
+  const [searchInput, setSearchInput] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>(""); // Separate state for the actual search query to trigger searches on submit rather than on every keystroke
+  const normalizedSearchQuery = collapseWhitespace(searchQuery).toLowerCase();
   const pageSize = 48; // Number of games to fetch per page for general lists
   const upcomingPageSize = 24; // Number of unreleased games per page
   const maxGames = 0; // Maximum number of games to load in total
@@ -157,11 +189,13 @@ function Games() {
       page,
       limit,
       upcomingOnly = false,
+      searchQuery,
       signal,
     }: {
       page: number;
       limit: number;
       upcomingOnly?: boolean;
+      searchQuery?: string;
       signal?: AbortSignal;
     }): Promise<GamesPage> => {
       // Ensure the base URL is properly formatted and does not have trailing slashes
@@ -176,6 +210,9 @@ function Games() {
       });
       if (upcomingOnly) {
         query.set("upcoming", "true");
+      }
+      if (searchQuery) {
+        query.set("q", searchQuery);
       }
       console.debug(
         `Fetching games from: ${root}/api/games?include_media=1&${query.toString()}`,
@@ -203,16 +240,14 @@ function Games() {
     data: gamesData,
     error: gamesQueryError,
     isPending: gamesLoading,
-    isFetchingNextPage: gamesLoadingMore,
-    hasNextPage,
-    fetchNextPage,
     refetch: refetchGames,
   } = useInfiniteQuery<GamesPage, Error>({
-    queryKey: ["games", baseUrl, pageSize] as const,
+    queryKey: ["games", baseUrl, pageSize, normalizedSearchQuery] as const,
     queryFn: ({ pageParam }: { pageParam: unknown }) =>
       fetchGamesPage({
         page: pageParam as number,
         limit: pageSize,
+        searchQuery: normalizedSearchQuery || undefined,
       }),
     enabled: true,
     initialPageParam: 1,
@@ -221,14 +256,14 @@ function Games() {
     staleTime: 60_000,
   });
 
-  // Use the useQuery hook to fetch a list of recent popular games, with logic to attempt fetching from the current year first and then the previous year if there are not enough results, ensuring that the list of recent popular games is robust and up-to-date while also handling potential API errors gracefully
+  // Fetch a single recent trending batch (no pagination), up to 300 items.
   const {
     data: recentPopularGames = [],
-    error: recentPopularQueryError,
-    isPending: recentPopularLoading,
-    refetch   : refetchRecentPopular,
+    error: trendingQueryError,
+    isPending: trendingLoading,
+    refetch: refetchTrendingGames,
   } = useQuery<GameItem[], Error>({
-    queryKey: ["games-recent-popular", baseUrl] as const,
+    queryKey: ["games-trending-recent", baseUrl] as const,
     queryFn: async ({ signal }) => {
       const trimmedBaseUrl = baseUrl.replace(/\/+$/, "");
       const root = trimmedBaseUrl.endsWith("/api")
@@ -238,29 +273,29 @@ function Games() {
       const fetchPopularByYear = async (year: number) => {
         const query = new URLSearchParams({
           year: String(year),
-          limit: String(10),
-          min_rating_count: "10",
+          limit: String(300),
+          min_rating_count: "1",
+          include_media: "1",
         });
-    const response = await fetch(`${root}/api/games/popular?${query.toString()}`, { signal });
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status} ${response.statusText}`);
-    }
-    const data = await response.json();
-    if (!Array.isArray(data)) {
-      throw new Error("Invalid API response: expected an array of games");
-    }
-    return data as GameItem[];
-  };
-    // Fetch popular games from the current year, and if there are not enough results, also fetch from the previous year to ensure a robust list of recent popular games
-    const currentYearGames = await fetchPopularByYear(currentYear);
-    if (currentYearGames.length >= 10) {
-      return dedupeGames(currentYearGames).slice(0, 10);
-    }
-    const previousYearGames = await fetchPopularByYear(currentYear - 1);
-    const combined = dedupeGames([...currentYearGames, ...previousYearGames]);
-    return combined.slice(0, 10);
-  },
-  staleTime: 5 * 60_000, // Cache recent popular games for 5 minutes
+        const response = await fetch(`${root}/api/games/popular?${query.toString()}`, { signal });
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status} ${response.statusText}`);
+        }
+        const data = await response.json();
+        if (!Array.isArray(data)) {
+          throw new Error("Invalid API response: expected an array of games");
+        }
+        return data as GameItem[];
+      };
+
+      const currentYearGames = await fetchPopularByYear(currentYear);
+      if (currentYearGames.length >= 300) {
+        return dedupeGames(currentYearGames).slice(0, 300);
+      }
+      const previousYearGames = await fetchPopularByYear(currentYear - 1);
+      return dedupeGames([...currentYearGames, ...previousYearGames]).slice(0, 300);
+    },
+    staleTime: 5 * 60_000,
   });
 
   // Use the useInfiniteQuery hook to manage fetching paginated upcoming game data, with support for loading more pages and handling errors, ensuring that users can easily discover new and unreleased games while also providing a seamless experience for loading additional content as needed
@@ -312,21 +347,60 @@ function Games() {
     }
     return merged;
   }, [upcomingData?.pages, maxGames]);
-  
+
+  const searchTerms = useMemo(
+    () => tokenizeSearchQuery(normalizedSearchQuery),
+    [normalizedSearchQuery],
+  );
+
+  const matchesSearchQuery = useCallback(
+    (game: GameItem) => {
+      if (!normalizedSearchQuery) return true;
+      const searchableText = [
+        game.name,
+        game.genre,
+        game.publishers,
+        game.description,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return searchableText.includes(normalizedSearchQuery);
+    },
+    [normalizedSearchQuery]
+  );
+  const searchResults = useMemo(() => {
+    if (!normalizedSearchQuery) return [] as GameItem[];
+    const ranked = games
+      .map((game) => ({
+        game,
+        score: scoreGameSimilarity(game, searchTerms),
+      }))
+      .filter((entry) => entry.score > 0);
+    ranked.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const bPopularity = b.game.popularity ?? 0;
+      const aPopularity = a.game.popularity ?? 0;
+      return bPopularity - aPopularity;
+    });
+    return ranked.map((entry) => entry.game);
+  }, [games, normalizedSearchQuery, searchTerms]);
+
+  const filteredGames = useMemo(
+    () =>
+      normalizedSearchQuery ? searchResults : games.filter(matchesSearchQuery),
+    [games, matchesSearchQuery, normalizedSearchQuery, searchResults]
+  );
+
+  const filteredUpcomingGames = useMemo(() => upcomingGames, [upcomingGames]);
+
   // Combine errors from different queries into a single error message for easier handling and display in the UI, ensuring that users are informed of any issues that occur during data fetching while also providing a clear and concise error message when multiple queries may have failed
   const gamesError =
     gamesQueryError?.message ?? 
     upcomingQueryError?.message ??
-    recentPopularQueryError?.message ??
+    trendingQueryError?.message ??
     null;
-  const hasMoreGames = Boolean(hasNextPage);
   const hasMoreUpcoming = Boolean(hasMoreUpcomingGames);
-
-  // Callback functions for loading more games and upcoming games, with checks to prevent multiple simultaneous fetches and to ensure that there are more pages to load before attempting to fetch additional data, providing a smooth and responsive experience for users as they explore the game library and discover new content without encountering issues related to excessive or redundant API calls
-  const loadMoreGames = useCallback(async () => {
-    if (!hasMoreGames || gamesLoadingMore || gamesLoading) return;
-    await fetchNextPage();
-  }, [fetchNextPage, hasMoreGames, gamesLoadingMore, gamesLoading]);
 
   // Callback function for loading more upcoming games, with checks to prevent multiple simultaneous fetches and to ensure that there are more pages to load before attempting to fetch additional data, providing a smooth and responsive experience for users as they explore the upcoming game library and discover new content without encountering issues related to excessive or redundant API calls
   const loadMoreUpcomingGames = useCallback(async () => {
@@ -361,11 +435,11 @@ function Games() {
 
   // useCallback function for opening the lightbox to display a selected media item, with logic to determine the index of the selected media within the list of featured media candidates and to set the lightbox index accordingly, providing an immersive experience for users as they view game media in a larger format while ensuring that the correct media item is displayed based on user interaction
   const featuredCandidates = useMemo(() => {
-    const withReleaseDates = games.filter((game) =>
+    const withReleaseDates = filteredGames.filter((game) =>
       Boolean(parseReleaseDate(game.release_date)),
     );
-    return withReleaseDates.length ? withReleaseDates : games;
-  }, [games]);
+    return withReleaseDates.length ? withReleaseDates : filteredGames;
+  }, [filteredGames]);
 
   // useEffect for selecting a featured game when the list of featured candidates changes, with logic to maintain the current featured game if it is still in the list of candidates or to randomly select a new featured game if the current one is no longer available, ensuring that the hero section of the page remains dynamic and engaging while also providing consistency for users as they explore the game library
   useEffect(() => {
@@ -751,21 +825,12 @@ function Games() {
 
   // Prepare game lists for carousels
   const releasedGames = useMemo(
-    () =>  games.filter((game) => isReleasedGames(game)),
-    [games],
+    () =>  filteredGames.filter((game) => isReleasedGames(game)),
+    [filteredGames],
     );
   // The topTenGames list is created by slicing the first 10 games from the releasedGames list, which contains only games that have been released based on their release dates. This list is used for the "Top Ten" carousel to showcase a curated selection of recently released games, providing users with a quick overview of popular titles that are currently available to play.
   const topTenGames = useMemo(() => releasedGames.slice(0, 10), [releasedGames]);
-  const discoveryGames = useMemo(() => releasedGames.slice(10), [releasedGames]);
-  const upcomingList = upcomingGames;
-
-  const discoveryList = useMemo(
-    () => 
-      (discoveryGames.length 
-        ? discoveryGames 
-        : releasedGames.slice(0, 10)),
-    [discoveryGames, releasedGames],
-  );
+  const upcomingList = filteredUpcomingGames;
 
   // The trendingList is determined by checking if there are any recent popular games available. If there are, it uses that list; otherwise, 
   // it falls back to using the first 10 games from the discovery list. This logic ensures that the "Trending" carousel always has content to display, 
@@ -774,13 +839,17 @@ function Games() {
     () => 
       recentPopularGames.length
         ? recentPopularGames
-        : discoveryList.slice(0, 10),
-    [recentPopularGames, discoveryList],
+        : releasedGames.slice(0, 10),
+    [recentPopularGames, releasedGames],
   );
 
   const closeLightbox = useCallback(() => {
     setLightboxIndex(null);
   }, []);
+
+  const handleSearchSubmit = useCallback(() => {
+    setSearchQuery(collapseWhitespace(searchInput));
+  }, [searchInput]);
 
   return (
     <div className="games-page">
@@ -801,7 +870,11 @@ function Games() {
             <Navbar />
           </nav>
           <div className="games-actions">
-            <Searchbar />
+            <Searchbar
+            value={searchInput}
+            onValueChange={setSearchInput}
+            onSubmit={handleSearchSubmit} 
+            />
             <button
               type="button"
               className="games-avatar"
@@ -881,12 +954,12 @@ function Games() {
                       void Promise.all([
                         refetchGames(),
                         refetchUpcomingGames(),
-                        refetchRecentPopular(),
+                        refetchTrendingGames(),
                       ]);
                     }}
-                    disabled={gamesLoading || upcomingLoading || recentPopularLoading}
+                    disabled={gamesLoading || upcomingLoading || trendingLoading}
                   >
-                    {gamesLoading || upcomingLoading || recentPopularLoading
+                    {gamesLoading || upcomingLoading || trendingLoading
                       ? "Refreshing..."
                       : "Refresh list"}
                   </button>
@@ -920,6 +993,56 @@ function Games() {
 
         <main className="games-content">
           {gamesError && <div className="games-alert">{gamesError}</div>}
+
+          <section className="games-search-results" aria-live="polite">
+            {normalizedSearchQuery ? (
+              <>
+                <p className="games-search-results__label">
+                  Search results for "{normalizedSearchQuery}"
+                </p>
+                <p className="games-search-results__count">
+                  Showing {searchResults.length} related game
+                  {searchResults.length === 1 ? "" : "s"}.
+                </p>
+              </>
+            ) : (
+               <p className="games-search-results__count">
+                Showing all games. Enter a query and press Enter to filter.
+              </p>
+            )}
+          </section>
+
+          {normalizedSearchQuery ? (
+            <section className="games-search-grid-section" aria-live="polite">
+              {searchResults.length ? (
+                <div className="games-search-grid">
+                  {searchResults.slice(0, 24).map((game) => (
+                    <Card
+                      key={`search-grid-${game.id}`}
+                      title={game.name || "Untitled"}
+                      description={getExploreDescription(game)}
+                      icon={
+                        carouselCover(game) ? (
+                          <img
+                            src={carouselCover(game) ?? ""}
+                            alt={game.name || "Game cover"}
+                            className="card__image"
+                            loading="lazy"
+                          />
+                        ) : undefined
+                      }
+                      onClick={() => openGameDetail(game.id)}
+                      ariaLabel={`View details for ${game.name || "game"}`}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="games-search-grid__empty">
+                  No games matched that query. Try a shorter or broader term.
+                </p>
+              )}
+            </section>
+          ) : null}
 
           <GameCarousel
             title="Upcoming Games"
@@ -955,18 +1078,6 @@ function Games() {
             getDescription={getReleaseDescription}
           />
 
-          <GameCarousel
-            title="Explore more"
-            badge="Discover"
-            games={discoveryList}
-            onSelect={openGameDetail}
-            getCoverUrl={carouselCover}
-            itemWidth={190}
-            onLoadMore={loadMoreGames}
-            canLoadMore={hasMoreGames}
-            isLoadingMore={gamesLoadingMore}
-            getDescription={getExploreDescription}
-          />
         </main>
         <SiteFooter />
       </div>

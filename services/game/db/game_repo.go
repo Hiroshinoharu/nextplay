@@ -2,40 +2,78 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
+	"strings"
 
 	"github.com/maxceban/nextplay/services/game/models"
 )
 
 // GetGames retrieves a page of games from the database.
 // Use includeMedia for detail-heavy responses; it is off by default for speed.
-func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool) ([]models.Game, error) {
-	query := `
+func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool, searchQuery string) ([]models.Game, error) {
+	baseQuery := `
 		SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url, aggregated_rating, aggregated_rating_count, total_rating, total_rating_count, popularity
 		FROM games
+	`
+	whereParts := make([]string, 0, 2)
+	args := make([]interface{}, 0, 3)
+
+	if upcomingOnly {
+		whereParts = append(whereParts, "release_date IS NOT NULL AND release_date > CURRENT_DATE")
+	}
+	if strings.TrimSpace(searchQuery) != "" {
+		args = append(args, "%"+strings.TrimSpace(searchQuery)+"%")
+		searchArgPos := len(args)
+		whereParts = append(
+			whereParts,
+			fmt.Sprintf(
+				`(
+					game_name ILIKE $%d
+					OR genre ILIKE $%d
+					OR publishers ILIKE $%d
+					OR game_description ILIKE $%d
+				)`,
+				searchArgPos,
+				searchArgPos,
+				searchArgPos,
+				searchArgPos,
+			),
+		)
+	}
+
+	if len(whereParts) > 0 {
+		baseQuery += "\nWHERE " + strings.Join(whereParts, "\n  AND ")
+	}
+	if upcomingOnly {
+		baseQuery += `
+		ORDER BY
+			release_date ASC,
+			game_id ASC
+	`
+	} else {
+		baseQuery += `
 		ORDER BY
 			COALESCE(popularity, 0 ) DESC,
 			COALESCE(aggregated_rating_count, total_rating_count, 0) DESC,
 			COALESCE(aggregated_rating, total_rating, 0) DESC,
 			game_id ASC
-		LIMIT $1 OFFSET $2;
 	`
-	if upcomingOnly {
-		query = `
-			SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url, aggregated_rating, aggregated_rating_count, total_rating, total_rating_count, popularity
-			FROM games
-			WHERE release_date IS NOT NULL
-			  AND release_date > CURRENT_DATE
-			ORDER BY release_date ASC, game_id ASC
-			LIMIT $1 OFFSET $2;
-		`
 	}
 
-	rows, err := DB.Query(query, limit, offset)
+	args = append(args, limit, offset)
+	limitArgPos := len(args) - 1
+	offsetArgPos := len(args)
+	query := baseQuery + fmt.Sprintf("\nLIMIT $%d OFFSET $%d;", limitArgPos, offsetArgPos)
+
+	rows, err := DB.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
+
+	// Ensure the rows are closed when the function returns to prevent resource leaks
 	defer rows.Close()
 
+	// Preallocate a slice to hold the games, using the limit as the capacity for efficiency
 	games := make([]models.Game, 0, limit)
 
 	// Iterate over the rows and scan into Game structs
@@ -125,13 +163,153 @@ func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool) ([]models
 	return games, nil
 }
 
+// SearchGamesByName retrieves games by name ordered by game_id.
+func SearchGamesByName(query string, mode string, limit int, includeMedia bool) ([]models.Game, error) {
+	trimmedQuery := strings.TrimSpace(query)
+	if trimmedQuery == "" {
+		return []models.Game{}, nil
+	}
+	if limit <= 0 {
+		limit = 200
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	whereClause := "g.game_name ILIKE $1"
+	argValue := "%" + trimmedQuery + "%"
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "starts_with":
+		whereClause = "g.game_name ILIKE $1"
+		argValue = trimmedQuery + "%"
+	case "exact":
+		whereClause = "LOWER(g.game_name) = LOWER($1)"
+		argValue = trimmedQuery
+	default:
+		whereClause = "g.game_name ILIKE $1"
+		argValue = "%" + trimmedQuery + "%"
+	}
+
+	querySQL := fmt.Sprintf(
+		`
+		SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url, aggregated_rating, aggregated_rating_count, total_rating, total_rating_count, popularity
+		FROM games g
+		WHERE %s
+		ORDER BY g.game_id
+		LIMIT $2;
+	`,
+		whereClause,
+	)
+
+	rows, err := DB.Query(
+		querySQL,
+		argValue,
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	games := make([]models.Game, 0, limit)
+	for rows.Next() {
+		var g models.Game
+		var description sql.NullString
+		var releaseDate sql.NullString
+		var genre sql.NullString
+		var publishers sql.NullString
+		var story sql.NullString
+		var coverImage sql.NullString
+		var aggregatedRating sql.NullFloat64
+		var aggregatedRatingCount sql.NullInt64
+		var totalRating sql.NullFloat64
+		var totalRatingCount sql.NullInt64
+		var popularity sql.NullFloat64
+		err := rows.Scan(
+			&g.ID,
+			&g.Name,
+			&description,
+			&releaseDate,
+			&genre,
+			&publishers,
+			&story,
+			&coverImage,
+			&aggregatedRating,
+			&aggregatedRatingCount,
+			&totalRating,
+			&totalRatingCount,
+			&popularity,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		if description.Valid {
+			g.Description = description.String
+		}
+		if releaseDate.Valid {
+			g.ReleaseDate = releaseDate.String
+		}
+		if genre.Valid {
+			g.Genre = genre.String
+		}
+		if publishers.Valid {
+			g.Publishers = publishers.String
+		}
+		if story.Valid {
+			g.Story = story.String
+		}
+		if coverImage.Valid {
+			g.CoverImageURL = coverImage.String
+		}
+		if aggregatedRating.Valid {
+			g.AggregatedRating = aggregatedRating.Float64
+		}
+		if aggregatedRatingCount.Valid {
+			g.AggregatedRatingCount = int(aggregatedRatingCount.Int64)
+		}
+		if totalRating.Valid {
+			g.TotalRating = totalRating.Float64
+		}
+		if totalRatingCount.Valid {
+			g.TotalRatingCount = int(totalRatingCount.Int64)
+		}
+		if popularity.Valid {
+			g.Popularity = popularity.Float64
+		}
+		if includeMedia {
+			media, err := GetGameMedia(int(g.ID))
+			if err != nil {
+				return nil, err
+			}
+			g.Media = media
+		} else {
+			g.Media = []models.GameMedia{}
+		}
+		g.Platforms = []int64{}
+		g.PlatformNames = []string{}
+		g.Keywords = []int64{}
+		g.Franchises = []int64{}
+		g.Companies = []int64{}
+		g.Series = []int64{}
+		games = append(games, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return games, nil
+}
+
 // GetPopularGames returns most popular games for a given release year based on IGDB popularity.
-func GetPopularGames(year, limit, minRatingCount int) ([]models.Game, error) {
+func GetPopularGames(year, limit, offset, minRatingCount int, includeMedia bool) ([]models.Game, error) {
 	if limit <= 0 {
 		limit = 10
 	}
 	if limit > 50 {
 		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
 	}
 	if minRatingCount < 0 {
 		minRatingCount = 0
@@ -160,10 +338,10 @@ func GetPopularGames(year, limit, minRatingCount int) ([]models.Game, error) {
 			COALESCE(g.aggregated_rating_count, g.total_rating_count, 0) DESC,
 			COALESCE(g.aggregated_rating, g.total_rating, 0) DESC,
 			g.game_id
-		LIMIT $2;
+		LIMIT $2 OFFSET $4;
 	`
 
-	rows, err := DB.Query(query, year, limit, minRatingCount)
+	rows, err := DB.Query(query, year, limit, minRatingCount, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +412,15 @@ func GetPopularGames(year, limit, minRatingCount int) ([]models.Game, error) {
 		if popularity.Valid {
 			g.Popularity = popularity.Float64
 		}
-		g.Media = []models.GameMedia{}
+		if includeMedia {
+			media, err := GetGameMedia(int(g.ID))
+			if err != nil {
+				return nil, err
+			}
+			g.Media = media
+		} else {
+			g.Media = []models.GameMedia{}
+		}
 		g.Platforms = []int64{}
 		g.PlatformNames = []string{}
 		g.Keywords = []int64{}
@@ -251,7 +437,7 @@ func GetPopularGames(year, limit, minRatingCount int) ([]models.Game, error) {
 
 // GetAllGames returns a default-sized page for backward compatibility.
 func GetAllGames() ([]models.Game, error) {
-	return GetGames(50, 0, false, false)
+	return GetGames(50, 0, false, false, "")
 }
 
 // GetGameByID retrieves a game by its ID
