@@ -196,14 +196,14 @@ function Games() {
     refetch: refetchGames,
   } = useInfiniteQuery<GamesPage, Error>({
     queryKey: ["games", baseUrl, pageSize] as const,
-    queryFn: ({ pageParam, signal }) =>
+    queryFn: ({ pageParam }: { pageParam: unknown }) =>
       fetchGamesPage({
         page: pageParam as number,
         limit: pageSize,
-        signal,
       }),
+    enabled: true,
     initialPageParam: 1,
-    getNextPageParam: (lastPage) =>
+    getNextPageParam: (lastPage: GamesPage): number | undefined =>
       lastPage.hasMore ? lastPage.page + 1 : undefined,
     staleTime: 60_000,
   });
@@ -218,7 +218,7 @@ function Games() {
     refetch: refetchUpcomingGames,
   } = useInfiniteQuery<GamesPage, Error>({
     queryKey: ["games-upcoming", baseUrl, upcomingPageSize] as const,
-    queryFn: ({ pageParam, signal }) =>
+    queryFn: ({ pageParam, signal }: { pageParam: unknown; signal?: AbortSignal }) =>
       fetchGamesPage({
         page: pageParam as number,
         limit: upcomingPageSize,
@@ -226,7 +226,7 @@ function Games() {
         signal,
       }),
     initialPageParam: 1,
-    getNextPageParam: (lastPage) =>
+    getNextPageParam: (lastPage: GamesPage): number | undefined =>
       lastPage.hasMore ? lastPage.page + 1 : undefined,
     staleTime: 60_000,
   });

@@ -62,10 +62,26 @@ const StyledWrapper = styled.div`
     text-align: left;
     background: none;
     cursor: default;
+    isolation: isolate;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
 
   .card--clickable {
     cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    translate: none;
+    scale: 1;
+    filter: none;
+  }
+
+  .card--clickable:hover,
+  .card--clickable:active {
+    translate: none;
+    scale: 1;
+    filter: none;
   }
 
   .card--poster {
@@ -73,6 +89,11 @@ const StyledWrapper = styled.div`
     height: 260px;
     background: #0c141a;
     box-shadow: 0 10px 30px rgba(7, 12, 16, 0.55);
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    clip-path: inset(0 round 12px);
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
   }
 
   .card--poster:hover {
@@ -83,6 +104,10 @@ const StyledWrapper = styled.div`
   .card--clickable:focus-visible {
     outline: 2px solid #38bdf8;
     outline-offset: 3px;
+  }
+
+  .card--clickable:focus {
+    outline: none;
   }
 
   .card--poster svg {
@@ -108,6 +133,8 @@ const StyledWrapper = styled.div`
     position: absolute;
     bottom: 0;
     transform: translateY(38%);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
   }
 
   .card--poster:hover .card__content {
@@ -138,6 +165,10 @@ const StyledWrapper = styled.div`
     object-fit: cover;
     border-radius: 12px;
     transition: transform 0.35s ease;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    clip-path: inset(0 round 12px);
   }
 
   .card--poster:hover .card__image {

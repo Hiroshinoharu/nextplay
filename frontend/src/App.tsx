@@ -84,6 +84,7 @@ const HEALTH_SERVICE_LABELS: Record<string, string> = {
 
 // Coerce unknown payload into AuthUser or null
 const coerceAuthUser = (payload: unknown): AuthUser | null => {
+  // We check for common ID fields (id, user_id, userId) and accept both number and string formats. For username and email, we only accept string values. For steam_linked, we check both possible keys and accept boolean values.
   if (!payload || typeof payload !== "object") return null;
   const data = payload as Record<string, unknown>;
   const idValue = data.id ?? data.user_id ?? data.userId;
@@ -94,6 +95,8 @@ const coerceAuthUser = (payload: unknown): AuthUser | null => {
     const parsed = Number(idValue);
     if (!Number.isNaN(parsed)) id = parsed;
   }
+  
+  // For username and email, we only accept string values. For steam_linked, we check both possible keys and accept boolean values.
   const username =
     typeof data.username === "string" ? data.username : undefined;
   const email = typeof data.email === "string" ? data.email : undefined;
