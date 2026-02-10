@@ -1,5 +1,6 @@
 import BrandLogo from "./BrandLogo";
 
+// A component for rendering the site footer with multiple sections and a subscription form.
 const SiteFooter = () => {
   return (
     <footer className="landing__footer">

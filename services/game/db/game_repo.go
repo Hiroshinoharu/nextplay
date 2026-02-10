@@ -8,13 +8,23 @@ import (
 
 // GetGames retrieves a page of games from the database.
 // Use includeMedia for detail-heavy responses; it is off by default for speed.
-func GetGames(limit, offset int, includeMedia bool) ([]models.Game, error) {
+func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool) ([]models.Game, error) {
 	query := `
 		SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url, aggregated_rating, aggregated_rating_count, total_rating, total_rating_count, popularity
 		FROM games
 		ORDER BY game_id
 		LIMIT $1 OFFSET $2;
 	`
+	if upcomingOnly {
+		query = `
+			SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url, aggregated_rating, aggregated_rating_count, total_rating, total_rating_count, popularity
+			FROM games
+			WHERE release_date IS NOT NULL
+			  AND release_date > CURRENT_DATE
+			ORDER BY release_date ASC, game_id ASC
+			LIMIT $1 OFFSET $2;
+		`
+	}
 
 	rows, err := DB.Query(query, limit, offset)
 	if err != nil {
@@ -235,7 +245,7 @@ func GetPopularGames(year, limit, minRatingCount int) ([]models.Game, error) {
 
 // GetAllGames returns a default-sized page for backward compatibility.
 func GetAllGames() ([]models.Game, error) {
-	return GetGames(50, 0, false)
+	return GetGames(50, 0, false, false)
 }
 
 // GetGameByID retrieves a game by its ID
@@ -502,7 +512,7 @@ func fetchPlatformNames(gameID int) ([]string, error) {
 	defer rows.Close()
 
 	names := make([]string, 0)
-	for rows.Next(){
+	for rows.Next() {
 		var name sql.NullString
 		if err := rows.Scan(&name); err != nil {
 			return nil, err

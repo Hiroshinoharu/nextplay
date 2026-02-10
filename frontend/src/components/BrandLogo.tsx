@@ -8,6 +8,7 @@ type BrandLogoProps = {
   label?: string;
 };
 
+// A reusable component for displaying the brand logo with customizable properties.
 const BrandLogo = ({
   onClick,
   width = 96,

@@ -1,5 +1,6 @@
 import styled from 'styled-components';
 
+// A reusable search input component with an icon and styled container.
 const Input = () => {
   return (
     <StyledWrapper>
@@ -25,6 +26,7 @@ const Input = () => {
   );
 }
 
+// Styled component for the search input, defining styles for the search container, input field, and search icon, with responsive adjustments for smaller screens.
 const StyledWrapper = styled.div`
   .search {
     position: relative;

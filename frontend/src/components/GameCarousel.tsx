@@ -1,4 +1,5 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
+import type { CSSProperties, ReactNode, UIEvent } from 'react'
 import Card from './card'
 
 type GameCarouselItem = {
@@ -20,6 +21,10 @@ type GameCarouselProps = {
   showHeader?: boolean
   itemWidth?: number
   gap?: number
+  onLoadMore?: () => void | Promise<void>
+  canLoadMore?: boolean
+  isLoadingMore?: boolean
+  loadMoreThreshold?: number
 }
 
 const baseRowStyle: CSSProperties = {
@@ -48,9 +53,39 @@ const GameCarousel = ({
   itemWidth = 200,
   gap = 20,
   showHeader = true,
+  onLoadMore,
+  canLoadMore = false,
+  isLoadingMore = false,
+  loadMoreThreshold = 220,
 }: GameCarouselProps) => {
   const rowStyle: CSSProperties = { ...baseRowStyle, gap }
   const itemStyle: CSSProperties = { flex: `0 0 ${itemWidth}px` }
+  const hasTriggeredNearEndRef = useRef(false)
+
+  useEffect(() => {
+    if (!isLoadingMore) {
+      hasTriggeredNearEndRef.current = false
+    }
+  }, [isLoadingMore, games.length])
+
+  const handleRowScroll = useCallback(
+    (event: UIEvent<HTMLDivElement>) => {
+      if (!onLoadMore || !canLoadMore || isLoadingMore) return
+      const row = event.currentTarget
+      const remaining = row.scrollWidth - row.scrollLeft - row.clientWidth
+      const isNearEnd = remaining <= loadMoreThreshold
+
+      if (!isNearEnd) {
+        hasTriggeredNearEndRef.current = false
+        return
+      }
+
+      if (hasTriggeredNearEndRef.current) return
+      hasTriggeredNearEndRef.current = true
+      void onLoadMore()
+    },
+    [canLoadMore, isLoadingMore, loadMoreThreshold, onLoadMore],
+  )
 
   return (
     <section className="games-section">
@@ -60,7 +95,7 @@ const GameCarousel = ({
           {badge && <span className="games-section__badge">{badge}</span>}
         </header>
       ) : null}
-      <div className="games-row" style={rowStyle}>
+      <div className="games-row" style={rowStyle} onScroll={handleRowScroll}>
         {games.map((game, index) => {
           const coverSrc = getCoverUrl(game)
           const description = getDescription(game)

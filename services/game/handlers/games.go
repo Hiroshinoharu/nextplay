@@ -11,6 +11,7 @@ import (
 
 // GET /api/games - retrieves a paged list of games
 func GetAllGames(c *fiber.Ctx) error {
+	// Parse query parameters for pagination and filtering options with default values and limits to prevent abuse and ensure reasonable defaults for the frontend and to avoid overwhelming the database with large requests
 	limit := c.QueryInt("limit", 50)
 	if limit <= 0 {
 		limit = 50
@@ -23,8 +24,9 @@ func GetAllGames(c *fiber.Ctx) error {
 		offset = 0
 	}
 	includeMedia := c.Query("include_media") == "true" || c.Query("include_media") == "1"
+	upcomingOnly := c.Query("upcoming") == "true" || c.Query("upcoming") == "1"
 
-	games, err := db.GetGames(limit, offset, includeMedia)
+	games, err := db.GetGames(limit, offset, includeMedia, upcomingOnly)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}

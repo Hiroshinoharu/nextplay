@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import GameCarousel from "./components/GameCarousel";
 import Lightbox from "./components/Lightbox";
@@ -27,6 +28,12 @@ type GameItem = {
 type GameMedia = {
   media_type?: string;
   url?: string;
+};
+
+type GamesPage = {
+  items: GameItem[];
+  page: number;
+  hasMore: boolean;
 };
 
 const dedupeGames = (items: GameItem[]) => {
@@ -95,33 +102,45 @@ const formatReleaseDate = (value?: string) => {
 function Games() {
   // Router and state hooks
   const navigate = useNavigate();
-  const [baseUrl] = useState<string>(API_ROOT);
-  const [games, setGames] = useState<GameItem[]>([]);
-  const [gamesError, setGamesError] = useState<string | null>(null);
-  const [gamesLoading, setGamesLoading] = useState<boolean>(false);
-  const [gamesLoadingMore, setGamesLoadingMore] = useState<boolean>(false);
-  const [hasMoreGames, setHasMoreGames] = useState<boolean>(true);
-  const [nextPage, setNextPage] = useState<number>(1);
+  const baseUrl = API_ROOT;
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [featuredGameId, setFeaturedGameId] = useState<number | null>(null);
   const [featuredDetail, setFeaturedDetail] = useState<GameItem | null>(null);
-  const pageSize = 200; // Number of games to fetch per page
+  const pageSize = 48; // Number of games to fetch per page for general lists
+  const upcomingPageSize = 24; // Number of unreleased games per page
   const maxGames = 0; // Maximum number of games to load in total
 
-  const fetchPage = useCallback(
-    async (page: number) => {
+  const fetchGamesPage = useCallback(
+    async ({
+      page,
+      limit,
+      upcomingOnly = false,
+      signal,
+    }: {
+      page: number;
+      limit: number;
+      upcomingOnly?: boolean;
+      signal?: AbortSignal;
+    }): Promise<GamesPage> => {
       // Ensure the base URL is properly formatted and does not have trailing slashes
       const trimmedBaseUrl = baseUrl.replace(/\/+$/, "");
       const root = trimmedBaseUrl.endsWith("/api")
         ? trimmedBaseUrl.slice(0, -4)
         : trimmedBaseUrl;
-      const offset = (page - 1) * pageSize;
+      const offset = (page - 1) * limit;
+      const query = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset),
+      });
+      if (upcomingOnly) {
+        query.set("upcoming", "true");
+      }
       console.debug(
-        `Fetching games from: ${root}/api/games?limit=${pageSize}&offset=${offset}`,
+        `Fetching games from: ${root}/api/games?${query.toString()}`,
       );
-      const url = `${root}/api/games?limit=${pageSize}&offset=${offset}`;
-      const response = await fetch(url);
+      const url = `${root}/api/games?${query.toString()}`;
+      const response = await fetch(url, { signal });
       if (!response.ok) {
         throw new Error(`API error: ${response.status} ${response.statusText}`);
       }
@@ -129,60 +148,104 @@ function Games() {
       if (!Array.isArray(data)) {
         throw new Error("Invalid API response: expected an array of games");
       }
-      return data as GameItem[];
+      return {
+        items: dedupeGames(data as GameItem[]),
+        page,
+        hasMore: data.length === limit,
+      };
     },
-    [baseUrl, pageSize],
+    [baseUrl],
   );
 
-  const loadGamesPage = useCallback(
-    async (page: number, mode: "replace" | "append") => {
-      if (mode === "replace") {
-        setGamesLoading(true);
-      } else {
-        setGamesLoadingMore(true);
+  // Use the useInfiniteQuery hook to manage fetching paginated game data, with support for loading more pages and handling errors
+  const {
+    data: gamesData,
+    error: gamesQueryError,
+    isPending: gamesLoading,
+    isFetchingNextPage: gamesLoadingMore,
+    hasNextPage,
+    fetchNextPage,
+    refetch: refetchGames,
+  } = useInfiniteQuery<GamesPage, Error>({
+    queryKey: ["games", baseUrl, pageSize] as const,
+    queryFn: ({ pageParam, signal }) =>
+      fetchGamesPage({
+        page: pageParam as number,
+        limit: pageSize,
+        signal,
+      }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage.hasMore ? lastPage.page + 1 : undefined,
+    staleTime: 60_000,
+  });
+
+  const {
+    data: upcomingData,
+    error: upcomingQueryError,
+    isPending: upcomingLoading,
+    isFetchingNextPage: upcomingLoadingMore,
+    hasNextPage: hasMoreUpcomingGames,
+    fetchNextPage: fetchNextUpcomingPage,
+    refetch: refetchUpcomingGames,
+  } = useInfiniteQuery<GamesPage, Error>({
+    queryKey: ["games-upcoming", baseUrl, upcomingPageSize] as const,
+    queryFn: ({ pageParam, signal }) =>
+      fetchGamesPage({
+        page: pageParam as number,
+        limit: upcomingPageSize,
+        upcomingOnly: true,
+        signal,
+      }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage.hasMore ? lastPage.page + 1 : undefined,
+    staleTime: 60_000,
+  });
+
+  const games = useMemo(() => {
+    const pages = gamesData?.pages ?? [];
+    let merged: GameItem[] = [];
+    for (const page of pages) {
+      merged = mergeUniqueGames(merged, page.items);
+      if (maxGames > 0 && merged.length >= maxGames) {
+        return merged.slice(0, maxGames);
       }
-      setGamesError(null);
-      try {
-        const data = await fetchPage(page);
-        setGames((previous) => {
-          const merged =
-            mode === "replace"
-              ? dedupeGames(data)
-              : mergeUniqueGames(previous, dedupeGames(data));
-          const capped = maxGames > 0 ? merged.slice(0, maxGames) : merged;
-          const reachedCap = maxGames > 0 && merged.length >= maxGames;
-          setHasMoreGames(!reachedCap && data.length === pageSize);
-          setNextPage(page + 1);
-          return capped;
-        });
-      } catch (error: unknown) {
-        setGamesError(
-          error instanceof Error
-            ? error.message
-            : "An unknown error occurred while loading games.",
-        );
-      } finally {
-        if (mode === "replace") {
-          setGamesLoading(false);
-        } else {
-          setGamesLoadingMore(false);
-        }
-      }
-    },
-    [fetchPage, maxGames, pageSize],
-  );
+    }
+    return merged;
+  }, [gamesData?.pages, maxGames]);
+
+  const upcomingGames = useMemo(() => {
+    const pages = upcomingData?.pages ?? [];
+    let merged: GameItem[] = [];
+    for (const page of pages) {
+      merged = mergeUniqueGames(merged, page.items);
+    }
+    return merged;
+  }, [upcomingData?.pages]);
+
+  const gamesError = gamesQueryError?.message ?? upcomingQueryError?.message ?? null;
+  const hasMoreGames = Boolean(hasNextPage);
+  const hasMoreUpcoming = Boolean(hasMoreUpcomingGames);
 
   const loadMoreGames = useCallback(async () => {
     if (!hasMoreGames || gamesLoadingMore || gamesLoading) return;
-    await loadGamesPage(nextPage, "append");
-  }, [hasMoreGames, gamesLoadingMore, gamesLoading, loadGamesPage, nextPage]);
+    await fetchNextPage();
+  }, [fetchNextPage, hasMoreGames, gamesLoadingMore, gamesLoading]);
 
-  useEffect(() => {
-    // Load the list of games when the gamesUrl changes
-    loadGamesPage(1, "replace");
-  }, [loadGamesPage]);
+  const loadMoreUpcomingGames = useCallback(async () => {
+    if (!hasMoreUpcoming || upcomingLoadingMore || upcomingLoading) return;
+    await fetchNextUpcomingPage();
+  }, [
+    fetchNextUpcomingPage,
+    hasMoreUpcoming,
+    upcomingLoading,
+    upcomingLoadingMore,
+  ]);
 
+  // useEffect for displaying error messages as toast notifications when the gamesError state changes
   useEffect(() => {
+    // If there is no error message, do not display a toast
     const message = gamesError;
     if (!message) return;
     setToastMessage(message);
@@ -287,26 +350,9 @@ function Games() {
         .filter((screenshot): screenshot is string => Boolean(screenshot));
   const carouselCover = (game: GameItem) => normalizeMediaUrl(game.cover_image);
 
-  // Filter upcoming games based on release date
-  const upcomingGames = useMemo(() => {
-    const now = new Date();
-    return games
-      .filter((game) => {
-        const date = parseReleaseDate(game.release_date);
-        return Boolean(date && date > now);
-      })
-      .sort((a, b) => {
-        const dateA = parseReleaseDate(a.release_date);
-        const dateB = parseReleaseDate(b.release_date);
-        if (!dateA) return 1;
-        if (!dateB) return -1;
-        return dateA.getTime() - dateB.getTime();
-      });
-  }, [games]);
-
   // Prepare game lists for carousels
   const topTenGames = games.slice(0, 10);
-  const discoveryGames = games.slice(10, 20);
+  const discoveryGames = games.slice(10);
   const upcomingList = upcomingGames;
 
   const discoveryList = discoveryGames.length
@@ -396,10 +442,14 @@ function Games() {
                   <button
                     type="button"
                     className="games-hero__button games-hero__button--ghost"
-                    onClick={() => void loadGamesPage(1, "replace")}
-                    disabled={gamesLoading}
+                    onClick={() => {
+                      void Promise.all([refetchGames(), refetchUpcomingGames()]);
+                    }}
+                    disabled={gamesLoading || upcomingLoading}
                   >
-                    {gamesLoading ? "Refreshing..." : "Refresh list"}
+                    {gamesLoading || upcomingLoading
+                      ? "Refreshing..."
+                      : "Refresh list"}
                   </button>
                 </div>
               </>
@@ -439,6 +489,9 @@ function Games() {
             onSelect={openGameDetail}
             getCoverUrl={carouselCover}
             itemWidth={190}
+            onLoadMore={loadMoreUpcomingGames}
+            canLoadMore={hasMoreUpcoming}
+            isLoadingMore={upcomingLoadingMore}
             getDescription={(game) =>
               formatReleaseDate(game.release_date)
                 ? `Release: ${formatReleaseDate(game.release_date)}`
@@ -466,6 +519,9 @@ function Games() {
             onSelect={openGameDetail}
             getCoverUrl={carouselCover}
             itemWidth={190}
+            onLoadMore={loadMoreGames}
+            canLoadMore={hasMoreGames}
+            isLoadingMore={gamesLoadingMore}
             getDescription={(game) =>
               [
                 formatReleaseDate(game.release_date)
@@ -478,20 +534,6 @@ function Games() {
             }
           />
 
-          <div className="games-pagination" aria-live="polite">
-            <button
-              className="games-pagination__button"
-              type="button"
-              onClick={loadMoreGames}
-              disabled={!hasMoreGames || gamesLoadingMore || gamesLoading}
-            >
-              {gamesLoadingMore
-                ? "Loading more..."
-                : hasMoreGames
-                  ? `Load more (${nextPage})`
-                  : "No more games"}
-            </button>
-          </div>
         </main>
         <SiteFooter />
       </div>
