@@ -16,6 +16,10 @@ type GameItem = {
   release_date?: string;
   genre?: string;
   cover_image?: string;
+  nsfw?: boolean;
+  is_nsfw?: boolean;
+  adult?: boolean;
+  age_rating?: string | number;
 };
 
 type SearchPageResult = {
@@ -62,6 +66,35 @@ const shuffleGames = (items: GameItem[]) => {
   return out;
 };
 
+// This parseGenres the genre string from the API, which may be a comma-separated list, and returns the first genre for display in the carousel description.
+const parseGenres = (value?: string) => {
+  if (!value) return [] as string[];
+  const unique = new Set<string>();
+  value
+    .split(/[,/|]/)
+    .map((part) => collapseWhitespace(part))
+    .filter(Boolean)
+    .forEach((part) => unique.add(part));
+  return Array.from(unique);
+};
+
+const NSFW_TEXT_MATCHER = /\b(nsfw|adult|erotic|hentai|porn|sexual|femboy|eroge)\b/i;
+
+const isNsfwGame = (game: GameItem) => {
+  if (game.nsfw || game.is_nsfw || game.adult) return true;
+  const ageRatingText = String(game.age_rating ?? "");
+  const metadataText = [game.name, game.genre, ageRatingText]
+    .filter(Boolean)
+    .join(" ");
+  return NSFW_TEXT_MATCHER.test(metadataText);
+};
+
+type DiscoverCarousel = {
+  title: string;
+  badge: string;
+  games: GameItem[];
+};
+
 function DiscoverPage() {
   const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState<string>("");
@@ -71,8 +104,18 @@ function DiscoverPage() {
   const searchPageSize = 24;
   const searchOffset = (searchPage - 1) * searchPageSize;
 
-  const { data: searchData, isPending, isFetching, error } = useQuery<SearchPageResult, Error>({
-    queryKey: ["discover-search-page", normalizedSearchQuery, searchPage, searchPageSize] as const,
+  const {
+    data: searchData,
+    isPending,
+    isFetching,
+    error,
+  } = useQuery<SearchPageResult, Error>({
+    queryKey: [
+      "discover-search-page",
+      normalizedSearchQuery,
+      searchPage,
+      searchPageSize,
+    ] as const,
     enabled: normalizedSearchQuery.length >= 1,
     queryFn: async ({ signal }) => {
       const query = new URLSearchParams({
@@ -82,9 +125,12 @@ function DiscoverPage() {
         offset: String(searchOffset),
         include_media: "1",
       });
-      const response = await fetch(`${API_ROOT}/api/games/search?${query.toString()}`, {
-        signal,
-      });
+      const response = await fetch(
+        `${API_ROOT}/api/games/search?${query.toString()}`,
+        {
+          signal,
+        },
+      );
       if (!response.ok) {
         const body = await response.text();
         throw new Error(`Search failed (${response.status}): ${body}`);
@@ -104,7 +150,8 @@ function DiscoverPage() {
 
   const cards = useMemo(() => searchData?.items ?? [], [searchData?.items]);
   const hasMoreSearchResults = Boolean(searchData?.hasMore);
-  const isLiveSearching = (isPending || isFetching) && normalizedSearchQuery.length > 0;
+  const isLiveSearching =
+    (isPending || isFetching) && normalizedSearchQuery.length > 0;
   const handleSearchSubmit = useCallback(() => {
     setSearchPage(1);
     setSearchQuery(collapseWhitespace(searchInput));
@@ -132,7 +179,10 @@ function DiscoverPage() {
         limit: "0",
         include_media: "1",
       });
-      const response = await fetch(`${API_ROOT}/api/games?${query.toString()}`, { signal });
+      const response = await fetch(
+        `${API_ROOT}/api/games?${query.toString()}`,
+        { signal },
+      );
       if (!response.ok) {
         throw new Error(`Random feed failed (${response.status})`);
       }
@@ -145,10 +195,11 @@ function DiscoverPage() {
     staleTime: 5 * 60_000,
   });
 
-  const randomCarousels = useMemo(() => {
-    if (!randomPool.length) return [] as Array<{ title: string; badge: string; games: GameItem[] }>;
-    const shuffled = shuffleGames(randomPool);
-    const defs = [
+  const discoverCarousels = useMemo(() => {
+    const safePool = randomPool.filter((game) => !isNsfwGame(game));
+    if (!safePool.length) return [] as DiscoverCarousel[];
+    const shuffled = shuffleGames(safePool);
+    const moodDefs = [
       { title: "Random Picks", badge: "Shuffle" },
       { title: "Hidden Gems", badge: "Mix" },
       { title: "Wildcard Queue", badge: "Lucky" },
@@ -156,13 +207,66 @@ function DiscoverPage() {
       { title: "Unplanned Marathon", badge: "Chaos" },
     ];
     const pageSize = 20;
-    return defs
+    const moodRows = moodDefs
       .map((def, index) => {
         const start = index * pageSize;
         const games = shuffled.slice(start, start + pageSize);
         return { ...def, games };
       })
       .filter((section) => section.games.length > 0);
+
+    const genreBuckets = new Map<string, GameItem[]>();
+    safePool.forEach((game) => {
+      parseGenres(game.genre).forEach((genre) => {
+        const bucket = genreBuckets.get(genre) ?? [];
+        bucket.push(game);
+        genreBuckets.set(genre, bucket);
+      });
+    });
+
+    const genreRows = Array.from(genreBuckets.entries())
+      .filter(([, games]) => games.length >= 4)
+      .sort((a, b) => b[1].length - a[1].length)
+      .slice(0, 6)
+      .map(([genre, games]) => ({
+        title: `${genre} Spotlights`,
+        badge: "Genre",
+        games: shuffleGames(games).slice(0, pageSize),
+      }))
+      .filter((section) => section.games.length > 0);
+
+    const recentHits = [...safePool]
+      .filter((game) => Boolean(game.release_date))
+      .sort((a, b) => {
+        const left = new Date(a.release_date!).getTime();
+        const right = new Date(b.release_date!).getTime();
+        return right - left;
+      })
+      .slice(0, pageSize);
+
+    const alphabeticQueue = [...safePool]
+      .filter((game) => Boolean(game.release_date))
+      .sort((a, b) => {
+        a.name = a.name ?? "";
+        b.name = b.name ?? "";
+        return a.name.localeCompare(b.name);
+      })
+      .slice(0, pageSize);
+
+    const specialRows: DiscoverCarousel[] = [
+      {
+        title: "Recently Released",
+        badge: "New",
+        games: recentHits,
+      },
+      {
+        title: "A-Z Queue",
+        badge: "A-Z",
+        games: alphabeticQueue,
+      },
+    ].filter((section) => section.games.length > 0);
+
+    return [...moodRows, ...genreRows, ...specialRows];
   }, [randomPool]);
 
   const handlePreviousSearchPage = useCallback(() => {
@@ -210,7 +314,10 @@ function DiscoverPage() {
 
         <main className="search-content">
           <div className="search-layout">
-            <section className="search-results search-results--full" aria-live="polite">
+            <section
+              className="search-results search-results--full"
+              aria-live="polite"
+            >
               {error && <div className="search-error">{error.message}</div>}
               <section className="games-search-results" aria-live="polite">
                 {normalizedSearchQuery ? (
@@ -232,7 +339,10 @@ function DiscoverPage() {
               </section>
 
               {normalizedSearchQuery ? (
-                <section className="games-search-grid-section" aria-live="polite">
+                <section
+                  className="games-search-grid-section"
+                  aria-live="polite"
+                >
                   {cards.length ? (
                     <div className="games-search-grid">
                       {cards.map((game) => (
@@ -257,10 +367,12 @@ function DiscoverPage() {
                     </div>
                   ) : (
                     <p className="games-search-grid__empty">
-                      No games matched that query. Try a shorter or broader term.
+                      No games matched that query. Try a shorter or broader
+                      term.
                     </p>
                   )}
-                  {cards.length > 0 && (searchPage > 1 || hasMoreSearchResults) ? (
+                  {cards.length > 0 &&
+                  (searchPage > 1 || hasMoreSearchResults) ? (
                     <div className="games-pagination">
                       <button
                         type="button"
@@ -288,7 +400,7 @@ function DiscoverPage() {
 
               {!normalizedSearchQuery ? (
                 <div className="discover-random">
-                  {randomCarousels.map((section) => (
+                  {discoverCarousels.map((section) => (
                     <GameCarousel
                       key={section.title}
                       title={section.title}

@@ -195,9 +195,7 @@ function Game() {
     .map((name) => collapseWhitespace(name))
     .filter(Boolean)
     .join(', ')
-  const platformsText = platformsTextFull
-    ? platformsTextFull
-    : 'n/a'
+  const platformsText = platformsTextFull || 'n/a'
 
   return (
     <div className="game-page">
@@ -209,6 +207,7 @@ function Game() {
           </div>
           <div className="game-header__actions">
             <Button label="Back to games" showIcon={false} onClick={() => navigate('/games')} />
+            <Button label='Back to Discover' showIcon={false} onClick={() => navigate('/discover')} />
           </div>
         </header>
 

@@ -29,6 +29,10 @@ type GameItem = {
   total_rating?: number;
   total_rating_count?: number;
   media?: GameMedia[];
+  nsfw?: boolean;
+  is_nsfw?: boolean;
+  adult?: boolean;
+  age_rating?: string | number;
 };
 
 type GameMedia = {
@@ -132,6 +136,48 @@ const getEffectiveRatingCount = (game: GameItem) =>
 
 const getEffectiveRating = (game: GameItem) =>
   Math.max(game.aggregated_rating ?? 0, game.total_rating ?? 0);
+
+const NSFW_TERMS = [
+  "nsfw",
+  "adult",
+  "erotic",
+  "hentai",
+  "porn",
+  "porno",
+  "sexual",
+  "sex",
+  "lust",
+  "lustful",
+  "lewd",
+  "fetish",
+  "brothel",
+  "succubus",
+  "ecchi",
+  "uncensored",
+  "r18",
+  "18+",
+  "xxx",
+  "cumming",
+  "cum",
+  "nude",
+  "nudity",
+  "milf",
+  "onlyfans",
+  "artificial academy",
+];
+
+const normalizeFilterText = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9+]+/g, " ").trim();
+
+const isNsfwGame = (game: GameItem) => {
+  if (game.nsfw || game.is_nsfw || game.adult) return true;
+  const ageRatingText = String(game.age_rating ?? "");
+  const metadataText = [game.name, game.genre, ageRatingText]
+    .filter(Boolean)
+    .join(" ");
+  const normalizedText = normalizeFilterText(metadataText);
+  return NSFW_TERMS.some((term) => normalizedText.includes(term));
+};
 
 type HeroMediaSource = "artwork" | "screenshot" | "cover";
 
@@ -497,10 +543,11 @@ function Games() {
 
   // useCallback function for opening the lightbox to display a selected media item, with logic to determine the index of the selected media within the list of featured media candidates and to set the lightbox index accordingly, providing an immersive experience for users as they view game media in a larger format while ensuring that the correct media item is displayed based on user interaction
   const featuredCandidates = useMemo(() => {
-    const withReleaseDates = filteredGames.filter((game) =>
+    const safePool = filteredGames.filter((game) => !isNsfwGame(game));
+    const withReleaseDates = safePool.filter((game) =>
       Boolean(parseReleaseDate(game.release_date)),
     );
-    return withReleaseDates.length ? withReleaseDates : filteredGames;
+    return withReleaseDates.length ? withReleaseDates : safePool;
   }, [filteredGames]);
 
   // useEffect for selecting a featured game when the list of featured candidates changes, with logic to maintain the current featured game if it is still in the list of candidates or to randomly select a new featured game if the current one is no longer available, ensuring that the hero section of the page remains dynamic and engaging while also providing consistency for users as they explore the game library
@@ -886,10 +933,27 @@ function Games() {
   }, []);
 
   // Prepare game lists for carousels
-  const releasedGames = useMemo(
-    () =>  filteredGames.filter((game) => isReleasedGames(game)),
+  const safeFilteredGames = useMemo(
+    () => filteredGames.filter((game) => !isNsfwGame(game)),
     [filteredGames],
-    );
+  );
+  const safeFilteredUpcomingGames = useMemo(
+    () => filteredUpcomingGames.filter((game) => !isNsfwGame(game)),
+    [filteredUpcomingGames],
+  );
+  const safeTopAllTimeGames = useMemo(
+    () => topAllTimeGames.filter((game) => !isNsfwGame(game)),
+    [topAllTimeGames],
+  );
+  const safeRecentPopularGames = useMemo(
+    () => recentPopularGames.filter((game) => !isNsfwGame(game)),
+    [recentPopularGames],
+  );
+
+  const releasedGames = useMemo(
+    () => safeFilteredGames.filter((game) => isReleasedGames(game)),
+    [safeFilteredGames],
+  );
   // The topTenGames list is created by slicing the first 10 games from the releasedGames list, which contains only games that have been released based on their release dates. This list is used for the "Top Ten" carousel to showcase a curated selection of recently released games, providing users with a quick overview of popular titles that are currently available to play.
   const topTenFallbackGames = useMemo(() => {
     const ranked = [...releasedGames]
@@ -905,20 +969,20 @@ function Games() {
       });
     return ranked.slice(0, 10);
   }, [releasedGames]);
-  const topTenGames = topAllTimeGames.length
-    ? topAllTimeGames
+  const topTenGames = safeTopAllTimeGames.length
+    ? safeTopAllTimeGames
     : topTenFallbackGames;
-  const upcomingList = filteredUpcomingGames;
+  const upcomingList = safeFilteredUpcomingGames;
 
   // The trendingList is determined by checking if there are any recent popular games available. If there are, it uses that list; otherwise, 
   // it falls back to using the first 10 games from the discovery list. This logic ensures that the "Trending" carousel always has content to display, 
   // prioritizing recent popular games when available while still providing a fallback option to maintain an engaging user experience.
   const trendingList = useMemo(
     () => 
-      recentPopularGames.length
-        ? recentPopularGames
+      safeRecentPopularGames.length
+        ? safeRecentPopularGames
         : releasedGames.slice(0, 10),
-    [recentPopularGames, releasedGames],
+    [safeRecentPopularGames, releasedGames],
   );
 
   const closeLightbox = useCallback(() => {

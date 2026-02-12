@@ -8,6 +8,10 @@ type GameCarouselItem = {
   release_date?: string
   genre?: string
   cover_image?: string
+  nsfw?: boolean
+  is_nsfw?: boolean
+  adult?: boolean
+  age_rating?: string | number
 }
 
 type GameCarouselProps = {
@@ -42,6 +46,48 @@ const defaultCoverUrl = (game: GameCarouselItem) => {
 const defaultDescription = (game: GameCarouselItem) =>
   game.release_date ? `Release: ${game.release_date}` : 'Release: n/a'
 
+const NSFW_TERMS = [
+  'nsfw',
+  'adult',
+  'erotic',
+  'hentai',
+  'porn',
+  'porno',
+  'sexual',
+  'sex',
+  'lust',
+  'lustful',
+  'lewd',
+  'fetish',
+  'brothel',
+  'succubus',
+  'ecchi',
+  'uncensored',
+  'r18',
+  '18+',
+  'xxx',
+  'cumming',
+  'cum',
+  'nude',
+  'nudity',
+  'milf',
+  'onlyfans',
+  'artificial academy',
+]
+
+const normalizeFilterText = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9+]+/g, ' ').trim()
+
+const isNsfwGame = (game: GameCarouselItem) => {
+  if (game.nsfw || game.is_nsfw || game.adult) return true
+  const ageRatingText = String(game.age_rating ?? '')
+  const metadataText = [game.name, game.genre, ageRatingText]
+    .filter(Boolean)
+    .join(' ')
+  const normalizedText = normalizeFilterText(metadataText)
+  return NSFW_TERMS.some((term) => normalizedText.includes(term))
+}
+
 const GameCarousel = ({
   title,
   badge,
@@ -61,23 +107,27 @@ const GameCarousel = ({
   const rowStyle: CSSProperties = { ...baseRowStyle, gap }
   const itemStyle: CSSProperties = { flex: `0 0 ${itemWidth}px` }
   const hasTriggeredNearEndRef = useRef(false)
+  const safeGames = useMemo(
+    () => games.filter((game) => !isNsfwGame(game)),
+    [games],
+  )
   const carouselItems = useMemo(
     () =>
-      games.map((game, index) => ({
+      safeGames.map((game, index) => ({
         key: `${game.id ?? 'game'}-${index}`,
         game,
         index,
         coverSrc: getCoverUrl(game),
         description: getDescription(game),
       })),
-    [games, getCoverUrl, getDescription],
+    [safeGames, getCoverUrl, getDescription],
   )
 
   useEffect(() => {
     if (!isLoadingMore) {
       hasTriggeredNearEndRef.current = false
     }
-  }, [isLoadingMore, games.length])
+  }, [isLoadingMore, safeGames.length])
 
   const handleRowScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
