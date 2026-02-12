@@ -206,11 +206,13 @@ function DiscoverPage() {
       { title: "Tonight's Roulette", badge: "Spin" },
       { title: "Unplanned Marathon", badge: "Chaos" },
     ];
-    const pageSize = 20;
     const moodRows = moodDefs
       .map((def, index) => {
-        const start = index * pageSize;
-        const games = shuffled.slice(start, start + pageSize);
+        const offset = safePool.length > 0 ? index % safePool.length : 0;
+        const games =
+          offset > 0
+            ? [...shuffled.slice(offset), ...shuffled.slice(0, offset)]
+            : shuffled;
         return { ...def, games };
       })
       .filter((section) => section.games.length > 0);
@@ -231,7 +233,7 @@ function DiscoverPage() {
       .map(([genre, games]) => ({
         title: `${genre} Spotlights`,
         badge: "Genre",
-        games: shuffleGames(games).slice(0, pageSize),
+        games: shuffleGames(games),
       }))
       .filter((section) => section.games.length > 0);
 
@@ -241,8 +243,7 @@ function DiscoverPage() {
         const left = new Date(a.release_date!).getTime();
         const right = new Date(b.release_date!).getTime();
         return right - left;
-      })
-      .slice(0, pageSize);
+      });
 
     const alphabeticQueue = [...safePool]
       .filter((game) => Boolean(game.release_date))
@@ -250,8 +251,7 @@ function DiscoverPage() {
         a.name = a.name ?? "";
         b.name = b.name ?? "";
         return a.name.localeCompare(b.name);
-      })
-      .slice(0, pageSize);
+      });
 
     const specialRows: DiscoverCarousel[] = [
       {

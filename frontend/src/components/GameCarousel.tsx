@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode, UIEvent } from 'react'
 import Card from './card'
 
@@ -107,45 +107,72 @@ const GameCarousel = ({
   const rowStyle: CSSProperties = { ...baseRowStyle, gap }
   const itemStyle: CSSProperties = { flex: `0 0 ${itemWidth}px` }
   const hasTriggeredNearEndRef = useRef(false)
+  const [visibleCount, setVisibleCount] = useState(20)
   const safeGames = useMemo(
     () => games.filter((game) => !isNsfwGame(game)),
     [games],
   )
+  const pageSize = 20
+
+  useEffect(() => {
+    setVisibleCount(pageSize)
+  }, [safeGames.length, setVisibleCount])
+
+  const visibleGames = useMemo(
+    () => safeGames.slice(0, Math.max(pageSize, visibleCount)),
+    [pageSize, safeGames, visibleCount],
+  )
+
   const carouselItems = useMemo(
     () =>
-      safeGames.map((game, index) => ({
+      visibleGames.map((game, index) => ({
         key: `${game.id ?? 'game'}-${index}`,
         game,
         index,
         coverSrc: getCoverUrl(game),
         description: getDescription(game),
       })),
-    [safeGames, getCoverUrl, getDescription],
+    [getCoverUrl, getDescription, visibleGames],
   )
 
   useEffect(() => {
     if (!isLoadingMore) {
       hasTriggeredNearEndRef.current = false
     }
-  }, [isLoadingMore, safeGames.length])
+  }, [isLoadingMore, safeGames.length, visibleGames.length])
 
   const handleRowScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
-      if (!onLoadMore || !canLoadMore || isLoadingMore) return
       const row = event.currentTarget
       const remaining = row.scrollWidth - row.scrollLeft - row.clientWidth
       const isNearEnd = remaining <= loadMoreThreshold
+
+      if (isNearEnd && visibleGames.length < safeGames.length) {
+        setVisibleCount((current) => Math.min(current + pageSize, safeGames.length))
+      }
+
+      if (!onLoadMore || !canLoadMore || isLoadingMore) return
 
       if (!isNearEnd) {
         hasTriggeredNearEndRef.current = false
         return
       }
 
+      if (visibleGames.length < safeGames.length) return
       if (hasTriggeredNearEndRef.current) return
       hasTriggeredNearEndRef.current = true
       void onLoadMore()
     },
-    [canLoadMore, isLoadingMore, loadMoreThreshold, onLoadMore],
+    [
+      canLoadMore,
+      isLoadingMore,
+      loadMoreThreshold,
+      onLoadMore,
+      pageSize,
+      safeGames.length,
+      setVisibleCount,
+      visibleGames.length,
+    ],
   )
 
   return (
@@ -156,7 +183,11 @@ const GameCarousel = ({
           {badge && <span className="games-section__badge">{badge}</span>}
         </header>
       ) : null}
-      <div className="games-row" style={rowStyle} onScroll={handleRowScroll}>
+      <div
+        className="games-row"
+        style={rowStyle}
+        onScroll={handleRowScroll}
+      >
         {carouselItems.map(({ key, game, index, coverSrc, description }) => {
           return (
             <div

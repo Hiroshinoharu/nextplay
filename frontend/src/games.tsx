@@ -219,7 +219,7 @@ function Games() {
       "top_min_rating_count",
     );
     const parsed = Number(raw);
-    if (!Number.isFinite(parsed) || parsed < 0) return 50;
+    if (!Number.isFinite(parsed) || parsed < 1) return 50;
     return Math.floor(parsed);
   }, []);
   const topPriorVotes = useMemo(() => {
@@ -395,11 +395,11 @@ function Games() {
         ? trimmedBaseUrl.slice(0, -4)
         : trimmedBaseUrl;
       const query = new URLSearchParams({
-        limit: "10",
+        limit: "50",
         min_rating_count: String(topMinRatingCount),
         prior_votes: String(topPriorVotes),
         popularity_weight: String(topPopularityWeight),
-        include_media: "1",
+        include_media: "0",
       });
       const response = await fetch(`${root}/api/games/top?${query.toString()}`, {
         signal,
@@ -967,7 +967,7 @@ function Games() {
         if (popularityDiff !== 0) return popularityDiff;
         return a.id - b.id;
       });
-    return ranked.slice(0, 10);
+    return ranked;
   }, [releasedGames]);
   const topTenGames = safeTopAllTimeGames.length
     ? safeTopAllTimeGames
@@ -981,7 +981,7 @@ function Games() {
     () => 
       safeRecentPopularGames.length
         ? safeRecentPopularGames
-        : releasedGames.slice(0, 10),
+        : releasedGames,
     [safeRecentPopularGames, releasedGames],
   );
 
@@ -1235,7 +1235,7 @@ function Games() {
               />
 
               <GameCarousel
-                title="Top 10 of all time"
+                title="Top Rated of all time"
                 badge="Ranked"
                 games={topTenGames}
                 onSelect={openGameDetail}
