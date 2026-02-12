@@ -179,7 +179,7 @@ const normalizeFilterText = (value: string) =>
 
 // A more comprehensive list of NSFW terms to check against game metadata for filtering out adult content from random carousels. This is still not perfect but should catch a wider range of explicit content based on common terminology.
 const NON_BASE_CONTENT_MATCHER =
-  /\b(dlc|downloadable content|expansion|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|starter pack|founder'?s pack|cosmetic pack|additional| difficulty | skin set | limited edition| deluxe | Ssason)\b/i;
+  /\b(dlc|downloadable content|expansion(?: pack)?|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|character pass|battle pass|starter pack|founder'?s pack|cosmetic(?: pack)?|skin(?: pack| set)?|costume(?: pack)?|outfit(?: pack)?|upgrade pack|item pack|consumable pack|limited edition|deluxe edition upgrade|ultimate edition upgrade)\b/i;
 
 const isNsfwGame = (game: GameItem) => {
   if (game.nsfw || game.is_nsfw || game.adult) return true;
@@ -211,6 +211,7 @@ function DiscoverPage() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchPage, setSearchPage] = useState<number>(1);
   const [rowSnapshots, setRowSnapshots] = useState<Record<string, number[]>>({});
+  const [loadingRowTitle, setLoadingRowTitle] = useState<string | null>(null);
   const [visibleGenreRows, setVisibleGenreRows] = useState<number>(INITIAL_GENRE_ROWS);
   const normalizedSearchQuery = collapseWhitespace(searchQuery);
   const searchPageSize = 24;
@@ -358,6 +359,82 @@ function DiscoverPage() {
       Math.max(game.aggregated_rating ?? 0, game.total_rating ?? 0);
 
     const orderedPool = stableOrderBySeed(safePool, "discover:pool");
+    // Create a "Wildcard Queue" carousel that surfaces a mix of highly-rated games with moderate visibility, 
+    // sorted by a combined score of rating and vote count to balance quality and obscurity. 
+    // This provides a unique discovery lane that can surface hidden gems that might be missed in a pure popularity sort,
+    //  while still maintaining a level of quality control through the rating threshold.
+    const wildcardPool = [...safePool]
+      .filter((game) => {
+        const votes = getVoteCount(game);
+        const rating = getRating(game);
+        return (
+          isReleasedGame(game) &&
+          rating >= 68 &&
+          votes >= 20 &&
+          votes <= 1200 &&
+          (game.popularity ?? 0) <= 1500
+        );
+      })
+      .sort((a, b) => {
+        const scoreA = getRating(a) - Math.log10((getVoteCount(a) || 1) + 1) * 4;
+        const scoreB = getRating(b) - Math.log10((getVoteCount(b) || 1) + 1) * 4;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        return hashString(`wildcard:${a.id}`) - hashString(`wildcard:${b.id}`);
+      });
+    const MARATHON_GENRE_MATCHER =
+      /\b(rpg|role[- ]?playing|strategy|simulation|sim|management|city builder|4x|grand strategy|turn[- ]based|sandbox|survival|crafting|open world|adventure)\b/i;
+    const scoreMarathon = (game: GameItem) =>
+      getRating(game) * 0.8 + Math.log10((getVoteCount(game) || 1) + 1) * 10;
+    const strictMarathon = [...safePool]
+      .filter((game) => {
+        const votes = getVoteCount(game);
+        const rating = getRating(game);
+        const metadata = [game.genre, game.description, game.name]
+          .filter(Boolean)
+          .join(" ");
+        return (
+          isReleasedGame(game) &&
+          MARATHON_GENRE_MATCHER.test(metadata) &&
+          rating >= 60 &&
+          votes >= 25 &&
+          (game.popularity ?? 0) <= 2200
+        );
+      })
+      .sort((a, b) => {
+        const scoreA = scoreMarathon(a);
+        const scoreB = scoreMarathon(b);
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        return hashString(`marathon:${a.id}`) - hashString(`marathon:${b.id}`);
+      });
+    const strictMarathonIds = new Set<number>(strictMarathon.map((game) => game.id));
+    const fallbackMarathon = [...safePool]
+      .filter((game) => {
+        if (strictMarathonIds.has(game.id)) return false;
+        if (!isReleasedGame(game)) return false;
+        const votes = getVoteCount(game);
+        const rating = getRating(game);
+        return rating >= 58 && votes >= 8 && (game.popularity ?? 0) <= 6000;
+      })
+      .sort((a, b) => {
+        const scoreA = scoreMarathon(a);
+        const scoreB = scoreMarathon(b);
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        return hashString(`marathon:fallback:${a.id}`) - hashString(`marathon:fallback:${b.id}`);
+      });
+    const marathonTarget = INITIAL_ROW_ITEMS;
+    const marathonPool = [...strictMarathon];
+    if (marathonPool.length < marathonTarget) {
+      marathonPool.push(...fallbackMarathon.slice(0, marathonTarget - marathonPool.length));
+    }
+    const marathonSeedIds = new Set<number>(marathonPool.map((game) => game.id));
+    const marathonSeedPool = [...marathonPool];
+    if (marathonSeedPool.length < marathonTarget) {
+      marathonSeedPool.push(
+        ...orderedPool
+          .filter((game) => !marathonSeedIds.has(game.id))
+          .slice(0, marathonTarget - marathonSeedPool.length),
+      );
+    }
 
     // Identify hidden gems as games that have a solid rating (70 or above) but relatively low visibility (fewer votes and lower popularity).
     const strictHiddenGems = [...safePool]
@@ -408,6 +485,14 @@ function DiscoverPage() {
     ];
     const moodRows = moodDefs
       .map((def, index) => {
+        if (def.title === "Wildcard Queue") {
+          const games = wildcardPool.length ? wildcardPool : orderedPool;
+          return { ...def, games };
+        }
+        if (def.title === "Unplanned Marathon") {
+          const games = marathonSeedPool.length ? marathonSeedPool : orderedPool;
+          return { ...def, games };
+        }
         const offset = safePool.length > 0 ? index % safePool.length : 0;
         const games =
           offset > 0
@@ -429,21 +514,74 @@ function DiscoverPage() {
     const genreRows = Array.from(genreBuckets.entries())
       .filter(([, games]) => games.length >= 4)
       .sort((a, b) => b[1].length - a[1].length)
-      .map(([genre, games]) => ({
-        title: `${genre} Spotlights`,
-        badge: "Genre",
-        games: stableOrderBySeed(games, `discover:genre:${genre}`),
-        rowType: "genre" as const,
-      }))
+      .map(([genre, games]) => {
+        const spotlightGames = [...games].sort((a, b) => {
+          const releasedA = isReleasedGame(a) ? 1 : 0;
+          const releasedB = isReleasedGame(b) ? 1 : 0;
+          if (releasedB !== releasedA) return releasedB - releasedA;
+          const ratingDiff = getRating(b) - getRating(a);
+          if (ratingDiff !== 0) return ratingDiff;
+          const votesDiff = getVoteCount(b) - getVoteCount(a);
+          if (votesDiff !== 0) return votesDiff;
+          const popularityDiff = (b.popularity ?? 0) - (a.popularity ?? 0);
+          if (popularityDiff !== 0) return popularityDiff;
+          return hashString(`genre:${genre}:${a.id}`) - hashString(`genre:${genre}:${b.id}`);
+        });
+        return {
+          title: `${genre} Spotlights`,
+          badge: "Genre",
+          games: spotlightGames,
+          rowType: "genre" as const,
+        };
+      })
       .filter((section) => section.games.length > 0);
-
+    
+    const now = new Date();
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(now.getMonth() - 1);
+    
+    const scoreRecentRelease = (game: GameItem) =>
+      getRating(game) * 0.9 + Math.log10((getVoteCount(game) || 1) + 1) * 10;
     const recentHits = [...safePool]
-      .filter((game) => Boolean(game.release_date))
+      .filter((game) => {
+        if (isNsfwGame(game) || isNonBaseContentGame(game)) return false;
+        if (!isReleasedGame(game, now)) return false;
+        if (!game.release_date) return false;
+        const releaseDate = new Date(game.release_date);
+        return releaseDate >= oneMonthAgo && releaseDate <= now;
+      })
       .sort((a, b) => {
+        const scoreA = scoreRecentRelease(a);
+        const scoreB = scoreRecentRelease(b);
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        const votesDiff = getVoteCount(b) - getVoteCount(a);
+        if (votesDiff !== 0) return votesDiff;
         const left = new Date(a.release_date!).getTime();
         const right = new Date(b.release_date!).getTime();
         return right - left;
       });
+    const recentTarget = INITIAL_ROW_ITEMS;
+    const recentIds = new Set<number>(recentHits.map((game) => game.id));
+    const recentFallback = [...safePool]
+      .filter((game) => {
+        if (recentIds.has(game.id)) return false;
+        if (isNsfwGame(game) || isNonBaseContentGame(game)) return false;
+        if (!isReleasedGame(game, now)) return false;
+        return Boolean(game.release_date);
+      })
+      .sort((a, b) => {
+        const left = new Date(a.release_date!).getTime();
+        const right = new Date(b.release_date!).getTime();
+        if (right !== left) return right - left;
+        const scoreA = scoreRecentRelease(a);
+        const scoreB = scoreRecentRelease(b);
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        return a.id - b.id;
+      });
+    const seededRecentHits = [...recentHits];
+    if (seededRecentHits.length < recentTarget) {
+      seededRecentHits.push(...recentFallback.slice(0, recentTarget - seededRecentHits.length));
+    }
 
     const alphabeticQueue = [...safePool]
       .filter((game) => Boolean(game.release_date))
@@ -465,7 +603,7 @@ function DiscoverPage() {
       {
         title: "Recently Released",
         badge: "New",
-        games: recentHits,
+        games: seededRecentHits,
       },
       {
         title: "A-Z Queue",
@@ -570,7 +708,12 @@ function DiscoverPage() {
       }
 
       if (!hasMoreRandomPool || randomPoolLoadingMore) return;
-      await fetchNextRandomPoolPage();
+      setLoadingRowTitle(title);
+      try {
+        await fetchNextRandomPoolPage();
+      } finally {
+        setLoadingRowTitle((current) => (current === title ? null : current));
+      }
     },
     [
       discoverCarouselsByTitle,
@@ -729,11 +872,12 @@ function DiscoverPage() {
                       itemWidth={190}
                       onLoadMore={() => loadMoreForRow(section.title)}
                       canLoadMore={localHasMore || Boolean(hasMoreRandomPool)}
-                      isLoadingMore={randomPoolLoadingMore}
+                      isLoadingMore={
+                        localHasMore
+                          ? false
+                          : randomPoolLoadingMore && loadingRowTitle === section.title
+                      }
                       loadMoreThreshold={420}
-                      isolateRendering
-                      initialVisibleItems={INITIAL_ROW_ITEMS}
-                      visibleItemsStep={ROW_STEP_ITEMS}
                       navStepItems={2}
                       showLaneStatus
                       laneLoadingText="Loading more games..."

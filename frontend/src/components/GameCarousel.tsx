@@ -98,6 +98,8 @@ const GameCarousel = ({
   const rowRef = useRef<HTMLDivElement | null>(null)
   const hasTriggeredNearEndRef = useRef(false)
   const hasExtendedNearEndRef = useRef(false)
+  const hasTriggeredNoOverflowLoadRef = useRef(false)
+  const nearEndActiveRef = useRef(false)
   const [loopState, setLoopState] = useState<{ sourceKey: string; extraCycles: number }>({
     sourceKey: '',
     extraCycles: 0,
@@ -113,14 +115,15 @@ const GameCarousel = ({
 
   const displayGames = useMemo(
     () => {
-      if (showRank || safeGames.length <= 1) return safeGames
+      if (showRank || safeGames.length <= 1 || !enableInfiniteScroll) return safeGames
       const extraCycles = loopState.sourceKey === sourceKey ? loopState.extraCycles : 0
+      if (extraCycles <= 0) return safeGames
       const cycles = Array.from({ length: 1 + extraCycles }, () =>
         shuffleItems(safeGames),
       )
       return cycles.flat()
     },
-    [loopState.extraCycles, loopState.sourceKey, safeGames, showRank, sourceKey],
+    [enableInfiniteScroll, loopState.extraCycles, loopState.sourceKey, safeGames, showRank, sourceKey],
   )
 
   const carouselItems = useMemo(
@@ -169,17 +172,38 @@ const GameCarousel = ({
     }
   }, [displayGames.length, isLoadingMore, safeGames.length])
 
+  useEffect(() => {
+    const row = rowRef.current
+    if (!row || !onLoadMore || !canLoadMore || isLoadingMore) return
+    if (hasTriggeredNoOverflowLoadRef.current) return
+
+    const hasHorizontalOverflow = row.scrollWidth > row.clientWidth + 1
+    if (hasHorizontalOverflow) return
+
+    // Fire at most once for non-overflow rows to avoid continuous load loops.
+    hasTriggeredNoOverflowLoadRef.current = true
+    void onLoadMore()
+  }, [canLoadMore, carouselItems.length, isLoadingMore, onLoadMore])
+
   const handleRowScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
       const row = event.currentTarget
       const remaining = row.scrollWidth - row.scrollLeft - row.clientWidth
-      const isNearEnd = remaining <= loadMoreThreshold
+      const enterThreshold = loadMoreThreshold
+      const exitThreshold =
+        loadMoreThreshold + Math.max(96, Math.round((itemWidth + gap) * 0.6))
+      const isNearEnd = remaining <= enterThreshold
+      const isFarFromEnd = remaining > exitThreshold
 
-      if (!isNearEnd) {
+      if (isFarFromEnd) {
+        nearEndActiveRef.current = false
         hasExtendedNearEndRef.current = false
         hasTriggeredNearEndRef.current = false
         return
       }
+      if (!isNearEnd) return
+      if (nearEndActiveRef.current) return
+      nearEndActiveRef.current = true
 
       if (
         isolateRendering &&
@@ -220,6 +244,8 @@ const GameCarousel = ({
       isolateRendering,
       isLoadingMore,
       loadMoreThreshold,
+      gap,
+      itemWidth,
       onLoadMore,
       carouselItems.length,
       safeGames,

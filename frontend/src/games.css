@@ -550,6 +550,11 @@
   display: flex;
   gap: 16px;
   overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: none;
+  scrollbar-gutter: stable both-edges;
+  touch-action: pan-x;
   padding: 14px 4px 20px;
   scroll-snap-type: x mandatory;
   scroll-snap-stop: always;
@@ -604,6 +609,10 @@
 .games-row::-webkit-scrollbar-thumb {
   background: rgba(140, 243, 122, 0.5);
   border-radius: 999px;
+}
+
+.games-row::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .games-item {
