@@ -32,6 +32,14 @@ type GameCarouselProps = {
   canLoadMore?: boolean
   isLoadingMore?: boolean
   loadMoreThreshold?: number
+  enableInfiniteScroll?: boolean
+  isolateRendering?: boolean
+  initialVisibleItems?: number
+  visibleItemsStep?: number
+  navStepItems?: number
+  showLaneStatus?: boolean
+  laneLoadingText?: string
+  laneEndText?: string
 }
 
 // Base styles for the carousel row, with horizontal scrolling and no wrapping
@@ -76,15 +84,27 @@ const GameCarousel = ({
   canLoadMore = false,
   isLoadingMore = false,
   loadMoreThreshold = 220,
+  enableInfiniteScroll = false,
+  isolateRendering = false,
+  initialVisibleItems = 24,
+  visibleItemsStep = 24,
+  navStepItems = 2,
+  showLaneStatus = false,
+  laneLoadingText = 'Loading more...',
+  laneEndText = 'No more games in this lane.',
 }: GameCarouselProps) => {
   const rowStyle: CSSProperties = { ...baseRowStyle, gap }
   const itemStyle: CSSProperties = { flex: `0 0 ${itemWidth}px` }
+  const rowRef = useRef<HTMLDivElement | null>(null)
   const hasTriggeredNearEndRef = useRef(false)
   const hasExtendedNearEndRef = useRef(false)
   const [loopState, setLoopState] = useState<{ sourceKey: string; extraCycles: number }>({
     sourceKey: '',
     extraCycles: 0,
   })
+  const [visibleCount, setVisibleCount] = useState<number>(() =>
+    Math.max(1, initialVisibleItems),
+  )
   const safeGames = games
   const sourceKey = useMemo(
     () => safeGames.map((game) => String(game.id)).join('|'),
@@ -114,6 +134,34 @@ const GameCarousel = ({
       })),
     [displayGames, getCoverUrl, getDescription],
   )
+  const visibleCarouselItems = useMemo(
+    () => {
+      if (!isolateRendering) return carouselItems
+      const baseVisible = Math.max(1, initialVisibleItems)
+      const clampedVisible = Math.max(
+        baseVisible,
+        Math.min(visibleCount, carouselItems.length),
+      )
+      return carouselItems.slice(0, clampedVisible)
+    },
+    [carouselItems, initialVisibleItems, isolateRendering, visibleCount],
+  )
+  const hasLocalMore = isolateRendering && visibleCarouselItems.length < carouselItems.length
+  const hasAnyMore = hasLocalMore || canLoadMore
+  const isLaneLoading = isLoadingMore && !hasLocalMore
+  const laneStatus = useMemo(() => {
+    if (!showLaneStatus) return null
+    if (isLaneLoading) return laneLoadingText
+    if (!hasAnyMore && carouselItems.length > 0) return laneEndText
+    return null
+  }, [
+    showLaneStatus,
+    isLaneLoading,
+    hasAnyMore,
+    carouselItems.length,
+    laneEndText,
+    laneLoadingText,
+  ])
 
   useEffect(() => {
     if (!isLoadingMore) {
@@ -134,6 +182,19 @@ const GameCarousel = ({
       }
 
       if (
+        isolateRendering &&
+        !showRank &&
+        !hasExtendedNearEndRef.current &&
+        visibleCount < carouselItems.length
+      ) {
+        hasExtendedNearEndRef.current = true
+        setVisibleCount((current) =>
+          Math.min(current + Math.max(1, visibleItemsStep), carouselItems.length),
+        )
+      }
+
+      if (
+        enableInfiniteScroll &&
         !showRank &&
         safeGames.length > 1 &&
         canLoadMore &&
@@ -155,14 +216,28 @@ const GameCarousel = ({
     },
     [
       canLoadMore,
+      enableInfiniteScroll,
+      isolateRendering,
       isLoadingMore,
       loadMoreThreshold,
       onLoadMore,
+      carouselItems.length,
       safeGames,
       showRank,
       sourceKey,
+      visibleCount,
+      visibleItemsStep,
     ],
   )
+
+  const scrollRowByDirection = useCallback((direction: 1 | -1) => {
+    const row = rowRef.current
+    if (!row) return
+    const fixedStep = (itemWidth + gap) * Math.max(1, navStepItems)
+    const responsiveCap = row.clientWidth * 0.82
+    const resolvedStep = Math.max(itemWidth + gap, Math.min(fixedStep, responsiveCap))
+    row.scrollBy({ left: resolvedStep * direction, behavior: 'smooth' })
+  }, [gap, itemWidth, navStepItems])
 
   return (
     <section className="games-section">
@@ -172,41 +247,65 @@ const GameCarousel = ({
           {badge && <span className="games-section__badge">{badge}</span>}
         </header>
       ) : null}
-      <div
-        className="games-row"
-        style={rowStyle}
-        onScroll={handleRowScroll}
-      >
-        {carouselItems.map(({ key, game, index, coverSrc, description }) => {
-          return (
-            <div
-              key={key}
-              className={`games-item${showRank ? ' games-item--ranked' : ''}`}
-              style={itemStyle}
-            >
-              {showRank && (
-                <span className="games-rank">{index + 1}</span>
-              )}
-              <Card
-                title={game.name || 'Untitled'}
-                description={description}
-                icon={
-                  coverSrc ? (
-                    <img
-                      src={coverSrc}
-                      alt={game.name || 'Game cover'}
-                      className="card__image"
-                      loading="lazy"
-                    />
-                  ) : undefined
-                }
-                onClick={() => onSelect(game.id)}
-                ariaLabel={`View details for ${game.name || 'game'}`}
-              />
-            </div>
-          )
-        })}
+      <div className="games-row-wrap">
+        <button
+          type="button"
+          className="games-row-nav games-row-nav--prev"
+          onClick={() => scrollRowByDirection(-1)}
+          aria-label={`Scroll ${title} left`}
+        >
+          ‹
+        </button>
+        <div
+          ref={rowRef}
+          className="games-row"
+          style={rowStyle}
+          onScroll={handleRowScroll}
+        >
+          {visibleCarouselItems.map(({ key, game, index, coverSrc, description }) => {
+            return (
+              <div
+                key={key}
+                className={`games-item${showRank ? ' games-item--ranked' : ''}`}
+                style={itemStyle}
+              >
+                {showRank && (
+                  <span className="games-rank">{index + 1}</span>
+                )}
+                <Card
+                  title={game.name || 'Untitled'}
+                  description={description}
+                  icon={
+                    coverSrc ? (
+                      <img
+                        src={coverSrc}
+                        alt={game.name || 'Game cover'}
+                        className="card__image"
+                        loading="lazy"
+                      />
+                    ) : undefined
+                  }
+                  onClick={() => onSelect(game.id)}
+                  ariaLabel={`View details for ${game.name || 'game'}`}
+                />
+              </div>
+            )
+          })}
+        </div>
+        <button
+          type="button"
+          className="games-row-nav games-row-nav--next"
+          onClick={() => scrollRowByDirection(1)}
+          aria-label={`Scroll ${title} right`}
+        >
+          ›
+        </button>
       </div>
+      {laneStatus ? (
+        <div className="games-row-status">
+          <span>{laneStatus}</span>
+        </div>
+      ) : null}
     </section>
   )
 }

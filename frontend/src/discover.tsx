@@ -21,8 +21,8 @@ type GameItem = {
   is_nsfw?: boolean;
   adult?: boolean;
   age_rating?: string | number;
-  aggregate_rating?: number;
-  aggregate_rating_count?: number;
+  aggregated_rating?: number;
+  aggregated_rating_count?: number;
   total_rating?: number;
   total_rating_count?: number;
   popularity?: number;
@@ -38,6 +38,11 @@ type RandomPoolPage = {
   page: number;
   hasMore: boolean;
 };
+
+const INITIAL_ROW_ITEMS = 24;
+const ROW_STEP_ITEMS = 24;
+const INITIAL_GENRE_ROWS = 6;
+const GENRE_ROWS_STEP = 6;
 
 const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(
   /\/+$/,
@@ -105,13 +110,76 @@ const parseGenres = (value?: string) => {
   return Array.from(unique);
 };
 
-// A simple check to see if a game should be considered NSFW based on metadata and flags. This is not perfect but helps filter out obvious non-safe content from the random carousels.
-const NSFW_TEXT_MATCHER =
-  /\b(nsfw|adult|erotic|hentai|porn|sexual|femboy|eroge|spanking|oppai)\b/i;
+const NSFW_TERMS = [
+  "nsfw",
+  "adult",
+  "erotic",
+  "hentai",
+  "porn",
+  "porno",
+  "sexual",
+  "sex",
+  "lust",
+  "lustful",
+  "lewd",
+  "fetish",
+  "brothel",
+  "succubus",
+  "ecchi",
+  "uncensored",
+  "r18",
+  "18+",
+  "xxx",
+  "cumming",
+  "cum",
+  "spanking",
+  "nude",
+  "nudity",
+  "milf",
+  "onlyfans",
+  "artificial academy",
+  "femboy",
+  "eroge",
+  "oppai",
+  "pussy",
+  "dick",
+  "cock",
+  "vagina",
+  "lingerie",
+  "bikini",
+  "swimsuit",
+  "strip",
+  "Glory Hole",
+  "Footjob",
+  "Foot Odor",
+  "Bondage",
+  "Squirting",
+  "Gokkun",
+  "Bukkake",
+  "Creampie",
+  "21+",
+  "Gay",
+  "Lesbian",
+  "Bisexual",
+  "Transgender",
+  "Exotic",
+  "Gaydorado",
+  "BDSM",
+  "Cow Girl",
+  "Doggy Style",
+  "Missionary",
+  "Cow Girl",
+  "Threesome",
+  "Gay Sex",
+  "Yandere Goth BDSM 15+",
+];
+
+const normalizeFilterText = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9+]+/g, " ").trim();
 
 // A more comprehensive list of NSFW terms to check against game metadata for filtering out adult content from random carousels. This is still not perfect but should catch a wider range of explicit content based on common terminology.
 const NON_BASE_CONTENT_MATCHER =
-  /\b(dlc|downloadable content|expansion|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|starter pack|founder'?s pack|cosmetic pack)\b/i;
+  /\b(dlc|downloadable content|expansion|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|starter pack|founder'?s pack|cosmetic pack|additional| difficulty | skin set | limited edition| deluxe | Ssason)\b/i;
 
 const isNsfwGame = (game: GameItem) => {
   if (game.nsfw || game.is_nsfw || game.adult) return true;
@@ -119,7 +187,8 @@ const isNsfwGame = (game: GameItem) => {
   const metadataText = [game.name, game.genre, game.description, ageRatingText]
     .filter(Boolean)
     .join(" ");
-  return NSFW_TEXT_MATCHER.test(metadataText);
+  const normalizedText = normalizeFilterText(metadataText);
+  return NSFW_TERMS.some((term) => normalizedText.includes(term));
 };
 
 const isNonBaseContentGame = (game: GameItem) => {
@@ -133,6 +202,7 @@ type DiscoverCarousel = {
   title: string;
   badge: string;
   games: GameItem[];
+  rowType?: "genre";
 };
 
 function DiscoverPage() {
@@ -140,6 +210,8 @@ function DiscoverPage() {
   const [searchInput, setSearchInput] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [searchPage, setSearchPage] = useState<number>(1);
+  const [rowSnapshots, setRowSnapshots] = useState<Record<string, number[]>>({});
+  const [visibleGenreRows, setVisibleGenreRows] = useState<number>(INITIAL_GENRE_ROWS);
   const normalizedSearchQuery = collapseWhitespace(searchQuery);
   const searchPageSize = 24;
   const searchOffset = (searchPage - 1) * searchPageSize;
@@ -269,11 +341,6 @@ function DiscoverPage() {
     }
     return merged;
   }, [randomPoolData?.pages]);
-  const loadMoreRandomPool = useCallback(async () => {
-    if (!hasMoreRandomPool || randomPoolLoadingMore) return;
-    await fetchNextRandomPoolPage();
-  }, [fetchNextRandomPoolPage, hasMoreRandomPool, randomPoolLoadingMore]);
-
   const discoverCarousels = useMemo(() => {
     const safePool = randomPool.filter(
       (game) => !isNsfwGame(game) && !isNonBaseContentGame(game),
@@ -282,18 +349,18 @@ function DiscoverPage() {
 
     const getVoteCount = (game: GameItem) =>
       Math.max(
-        game.aggregate_rating_count ?? 0,
+        game.aggregated_rating_count ?? 0,
         game.total_rating_count ?? 0,
         game.popularity ?? 0,
       );
 
     const getRating = (game: GameItem) =>
-      Math.max(game.aggregate_rating ?? 0, game.total_rating ?? 0);
+      Math.max(game.aggregated_rating ?? 0, game.total_rating ?? 0);
 
     const orderedPool = stableOrderBySeed(safePool, "discover:pool");
 
-    // Identify hidden gems as games that have a solid rating (70 or above) but relatively low visibility (fewer votes and lower popularity). These are sorted to surface underrated titles that may have been overlooked by the community.
-    const hiddenGems = [...safePool]
+    // Identify hidden gems as games that have a solid rating (70 or above) but relatively low visibility (fewer votes and lower popularity).
+    const strictHiddenGems = [...safePool]
       .filter((game) =>
         !isNonBaseContentGame(game) &&
         isReleasedGame(game) &&
@@ -308,6 +375,30 @@ function DiscoverPage() {
         if (popularityDiff !== 0) return popularityDiff;
         return getRating(b) - getRating(a);
       });
+    const hiddenGemTarget = INITIAL_ROW_ITEMS;
+    const strictIds = new Set<number>(strictHiddenGems.map((game) => game.id));
+    const fallbackHiddenGems = [...safePool]
+      .filter((game) =>
+        !strictIds.has(game.id) &&
+        !isNonBaseContentGame(game) &&
+        isReleasedGame(game) &&
+        getRating(game) >= 65 &&
+        getVoteCount(game) < 200 &&
+        (game.popularity ?? 0) < 500
+      )
+      .sort((a, b) => {
+        const ratingDiff = getRating(b) - getRating(a);
+        if (ratingDiff !== 0) return ratingDiff;
+        const votesDiff = getVoteCount(a) - getVoteCount(b);
+        if (votesDiff !== 0) return votesDiff;
+        const popularityDiff = (a.popularity ?? 0) - (b.popularity ?? 0);
+        if (popularityDiff !== 0) return popularityDiff;
+        return a.id - b.id;
+      });
+    const hiddenGems = [...strictHiddenGems];
+    if (hiddenGems.length < hiddenGemTarget) {
+      hiddenGems.push(...fallbackHiddenGems.slice(0, hiddenGemTarget - hiddenGems.length));
+    }
 
     const moodDefs = [
       { title: "Random Picks", badge: "Shuffle" },
@@ -338,11 +429,11 @@ function DiscoverPage() {
     const genreRows = Array.from(genreBuckets.entries())
       .filter(([, games]) => games.length >= 4)
       .sort((a, b) => b[1].length - a[1].length)
-      .slice(0, 6)
       .map(([genre, games]) => ({
         title: `${genre} Spotlights`,
         badge: "Genre",
         games: stableOrderBySeed(games, `discover:genre:${genre}`),
+        rowType: "genre" as const,
       }))
       .filter((section) => section.games.length > 0);
 
@@ -394,6 +485,101 @@ function DiscoverPage() {
       ...specialRows,
     ];
   }, [randomPool]);
+
+  const discoverCarouselsByTitle = useMemo(() => {
+    const map = new Map<string, DiscoverCarousel>();
+    discoverCarousels.forEach((section) => {
+      map.set(section.title, section);
+    });
+    return map;
+  }, [discoverCarousels]);
+
+  const displayedDiscoverCarousels = useMemo(() => {
+    return discoverCarousels
+      .map((section) => {
+        const sourceById = new Map<number, GameItem>();
+        section.games.forEach((game) => {
+          sourceById.set(game.id, game);
+        });
+        const defaultIds = section.games
+          .slice(0, INITIAL_ROW_ITEMS)
+          .map((game) => game.id);
+        const snapshotIds = rowSnapshots[section.title] ?? defaultIds;
+        const resolvedIds = snapshotIds.filter((id) => sourceById.has(id));
+        const targetSize = Math.max(defaultIds.length, snapshotIds.length);
+        if (resolvedIds.length < targetSize) {
+          const existing = new Set<number>(resolvedIds);
+          for (const game of section.games) {
+            if (resolvedIds.length >= targetSize) break;
+            if (existing.has(game.id)) continue;
+            existing.add(game.id);
+            resolvedIds.push(game.id);
+          }
+        }
+        const games = resolvedIds
+          .map((id) => sourceById.get(id))
+          .filter((item): item is GameItem => Boolean(item));
+        if (!games.length) return null;
+        return {
+          ...section,
+          games,
+        };
+      })
+      .filter((section): section is DiscoverCarousel => Boolean(section));
+  }, [discoverCarousels, rowSnapshots]);
+  const visibleDisplayedDiscoverCarousels = useMemo(() => {
+    let shownGenreRows = 0;
+    return displayedDiscoverCarousels.filter((section) => {
+      if (section.rowType !== "genre") return true;
+      shownGenreRows += 1;
+      return shownGenreRows <= visibleGenreRows;
+    });
+  }, [displayedDiscoverCarousels, visibleGenreRows]);
+  const totalDisplayedGenreRows = useMemo(
+    () => displayedDiscoverCarousels.filter((section) => section.rowType === "genre").length,
+    [displayedDiscoverCarousels],
+  );
+  const hasMoreGenreRows = totalDisplayedGenreRows > visibleGenreRows;
+
+  const loadMoreForRow = useCallback(
+    async (title: string) => {
+      const section = discoverCarouselsByTitle.get(title);
+      if (!section) return;
+
+      const defaultIds = section.games
+        .slice(0, INITIAL_ROW_ITEMS)
+        .map((game) => game.id);
+      const currentIds = rowSnapshots[title] ?? defaultIds;
+      const currentSet = new Set<number>(currentIds);
+      const nextIds = section.games
+        .map((game) => game.id)
+        .filter((id) => !currentSet.has(id))
+        .slice(0, ROW_STEP_ITEMS);
+
+      if (nextIds.length > 0) {
+        setRowSnapshots((prev) => {
+          const baseIds = prev[title] ?? defaultIds;
+          const seen = new Set<number>(baseIds);
+          const appended = nextIds.filter((id) => !seen.has(id));
+          return {
+            ...prev,
+            [title]: [...baseIds, ...appended],
+          };
+        });
+        return;
+      }
+
+      if (!hasMoreRandomPool || randomPoolLoadingMore) return;
+      await fetchNextRandomPoolPage();
+    },
+    [
+      discoverCarouselsByTitle,
+      fetchNextRandomPoolPage,
+      hasMoreRandomPool,
+      randomPoolLoadingMore,
+      rowSnapshots,
+    ],
+  );
 
   const handlePreviousSearchPage = useCallback(() => {
     setSearchPage((current) => Math.max(1, current - 1));
@@ -526,7 +712,10 @@ function DiscoverPage() {
 
               {!normalizedSearchQuery ? (
                 <div className="discover-random">
-                  {discoverCarousels.map((section) => (
+                  {visibleDisplayedDiscoverCarousels.map((section) => {
+                    const sourceSection = discoverCarouselsByTitle.get(section.title);
+                    const localHasMore = (sourceSection?.games.length ?? 0) > section.games.length;
+                    return (
                     <GameCarousel
                       key={section.title}
                       title={section.title}
@@ -538,12 +727,33 @@ function DiscoverPage() {
                         return release ? `Release: ${release}` : "Release: n/a";
                       }}
                       itemWidth={190}
-                      onLoadMore={loadMoreRandomPool}
-                      canLoadMore={Boolean(hasMoreRandomPool)}
+                      onLoadMore={() => loadMoreForRow(section.title)}
+                      canLoadMore={localHasMore || Boolean(hasMoreRandomPool)}
                       isLoadingMore={randomPoolLoadingMore}
                       loadMoreThreshold={420}
+                      isolateRendering
+                      initialVisibleItems={INITIAL_ROW_ITEMS}
+                      visibleItemsStep={ROW_STEP_ITEMS}
+                      navStepItems={2}
+                      showLaneStatus
+                      laneLoadingText="Loading more games..."
+                      laneEndText="End of this lane."
                     />
-                  ))}
+                    );
+                  })}
+                  {hasMoreGenreRows ? (
+                    <div className="games-load-more">
+                      <button
+                        type="button"
+                        className="games-pagination__button"
+                        onClick={() =>
+                          setVisibleGenreRows((current) => current + GENRE_ROWS_STEP)
+                        }
+                      >
+                        Load more Genre Spotlights
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </section>
