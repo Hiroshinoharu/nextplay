@@ -133,7 +133,12 @@ const GameCarousel = ({
         return
       }
 
-      if (!showRank && safeGames.length > 1 && !hasExtendedNearEndRef.current) {
+      if (
+        !showRank &&
+        safeGames.length > 1 &&
+        canLoadMore &&
+        !hasExtendedNearEndRef.current
+      ) {
         hasExtendedNearEndRef.current = true
         setLoopState((current) => {
           if (current.sourceKey !== sourceKey) {

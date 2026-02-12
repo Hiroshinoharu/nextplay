@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import Card from "./components/card";
 import GameCarousel from "./components/GameCarousel";
@@ -21,10 +21,21 @@ type GameItem = {
   is_nsfw?: boolean;
   adult?: boolean;
   age_rating?: string | number;
+  aggregate_rating?: number;
+  aggregate_rating_count?: number;
+  total_rating?: number;
+  total_rating_count?: number;
+  popularity?: number;
 };
 
 type SearchPageResult = {
   items: GameItem[];
+  hasMore: boolean;
+};
+
+type RandomPoolPage = {
+  items: GameItem[];
+  page: number;
   hasMore: boolean;
 };
 
@@ -52,20 +63,35 @@ const formatReleaseDate = (value?: string) => {
   });
 };
 
+const isReleasedGame = (game: GameItem, now: Date = new Date()) => {
+  if (!game.release_date) return false;
+  const parsed = new Date(game.release_date);
+  if (Number.isNaN(parsed.getTime())) return false;
+  return parsed <= now;
+};
+
 const normalizeMediaUrl = (url?: string) => {
   if (!url) return null;
   if (url.startsWith("//")) return `https:${url}`;
   return url;
 };
 
-const shuffleGames = (items: GameItem[]) => {
-  const out = [...items];
-  for (let i = out.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
+const hashString = (value: string) => {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
   }
-  return out;
+  return hash >>> 0;
 };
+
+const stableOrderBySeed = (items: GameItem[], seed: string) =>
+  [...items].sort((a, b) => {
+    const left = hashString(`${seed}:${a.id}`);
+    const right = hashString(`${seed}:${b.id}`);
+    if (left !== right) return left - right;
+    return a.id - b.id;
+  });
 
 // This parseGenres the genre string from the API, which may be a comma-separated list, and returns the first genre for display in the carousel description.
 const parseGenres = (value?: string) => {
@@ -80,10 +106,12 @@ const parseGenres = (value?: string) => {
 };
 
 // A simple check to see if a game should be considered NSFW based on metadata and flags. This is not perfect but helps filter out obvious non-safe content from the random carousels.
-const NSFW_TEXT_MATCHER = /\b(nsfw|adult|erotic|hentai|porn|sexual|femboy|eroge|spanking|oppai)\b/i;
+const NSFW_TEXT_MATCHER =
+  /\b(nsfw|adult|erotic|hentai|porn|sexual|femboy|eroge|spanking|oppai)\b/i;
 
 // A more comprehensive list of NSFW terms to check against game metadata for filtering out adult content from random carousels. This is still not perfect but should catch a wider range of explicit content based on common terminology.
-const NON_BASE_CONTENT_MATCHER = /\b(dlc|downloadable content|expansion|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|starter pack|founder'?s pack|cosmetic pack)\b/i;
+const NON_BASE_CONTENT_MATCHER =
+  /\b(dlc|downloadable content|expansion|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|starter pack|founder'?s pack|cosmetic pack)\b/i;
 
 const isNsfwGame = (game: GameItem) => {
   if (game.nsfw || game.is_nsfw || game.adult) return true;
@@ -184,13 +212,23 @@ function DiscoverPage() {
     [navigate],
   );
 
-  const { data: randomPool = [] } = useQuery<GameItem[], Error>({
-    queryKey: ["discover-random-pool"] as const,
-    queryFn: async ({ signal }) => {
+  const randomPoolPageSize = 120;
+  const {
+    data: randomPoolData,
+    isFetchingNextPage: randomPoolLoadingMore,
+    hasNextPage: hasMoreRandomPool,
+    fetchNextPage: fetchNextRandomPoolPage,
+  } = useInfiniteQuery<RandomPoolPage, Error>({
+    queryKey: ["discover-random-pool", randomPoolPageSize] as const,
+    queryFn: async ({ pageParam, signal }: { pageParam: unknown; signal?: AbortSignal }) => {
+      const page = pageParam as number;
+      const offset = (page - 1) * randomPoolPageSize;
       const query = new URLSearchParams({
-        limit: "120",
+        limit: String(randomPoolPageSize),
+        offset: String(offset),
         include_media: "0",
         exclude_non_base: "1",
+        random: "1",
       });
       const response = await fetch(
         `${API_ROOT}/api/games?${query.toString()}`,
@@ -203,18 +241,76 @@ function DiscoverPage() {
       if (!Array.isArray(payload)) {
         throw new Error("Unexpected random feed response shape");
       }
-      return payload as GameItem[];
+      const items = payload as GameItem[];
+      return {
+        items,
+        page,
+        hasMore: items.length === randomPoolPageSize,
+      };
     },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage: RandomPoolPage): number | undefined =>
+      lastPage.hasMore ? lastPage.page + 1 : undefined,
     staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
+  const randomPool = useMemo(() => {
+    const pages = randomPoolData?.pages ?? [];
+    const seen = new Set<number>();
+    const merged: GameItem[] = [];
+    for (const page of pages) {
+      for (const item of page.items) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        merged.push(item);
+      }
+    }
+    return merged;
+  }, [randomPoolData?.pages]);
+  const loadMoreRandomPool = useCallback(async () => {
+    if (!hasMoreRandomPool || randomPoolLoadingMore) return;
+    await fetchNextRandomPoolPage();
+  }, [fetchNextRandomPoolPage, hasMoreRandomPool, randomPoolLoadingMore]);
 
   const discoverCarousels = useMemo(() => {
-    const safePool = randomPool.filter((game) => !isNsfwGame(game) && !isNonBaseContentGame(game));
+    const safePool = randomPool.filter(
+      (game) => !isNsfwGame(game) && !isNonBaseContentGame(game),
+    );
     if (!safePool.length) return [] as DiscoverCarousel[];
-    const shuffled = shuffleGames(safePool);
+
+    const getVoteCount = (game: GameItem) =>
+      Math.max(
+        game.aggregate_rating_count ?? 0,
+        game.total_rating_count ?? 0,
+        game.popularity ?? 0,
+      );
+
+    const getRating = (game: GameItem) =>
+      Math.max(game.aggregate_rating ?? 0, game.total_rating ?? 0);
+
+    const orderedPool = stableOrderBySeed(safePool, "discover:pool");
+
+    // Identify hidden gems as games that have a solid rating (70 or above) but relatively low visibility (fewer votes and lower popularity). These are sorted to surface underrated titles that may have been overlooked by the community.
+    const hiddenGems = [...safePool]
+      .filter((game) =>
+        !isNonBaseContentGame(game) &&
+        isReleasedGame(game) &&
+        getRating(game) >= 70 &&
+        getVoteCount(game) < 50 &&
+        (game.popularity ?? 0) < 100
+      )
+      .sort((a, b) => {
+        const votesDiff = getVoteCount(a) - getVoteCount(b);
+        if (votesDiff !== 0) return votesDiff;
+        const popularityDiff = (a.popularity ?? 0) - (b.popularity ?? 0);
+        if (popularityDiff !== 0) return popularityDiff;
+        return getRating(b) - getRating(a);
+      });
+
     const moodDefs = [
       { title: "Random Picks", badge: "Shuffle" },
-      { title: "Hidden Gems", badge: "Mix" },
       { title: "Wildcard Queue", badge: "Lucky" },
       { title: "Tonight's Roulette", badge: "Spin" },
       { title: "Unplanned Marathon", badge: "Chaos" },
@@ -224,8 +320,8 @@ function DiscoverPage() {
         const offset = safePool.length > 0 ? index % safePool.length : 0;
         const games =
           offset > 0
-            ? [...shuffled.slice(offset), ...shuffled.slice(0, offset)]
-            : shuffled;
+            ? [...orderedPool.slice(offset), ...orderedPool.slice(0, offset)]
+            : orderedPool;
         return { ...def, games };
       })
       .filter((section) => section.games.length > 0);
@@ -246,7 +342,7 @@ function DiscoverPage() {
       .map(([genre, games]) => ({
         title: `${genre} Spotlights`,
         badge: "Genre",
-        games: shuffleGames(games),
+        games: stableOrderBySeed(games, `discover:genre:${genre}`),
       }))
       .filter((section) => section.games.length > 0);
 
@@ -266,6 +362,14 @@ function DiscoverPage() {
         return a.name.localeCompare(b.name);
       });
 
+    const hiddenGemsRow: DiscoverCarousel | null = hiddenGems.length
+      ? {
+          title: "Hidden Gems",
+          badge: "Hidden",
+          games: hiddenGems,
+        }
+      : null;
+
     const specialRows: DiscoverCarousel[] = [
       {
         title: "Recently Released",
@@ -279,7 +383,16 @@ function DiscoverPage() {
       },
     ].filter((section) => section.games.length > 0);
 
-    return [...moodRows, ...genreRows, ...specialRows];
+    const firstMoodRow = moodRows[0];
+    const remainingMoodRows = moodRows.slice(1);
+
+    return [
+      ...(firstMoodRow ? [firstMoodRow] : []),
+      ...(hiddenGemsRow ? [hiddenGemsRow] : []),
+      ...remainingMoodRows,
+      ...genreRows,
+      ...specialRows,
+    ];
   }, [randomPool]);
 
   const handlePreviousSearchPage = useCallback(() => {
@@ -425,6 +538,10 @@ function DiscoverPage() {
                         return release ? `Release: ${release}` : "Release: n/a";
                       }}
                       itemWidth={190}
+                      onLoadMore={loadMoreRandomPool}
+                      canLoadMore={Boolean(hasMoreRandomPool)}
+                      isLoadingMore={randomPoolLoadingMore}
+                      loadMoreThreshold={420}
                     />
                   ))}
                 </div>
