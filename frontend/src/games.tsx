@@ -124,8 +124,14 @@ const truncateText = (value: string, maxLength: number) => {
 
 const isReleasedGames = (game: GameItem, now: Date = new Date()) => {
   const releaseDate = parseReleaseDate(game.release_date);
-  return releaseDate ? releaseDate <= now : true;
+  return releaseDate ? releaseDate <= now : false;
 };
+
+const getEffectiveRatingCount = (game: GameItem) =>
+  Math.max(game.aggregated_rating_count ?? 0, game.total_rating_count ?? 0);
+
+const getEffectiveRating = (game: GameItem) =>
+  Math.max(game.aggregated_rating ?? 0, game.total_rating ?? 0);
 
 type HeroMediaSource = "artwork" | "screenshot" | "cover";
 
@@ -162,6 +168,28 @@ function Games() {
   const upcomingPageSize = 24; // Number of unreleased games per page
   const searchPageSize = 24;
   const maxGames = 0; // Maximum number of games to load in total
+  const topMinRatingCount = useMemo(() => {
+    const raw = new URLSearchParams(window.location.search).get(
+      "top_min_rating_count",
+    );
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed < 0) return 50;
+    return Math.floor(parsed);
+  }, []);
+  const topPriorVotes = useMemo(() => {
+    const raw = new URLSearchParams(window.location.search).get("top_prior_votes");
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 200;
+    return Math.floor(parsed);
+  }, []);
+  const topPopularityWeight = useMemo(() => {
+    const raw = new URLSearchParams(window.location.search).get(
+      "top_popularity_weight",
+    );
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed < 0) return 0;
+    return parsed;
+  }, []);
 
   const fetchGamesPage = useCallback(
     async ({
@@ -301,6 +329,47 @@ function Games() {
     staleTime: 5 * 60_000,
   });
 
+  // Use the useQuery hook to fetch a single batch of top-rated games of all time, with support for handling errors and managing loading state, providing users with access to highly rated games based on specified criteria for minimum rating count and prior votes to ensure that the displayed games have a significant level of user engagement and feedback
+  const {
+    data: topAllTimeGames = [],
+    error: topGamesQueryError,
+    isPending: topGamesLoading,
+    refetch: refetchTopGames,
+  } = useQuery<GameItem[], Error>({
+    queryKey: [
+      "games-top-all-time",
+      baseUrl,
+      topMinRatingCount,
+      topPriorVotes,
+      topPopularityWeight,
+    ] as const,
+    queryFn: async ({ signal }) => {
+      const trimmedBaseUrl = baseUrl.replace(/\/+$/, "");
+      const root = trimmedBaseUrl.endsWith("/api")
+        ? trimmedBaseUrl.slice(0, -4)
+        : trimmedBaseUrl;
+      const query = new URLSearchParams({
+        limit: "10",
+        min_rating_count: String(topMinRatingCount),
+        prior_votes: String(topPriorVotes),
+        popularity_weight: String(topPopularityWeight),
+        include_media: "1",
+      });
+      const response = await fetch(`${root}/api/games/top?${query.toString()}`, {
+        signal,
+      });
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      const data = await response.json();
+      if (!Array.isArray(data)) {
+        throw new Error("Invalid API response: expected an array of games");
+      }
+      return dedupeGames(data as GameItem[]);
+    },
+    staleTime: 5 * 60_000,
+  });
+
   const searchOffset = (searchPage - 1) * searchPageSize;
 
   const {
@@ -390,6 +459,7 @@ function Games() {
     gamesQueryError?.message ?? 
     upcomingQueryError?.message ??
     trendingQueryError?.message ??
+    topGamesQueryError?.message ??
     searchQueryError?.message ??
     null;
   const hasMoreUpcoming = Boolean(hasMoreUpcomingGames);
@@ -821,7 +891,23 @@ function Games() {
     [filteredGames],
     );
   // The topTenGames list is created by slicing the first 10 games from the releasedGames list, which contains only games that have been released based on their release dates. This list is used for the "Top Ten" carousel to showcase a curated selection of recently released games, providing users with a quick overview of popular titles that are currently available to play.
-  const topTenGames = useMemo(() => releasedGames.slice(0, 10), [releasedGames]);
+  const topTenFallbackGames = useMemo(() => {
+    const ranked = [...releasedGames]
+      .filter((game) => getEffectiveRatingCount(game) > 0)
+      .sort((a, b) => {
+        const countDiff = getEffectiveRatingCount(b) - getEffectiveRatingCount(a);
+        if (countDiff !== 0) return countDiff;
+        const ratingDiff = getEffectiveRating(b) - getEffectiveRating(a);
+        if (ratingDiff !== 0) return ratingDiff;
+        const popularityDiff = (b.popularity ?? 0) - (a.popularity ?? 0);
+        if (popularityDiff !== 0) return popularityDiff;
+        return a.id - b.id;
+      });
+    return ranked.slice(0, 10);
+  }, [releasedGames]);
+  const topTenGames = topAllTimeGames.length
+    ? topAllTimeGames
+    : topTenFallbackGames;
   const upcomingList = filteredUpcomingGames;
 
   // The trendingList is determined by checking if there are any recent popular games available. If there are, it uses that list; otherwise, 
@@ -948,17 +1034,19 @@ function Games() {
                         refetchGames(),
                         refetchUpcomingGames(),
                         refetchTrendingGames(),
+                        refetchTopGames(),
                       ]);
                     }}
                     disabled={
                       gamesLoading ||
                       upcomingLoading ||
                       trendingLoading ||
+                      topGamesLoading ||
                       searchLoading ||
                       searchFetching
                     }
                   >
-                    {gamesLoading || upcomingLoading || trendingLoading || searchLoading || searchFetching
+                    {gamesLoading || upcomingLoading || trendingLoading || topGamesLoading || searchLoading || searchFetching
                       ? "Refreshing..."
                       : "Refresh list"}
                   </button>

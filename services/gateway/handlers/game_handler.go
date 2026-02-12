@@ -42,6 +42,15 @@ func GetPopularGames(c *fiber.Ctx) error {
 	return c.Status(status).Send(data)
 }
 
+func GetTopGames(c *fiber.Ctx) error {
+	query := c.Context().QueryArgs().String()
+	status, data, err := gameClient.GetTopGames(query)
+	if err != nil {
+		return c.Status(502).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.Status(status).Send(data)
+}
+
 func GetGameByID(c *fiber.Ctx) error {
 	// Extract the game ID from the URL parameters
 	// For example, if the route is defined as /games/:id, this will get the value of :id
@@ -195,7 +204,6 @@ func GetGameFranchises(c *fiber.Ctx) error {
 	return c.Status(status).Send(data)
 }
 
-//
 func AddGameFranchise(c *fiber.Ctx) error {
 	id := c.Params("id")
 	body := c.Body()

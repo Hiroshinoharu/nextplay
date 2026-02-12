@@ -15,6 +15,7 @@ func SetUpRoutes(app *fiber.App) {
 	games.Get("/", handlers.GetAllGames)             // List all games
 	games.Get("/search", handlers.SearchGamesByName) // Search games by name
 	games.Get("/popular", handlers.GetPopularGames)  // List popular games
+	games.Get("/top", handlers.GetTopGames)          // List weighted top games
 	games.Get("/:id", handlers.GetGameByID)          // Get one game by ID
 	games.Post("/", handlers.CreateGame)             // Add a new game (local only)
 	games.Put("/:id", handlers.UpdateGame)           // Update a game by ID

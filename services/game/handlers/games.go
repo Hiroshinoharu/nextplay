@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"math"
 	"strconv"
 	"strings"
 
@@ -67,7 +68,7 @@ func GetPopularGames(c *fiber.Ctx) error {
 	year := c.QueryInt("year", 0)
 	limit := c.QueryInt("limit", 4)
 	offset := c.QueryInt("offset", 0)
-	minRatingCount := c.QueryInt("min_rating_count", 1000)
+	minRatingCount := c.QueryInt("min_rating_count", 50)
 	if limit > 300 {
 		limit = 300
 	}
@@ -79,6 +80,37 @@ func GetPopularGames(c *fiber.Ctx) error {
 	}
 	includeMedia := c.Query("include_media") == "true" || c.Query("include_media") == "1"
 	games, err := db.GetPopularGames(year, limit, offset, minRatingCount, includeMedia)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(games)
+}
+
+// GET /api/games/top - retrieves top all-time games using weighted rating.
+func GetTopGames(c *fiber.Ctx) error {
+	limit := c.QueryInt("limit", 10)
+	offset := c.QueryInt("offset", 0)
+	minRatingCount := c.QueryInt("min_rating_count", 1000)
+	priorVotes := c.QueryInt("prior_votes", 200)
+	popularityWeight := c.QueryFloat("popularity_weight", 0)
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if minRatingCount < 0 {
+		minRatingCount = 0
+	}
+	if priorVotes <= 0 {
+		priorVotes = 200
+	}
+	if math.IsNaN(popularityWeight) || math.IsInf(popularityWeight, 0) || popularityWeight < 0 {
+		popularityWeight = 0
+	}
+	includeMedia := c.Query("include_media") == "true" || c.Query("include_media") == "1"
+
+	games, err := db.GetTopGames(limit, offset, minRatingCount, priorVotes, popularityWeight, includeMedia)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}

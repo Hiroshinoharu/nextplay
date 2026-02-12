@@ -447,6 +447,182 @@ func GetPopularGames(year, limit, offset, minRatingCount int, includeMedia bool)
 	return games, nil
 }
 
+// GetTopGames returns all-time top games using a weighted rating formula.
+func GetTopGames(limit, offset, minRatingCount, priorVotes int, popularityWeight float64, includeMedia bool) ([]models.Game, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	if minRatingCount < 0 {
+		minRatingCount = 0
+	}
+	if priorVotes <= 0 {
+		priorVotes = 200
+	}
+
+	query := `
+		WITH rated AS (
+			SELECT
+				g.game_id,
+				g.game_name,
+				g.game_description,
+				g.release_date,
+				g.genre,
+				g.publishers,
+				g.story,
+				g.cover_image_url,
+				g.aggregated_rating,
+				g.aggregated_rating_count,
+				g.total_rating,
+				g.total_rating_count,
+				g.popularity,
+				CASE
+					WHEN COALESCE(g.total_rating_count, 0) > 0 THEN COALESCE(g.total_rating, 0)
+					WHEN COALESCE(g.aggregated_rating_count, 0) > 0 THEN COALESCE(g.aggregated_rating, 0)
+					ELSE COALESCE(g.total_rating, g.aggregated_rating, 0)
+				END::float8 AS rating,
+				CASE
+					WHEN COALESCE(g.total_rating_count, 0) > 0 THEN COALESCE(g.total_rating_count, 0)
+					WHEN COALESCE(g.aggregated_rating_count, 0) > 0 THEN COALESCE(g.aggregated_rating_count, 0)
+					ELSE 0
+				END::float8 AS votes
+			FROM games g
+			WHERE g.release_date IS NOT NULL
+			  AND g.release_date <= CURRENT_DATE
+		),
+		stats AS (
+			SELECT COALESCE(AVG(r.rating), 0)::float8 AS c
+			FROM rated r
+			WHERE r.votes > 0
+		)
+		SELECT
+			r.game_id,
+			r.game_name,
+			r.game_description,
+			r.release_date,
+			r.genre,
+			r.publishers,
+			r.story,
+			r.cover_image_url,
+			r.aggregated_rating,
+			r.aggregated_rating_count,
+			r.total_rating,
+			r.total_rating_count,
+			r.popularity
+		FROM rated r
+		CROSS JOIN stats s
+		WHERE r.votes >= $3
+		ORDER BY
+			(
+				((r.votes / (r.votes + $4::float8)) * r.rating) +
+				(($4::float8 / (r.votes + $4::float8)) * s.c) +
+				($5::float8 * COALESCE(r.popularity, 0))
+			) DESC,
+			r.votes DESC,
+			r.rating DESC,
+			r.game_id ASC
+		LIMIT $1 OFFSET $2;
+	`
+
+	rows, err := DB.Query(query, limit, offset, minRatingCount, priorVotes, popularityWeight)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	games := make([]models.Game, 0, limit)
+	for rows.Next() {
+		var g models.Game
+		var description sql.NullString
+		var releaseDate sql.NullString
+		var genre sql.NullString
+		var publishers sql.NullString
+		var story sql.NullString
+		var coverImage sql.NullString
+		var aggregatedRating sql.NullFloat64
+		var aggregatedRatingCount sql.NullInt64
+		var totalRating sql.NullFloat64
+		var totalRatingCount sql.NullInt64
+		var popularity sql.NullFloat64
+		err := rows.Scan(
+			&g.ID,
+			&g.Name,
+			&description,
+			&releaseDate,
+			&genre,
+			&publishers,
+			&story,
+			&coverImage,
+			&aggregatedRating,
+			&aggregatedRatingCount,
+			&totalRating,
+			&totalRatingCount,
+			&popularity,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if description.Valid {
+			g.Description = description.String
+		}
+		if releaseDate.Valid {
+			g.ReleaseDate = releaseDate.String
+		}
+		if genre.Valid {
+			g.Genre = genre.String
+		}
+		if publishers.Valid {
+			g.Publishers = publishers.String
+		}
+		if story.Valid {
+			g.Story = story.String
+		}
+		if coverImage.Valid {
+			g.CoverImageURL = coverImage.String
+		}
+		if aggregatedRating.Valid {
+			g.AggregatedRating = aggregatedRating.Float64
+		}
+		if aggregatedRatingCount.Valid {
+			g.AggregatedRatingCount = int(aggregatedRatingCount.Int64)
+		}
+		if totalRating.Valid {
+			g.TotalRating = totalRating.Float64
+		}
+		if totalRatingCount.Valid {
+			g.TotalRatingCount = int(totalRatingCount.Int64)
+		}
+		if popularity.Valid {
+			g.Popularity = popularity.Float64
+		}
+		if includeMedia {
+			media, err := GetGameMedia(int(g.ID))
+			if err != nil {
+				return nil, err
+			}
+			g.Media = media
+		} else {
+			g.Media = []models.GameMedia{}
+		}
+		g.Platforms = []int64{}
+		g.PlatformNames = []string{}
+		g.Keywords = []int64{}
+		g.Franchises = []int64{}
+		g.Companies = []int64{}
+		g.Series = []int64{}
+		games = append(games, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return games, nil
+}
+
 // GetAllGames returns a default-sized page for backward compatibility.
 func GetAllGames() ([]models.Game, error) {
 	return GetGames(50, 0, false, false, "")
