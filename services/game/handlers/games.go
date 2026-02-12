@@ -29,7 +29,7 @@ func GetAllGames(c *fiber.Ctx) error {
 	upcomingOnly := c.Query("upcoming") == "true" || c.Query("upcoming") == "1"
 	searchQuery := strings.TrimSpace(c.Query("q"))
 	randomOrder := c.Query("random") == "true" || c.Query("random") == "1"
-excludeNonBaseContent := c.Query("exclude_non_base") == "true" || c.Query("exclude_non_base") == "1"
+	excludeNonBaseContent := c.Query("exclude_non_base") == "true" || c.Query("exclude_non_base") == "1"
 
 	games, err := db.GetGames(limit, offset, includeMedia, upcomingOnly, searchQuery, randomOrder, excludeNonBaseContent)
 	if err != nil {
@@ -95,8 +95,8 @@ func GetTopGames(c *fiber.Ctx) error {
 	minRatingCount := c.QueryInt("min_rating_count", 1000)
 	priorVotes := c.QueryInt("prior_votes", 200)
 	popularityWeight := c.QueryFloat("popularity_weight", 0)
-	if limit > 100 {
-		limit = 100
+	if limit > 200 {
+		limit = 200
 	}
 	if offset < 0 {
 		offset = 0

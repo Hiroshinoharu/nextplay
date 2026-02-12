@@ -573,12 +573,12 @@
 }
 
 .games-item--ranked {
-  padding-left: 52px;
+  padding-left: 66px;
 }
 
 .games-rank {
   position: absolute;
-  left: 0;
+  left: -14px;
   top: 50%;
   transform: translateY(-50%);
   width: 2.2ch;
@@ -848,13 +848,13 @@
   }
 
   .games-item--ranked {
-    padding-left: 38px;
+    padding-left: 46px;
   }
 
   .games-rank {
     font-size: 28px;
     width: 2ch;
-    left: 0;
+    left: -8px;
     text-shadow:
       0 0 6px var(--rank-glow, rgba(140, 243, 122, 0.35)),
       0 0 14px var(--rank-glow, rgba(140, 243, 122, 0.3));

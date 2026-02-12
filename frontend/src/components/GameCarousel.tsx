@@ -60,52 +60,7 @@ const shuffleItems = <T,>(items: T[]): T[] => {
   return out
 }
 
-const NSFW_TERMS = [
-  'nsfw',
-  'adult',
-  'erotic',
-  'hentai',
-  'porn',
-  'porno',
-  'sexual',
-  'sex',
-  'lust',
-  'lustful',
-  'lewd',
-  'fetish',
-  'brothel',
-  'succubus',
-  'ecchi',
-  'uncensored',
-  'r18',
-  '18+',
-  'xxx',
-  'cumming',
-  'cum',
-  'spanking',
-  'nude',
-  'nudity',
-  'milf',
-  'onlyfans',
-  'artificial academy',
-  'oppai'
-]
-
-const normalizeFilterText = (value: string) =>
-  value.toLowerCase().replace(/[^a-z0-9+]+/g, ' ').trim()
-
-// Determine if a game should be considered NSFW based on metadata and flags
-const isNsfwGame = (game: GameCarouselItem) => {
-  if (game.nsfw || game.is_nsfw || game.adult) return true
-  const ageRatingText = String(game.age_rating ?? '')
-  const metadataText = [game.name, game.genre, game.description, ageRatingText]
-    .filter(Boolean)
-    .join(' ')
-  const normalizedText = normalizeFilterText(metadataText)
-  return NSFW_TERMS.some((term) => normalizedText.includes(term))
-}
-
-// GameCarousel component renders a horizontal scrolling list of game cards with optional features like ranking, loading more items, and NSFW filtering
+// GameCarousel component renders a horizontal scrolling list of game cards with optional ranking and infinite extension/loading.
 const GameCarousel = ({
   title,
   badge,
@@ -130,10 +85,7 @@ const GameCarousel = ({
     sourceKey: '',
     extraCycles: 0,
   })
-  const safeGames = useMemo(
-    () => games.filter((game) => !isNsfwGame(game)),
-    [games],
-  )
+  const safeGames = games
   const sourceKey = useMemo(
     () => safeGames.map((game) => String(game.id)).join('|'),
     [safeGames],
