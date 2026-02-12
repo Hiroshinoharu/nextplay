@@ -342,11 +342,11 @@ function Games() {
       };
 
       const currentYearGames = await fetchPopularByYear(currentYear);
-      if (currentYearGames.length >= 300) {
+      if (currentYearGames.length > 0) {
         return dedupeGames(currentYearGames).slice(0, 300);
       }
       const previousYearGames = await fetchPopularByYear(currentYear - 1);
-      return dedupeGames([...currentYearGames, ...previousYearGames]).slice(0, 300);
+      return dedupeGames(previousYearGames).slice(0, 300);
     },
     staleTime: 5 * 60_000,
   });
@@ -591,6 +591,10 @@ function Games() {
         if (!data || typeof data !== "object") {
           throw new Error("Invalid featured game response");
         }
+        if (isNsfwGame(data)) {
+          setFeaturedDetail(null);
+          return;
+        }
         setFeaturedDetail(data);
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
@@ -609,10 +613,19 @@ function Games() {
         ]
       : null;
 
-  const heroGame =
-    featuredDetail && featuredDetail.id === featuredGameId
-      ? featuredDetail
-      : featuredGame;
+  const heroGame = useMemo(() => {
+    if (
+      featuredDetail &&
+      featuredDetail.id === featuredGameId &&
+      !isNsfwGame(featuredDetail)
+    ) {
+      return featuredDetail;
+    }
+    if (featuredGame && !isNsfwGame(featuredGame)) {
+      return featuredGame;
+    }
+    return null;
+  }, [featuredDetail, featuredGame, featuredGameId]);
   const heroDescriptionSource = collapseWhitespace(
     heroGame?.description || heroGame?.story,
   );
@@ -956,7 +969,7 @@ function Games() {
   );
   // The topTenGames list is created by slicing the first 10 games from the releasedGames list, which contains only games that have been released based on their release dates. This list is used for the "Top Ten" carousel to showcase a curated selection of recently released games, providing users with a quick overview of popular titles that are currently available to play.
   const topTenFallbackGames = useMemo(() => {
-    const ranked = [...releasedGames]
+    return [...releasedGames]
       .filter((game) => getEffectiveRatingCount(game) > 0)
       .sort((a, b) => {
         const countDiff = getEffectiveRatingCount(b) - getEffectiveRatingCount(a);
@@ -967,7 +980,6 @@ function Games() {
         if (popularityDiff !== 0) return popularityDiff;
         return a.id - b.id;
       });
-    return ranked;
   }, [releasedGames]);
   const topTenGames = safeTopAllTimeGames.length
     ? safeTopAllTimeGames

@@ -46,6 +46,31 @@ const defaultCoverUrl = (game: GameCarouselItem) => {
 const defaultDescription = (game: GameCarouselItem) =>
   game.release_date ? `Release: ${game.release_date}` : 'Release: n/a'
 
+// FNV-1a hash function for consistent hashing of strings, used for shuffling with a seed 
+const hashText = (value: string) => {
+  let hash = 2166136261
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
+}
+
+// Shuffle an array of items using a seed string for deterministic randomness
+const shuffleItemsWithSeed = <T,>(items: T[], seedText: string) => {
+  const out = [...items]
+  let seed = hashText(seedText)
+  const next = () => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+    return seed / 4294967296
+  }
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(next() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
 const NSFW_TERMS = [
   'nsfw',
   'adult',
@@ -107,39 +132,49 @@ const GameCarousel = ({
   const rowStyle: CSSProperties = { ...baseRowStyle, gap }
   const itemStyle: CSSProperties = { flex: `0 0 ${itemWidth}px` }
   const hasTriggeredNearEndRef = useRef(false)
-  const [visibleCount, setVisibleCount] = useState(20)
+  const hasExtendedNearEndRef = useRef(false)
+  const [loopState, setLoopState] = useState<{ sourceKey: string; extraCycles: number }>({
+    sourceKey: '',
+    extraCycles: 0,
+  })
   const safeGames = useMemo(
     () => games.filter((game) => !isNsfwGame(game)),
     [games],
   )
-  const pageSize = 20
+  const sourceKey = useMemo(
+    () => safeGames.map((game) => String(game.id)).join('|'),
+    [safeGames],
+  )
 
-  useEffect(() => {
-    setVisibleCount(pageSize)
-  }, [safeGames.length, setVisibleCount])
-
-  const visibleGames = useMemo(
-    () => safeGames.slice(0, Math.max(pageSize, visibleCount)),
-    [pageSize, safeGames, visibleCount],
+  const displayGames = useMemo(
+    () => {
+      if (showRank || safeGames.length <= 1) return safeGames
+      const extraCycles = loopState.sourceKey === sourceKey ? loopState.extraCycles : 0
+      const cycles = Array.from({ length: 1 + extraCycles }, (_, cycleIndex) =>
+        shuffleItemsWithSeed(safeGames, `${sourceKey}:${cycleIndex}`),
+      )
+      return cycles.flat()
+    },
+    [loopState.extraCycles, loopState.sourceKey, safeGames, showRank, sourceKey],
   )
 
   const carouselItems = useMemo(
     () =>
-      visibleGames.map((game, index) => ({
+      displayGames.map((game, index) => ({
         key: `${game.id ?? 'game'}-${index}`,
         game,
         index,
         coverSrc: getCoverUrl(game),
         description: getDescription(game),
       })),
-    [getCoverUrl, getDescription, visibleGames],
+    [displayGames, getCoverUrl, getDescription],
   )
 
   useEffect(() => {
     if (!isLoadingMore) {
       hasTriggeredNearEndRef.current = false
     }
-  }, [isLoadingMore, safeGames.length, visibleGames.length])
+  }, [displayGames.length, isLoadingMore, safeGames.length])
 
   const handleRowScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
@@ -147,18 +182,23 @@ const GameCarousel = ({
       const remaining = row.scrollWidth - row.scrollLeft - row.clientWidth
       const isNearEnd = remaining <= loadMoreThreshold
 
-      if (isNearEnd && visibleGames.length < safeGames.length) {
-        setVisibleCount((current) => Math.min(current + pageSize, safeGames.length))
-      }
-
-      if (!onLoadMore || !canLoadMore || isLoadingMore) return
-
       if (!isNearEnd) {
+        hasExtendedNearEndRef.current = false
         hasTriggeredNearEndRef.current = false
         return
       }
 
-      if (visibleGames.length < safeGames.length) return
+      if (!showRank && safeGames.length > 1 && !hasExtendedNearEndRef.current) {
+        hasExtendedNearEndRef.current = true
+        setLoopState((current) => {
+          if (current.sourceKey !== sourceKey) {
+            return { sourceKey, extraCycles: 1 }
+          }
+          return { sourceKey, extraCycles: current.extraCycles + 1 }
+        })
+      }
+
+      if (!onLoadMore || !canLoadMore || isLoadingMore) return
       if (hasTriggeredNearEndRef.current) return
       hasTriggeredNearEndRef.current = true
       void onLoadMore()
@@ -168,10 +208,9 @@ const GameCarousel = ({
       isLoadingMore,
       loadMoreThreshold,
       onLoadMore,
-      pageSize,
-      safeGames.length,
-      setVisibleCount,
-      visibleGames.length,
+      safeGames,
+      showRank,
+      sourceKey,
     ],
   )
 
