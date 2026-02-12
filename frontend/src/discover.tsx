@@ -16,6 +16,7 @@ type GameItem = {
   release_date?: string;
   genre?: string;
   cover_image?: string;
+  description?: string;
   nsfw?: boolean;
   is_nsfw?: boolean;
   adult?: boolean;
@@ -78,15 +79,26 @@ const parseGenres = (value?: string) => {
   return Array.from(unique);
 };
 
-const NSFW_TEXT_MATCHER = /\b(nsfw|adult|erotic|hentai|porn|sexual|femboy|eroge)\b/i;
+// A simple check to see if a game should be considered NSFW based on metadata and flags. This is not perfect but helps filter out obvious non-safe content from the random carousels.
+const NSFW_TEXT_MATCHER = /\b(nsfw|adult|erotic|hentai|porn|sexual|femboy|eroge|spanking|oppai)\b/i;
+
+// A more comprehensive list of NSFW terms to check against game metadata for filtering out adult content from random carousels. This is still not perfect but should catch a wider range of explicit content based on common terminology.
+const NON_BASE_CONTENT_MATCHER = /\b(dlc|downloadable content|expansion|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|starter pack|founder'?s pack|cosmetic pack)\b/i;
 
 const isNsfwGame = (game: GameItem) => {
   if (game.nsfw || game.is_nsfw || game.adult) return true;
   const ageRatingText = String(game.age_rating ?? "");
-  const metadataText = [game.name, game.genre, ageRatingText]
+  const metadataText = [game.name, game.genre, game.description, ageRatingText]
     .filter(Boolean)
     .join(" ");
   return NSFW_TEXT_MATCHER.test(metadataText);
+};
+
+const isNonBaseContentGame = (game: GameItem) => {
+  const metadataText = [game.name, game.genre, game.description]
+    .filter(Boolean)
+    .join(" ");
+  return NON_BASE_CONTENT_MATCHER.test(metadataText);
 };
 
 type DiscoverCarousel = {
@@ -176,8 +188,9 @@ function DiscoverPage() {
     queryKey: ["discover-random-pool"] as const,
     queryFn: async ({ signal }) => {
       const query = new URLSearchParams({
-        limit: "0",
-        include_media: "1",
+        limit: "120",
+        include_media: "0",
+        exclude_non_base: "1",
       });
       const response = await fetch(
         `${API_ROOT}/api/games?${query.toString()}`,
@@ -196,7 +209,7 @@ function DiscoverPage() {
   });
 
   const discoverCarousels = useMemo(() => {
-    const safePool = randomPool.filter((game) => !isNsfwGame(game));
+    const safePool = randomPool.filter((game) => !isNsfwGame(game) && !isNonBaseContentGame(game));
     if (!safePool.length) return [] as DiscoverCarousel[];
     const shuffled = shuffleGames(safePool);
     const moodDefs = [

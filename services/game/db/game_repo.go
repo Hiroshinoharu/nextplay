@@ -10,16 +10,19 @@ import (
 
 // GetGames retrieves a page of games from the database.
 // Use includeMedia for detail-heavy responses; it is off by default for speed.
-func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool, searchQuery string) ([]models.Game, error) {
+func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool, searchQuery string, randomOrder bool, excludeNonBaseContent bool) ([]models.Game, error) {
 	baseQuery := `
 		SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url, aggregated_rating, aggregated_rating_count, total_rating, total_rating_count, popularity
 		FROM games
 	`
-	whereParts := make([]string, 0, 2)
-	args := make([]interface{}, 0, 3)
+	whereParts := make([]string, 0, 4)
+	args := make([]interface{}, 0, 5)
 
 	if upcomingOnly {
 		whereParts = append(whereParts, "release_date IS NOT NULL AND release_date > CURRENT_DATE")
+	}
+	if excludeNonBaseContent {
+		whereParts = append(whereParts, `NOT (CONCAT_WS(' ', COALESCE(game_name, ''), COALESCE(genre, ''), COALESCE(game_description, '')) ~* '(\m(dlc|downloadable content|expansion|add[- ]?on|bonus( content)?|soundtrack|artbook|season pass|starter pack|founder.?s pack|cosmetic pack)\M)')`)
 	}
 	if strings.TrimSpace(searchQuery) != "" {
 		args = append(args, "%"+strings.TrimSpace(searchQuery)+"%")
@@ -44,7 +47,9 @@ func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool, searchQue
 	if len(whereParts) > 0 {
 		baseQuery += "\nWHERE " + strings.Join(whereParts, "\n  AND ")
 	}
-	if upcomingOnly {
+	if randomOrder {
+		baseQuery += "\nORDER BY RANDOM()"
+	} else if upcomingOnly {
 		baseQuery += `
 		ORDER BY
 			release_date ASC,
@@ -625,7 +630,7 @@ func GetTopGames(limit, offset, minRatingCount, priorVotes int, popularityWeight
 
 // GetAllGames returns a default-sized page for backward compatibility.
 func GetAllGames() ([]models.Game, error) {
-	return GetGames(50, 0, false, false, "")
+	return GetGames(50, 0, false, false, "", false, false)
 }
 
 // GetGameByID retrieves a game by its ID

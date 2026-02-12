@@ -2,18 +2,21 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode, UIEvent } from 'react'
 import Card from './card'
 
+// Type definition for individual game items in the carousel, including optional metadata fields
 type GameCarouselItem = {
   id: number
   name: string
   release_date?: string
   genre?: string
   cover_image?: string
+  description?: string
   nsfw?: boolean
   is_nsfw?: boolean
   adult?: boolean
   age_rating?: string | number
 }
 
+// Props for the GameCarousel component, defining the expected data and behavior
 type GameCarouselProps = {
   title: string
   badge?: string
@@ -31,6 +34,7 @@ type GameCarouselProps = {
   loadMoreThreshold?: number
 }
 
+// Base styles for the carousel row, with horizontal scrolling and no wrapping
 const baseRowStyle: CSSProperties = {
   display: 'flex',
   flexWrap: 'nowrap',
@@ -46,26 +50,11 @@ const defaultCoverUrl = (game: GameCarouselItem) => {
 const defaultDescription = (game: GameCarouselItem) =>
   game.release_date ? `Release: ${game.release_date}` : 'Release: n/a'
 
-// FNV-1a hash function for consistent hashing of strings, used for shuffling with a seed 
-const hashText = (value: string) => {
-  let hash = 2166136261
-  for (let i = 0; i < value.length; i += 1) {
-    hash ^= value.charCodeAt(i)
-    hash = Math.imul(hash, 16777619)
-  }
-  return hash >>> 0
-}
 
-// Shuffle an array of items using a seed string for deterministic randomness
-const shuffleItemsWithSeed = <T,>(items: T[], seedText: string) => {
+const shuffleItems = <T,>(items: T[]): T[] => {
   const out = [...items]
-  let seed = hashText(seedText)
-  const next = () => {
-    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
-    return seed / 4294967296
-  }
-  for (let i = out.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(next() * (i + 1))
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1)) // 0 <= j <= i
     ;[out[i], out[j]] = [out[j], out[i]]
   }
   return out
@@ -93,26 +82,30 @@ const NSFW_TERMS = [
   'xxx',
   'cumming',
   'cum',
+  'spanking',
   'nude',
   'nudity',
   'milf',
   'onlyfans',
   'artificial academy',
+  'oppai'
 ]
 
 const normalizeFilterText = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9+]+/g, ' ').trim()
 
+// Determine if a game should be considered NSFW based on metadata and flags
 const isNsfwGame = (game: GameCarouselItem) => {
   if (game.nsfw || game.is_nsfw || game.adult) return true
   const ageRatingText = String(game.age_rating ?? '')
-  const metadataText = [game.name, game.genre, ageRatingText]
+  const metadataText = [game.name, game.genre, game.description, ageRatingText]
     .filter(Boolean)
     .join(' ')
   const normalizedText = normalizeFilterText(metadataText)
   return NSFW_TERMS.some((term) => normalizedText.includes(term))
 }
 
+// GameCarousel component renders a horizontal scrolling list of game cards with optional features like ranking, loading more items, and NSFW filtering
 const GameCarousel = ({
   title,
   badge,
@@ -150,8 +143,8 @@ const GameCarousel = ({
     () => {
       if (showRank || safeGames.length <= 1) return safeGames
       const extraCycles = loopState.sourceKey === sourceKey ? loopState.extraCycles : 0
-      const cycles = Array.from({ length: 1 + extraCycles }, (_, cycleIndex) =>
-        shuffleItemsWithSeed(safeGames, `${sourceKey}:${cycleIndex}`),
+      const cycles = Array.from({ length: 1 + extraCycles }, () =>
+        shuffleItems(safeGames),
       )
       return cycles.flat()
     },

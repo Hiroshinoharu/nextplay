@@ -28,8 +28,10 @@ func GetAllGames(c *fiber.Ctx) error {
 	includeMedia := c.Query("include_media") == "true" || c.Query("include_media") == "1"
 	upcomingOnly := c.Query("upcoming") == "true" || c.Query("upcoming") == "1"
 	searchQuery := strings.TrimSpace(c.Query("q"))
+	randomOrder := c.Query("random") == "true" || c.Query("random") == "1"
+excludeNonBaseContent := c.Query("exclude_non_base") == "true" || c.Query("exclude_non_base") == "1"
 
-	games, err := db.GetGames(limit, offset, includeMedia, upcomingOnly, searchQuery)
+	games, err := db.GetGames(limit, offset, includeMedia, upcomingOnly, searchQuery, randomOrder, excludeNonBaseContent)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}

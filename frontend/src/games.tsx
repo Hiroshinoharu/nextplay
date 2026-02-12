@@ -159,6 +159,7 @@ const NSFW_TERMS = [
   "xxx",
   "cumming",
   "cum",
+  "spanking",
   "nude",
   "nudity",
   "milf",
@@ -172,11 +173,21 @@ const normalizeFilterText = (value: string) =>
 const isNsfwGame = (game: GameItem) => {
   if (game.nsfw || game.is_nsfw || game.adult) return true;
   const ageRatingText = String(game.age_rating ?? "");
-  const metadataText = [game.name, game.genre, ageRatingText]
+  const metadataText = [game.name, game.genre, game.description, ageRatingText]
     .filter(Boolean)
     .join(" ");
   const normalizedText = normalizeFilterText(metadataText);
   return NSFW_TERMS.some((term) => normalizedText.includes(term));
+};
+
+const NON_BASE_CONTENT_MATCHER =
+  /\b(dlc|downloadable content|expansion|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|starter pack|founder'?s pack|cosmetic pack)\b/i;
+
+const isNonBaseContentGame = (game: GameItem) => {
+  const metadataText = [game.name, game.genre, game.description, game.story]
+    .filter(Boolean)
+    .join(" ");
+  return NON_BASE_CONTENT_MATCHER.test(metadataText);
 };
 
 type HeroMediaSource = "artwork" | "screenshot" | "cover";
@@ -395,7 +406,7 @@ function Games() {
         ? trimmedBaseUrl.slice(0, -4)
         : trimmedBaseUrl;
       const query = new URLSearchParams({
-        limit: "50",
+        limit: "120",
         min_rating_count: String(topMinRatingCount),
         prior_votes: String(topPriorVotes),
         popularity_weight: String(topPopularityWeight),
@@ -543,7 +554,9 @@ function Games() {
 
   // useCallback function for opening the lightbox to display a selected media item, with logic to determine the index of the selected media within the list of featured media candidates and to set the lightbox index accordingly, providing an immersive experience for users as they view game media in a larger format while ensuring that the correct media item is displayed based on user interaction
   const featuredCandidates = useMemo(() => {
-    const safePool = filteredGames.filter((game) => !isNsfwGame(game));
+    const safePool = filteredGames.filter(
+      (game) => !isNsfwGame(game) && !isNonBaseContentGame(game),
+    );
     const withReleaseDates = safePool.filter((game) =>
       Boolean(parseReleaseDate(game.release_date)),
     );
@@ -591,7 +604,7 @@ function Games() {
         if (!data || typeof data !== "object") {
           throw new Error("Invalid featured game response");
         }
-        if (isNsfwGame(data)) {
+        if (isNsfwGame(data) || isNonBaseContentGame(data)) {
           setFeaturedDetail(null);
           return;
         }
@@ -617,11 +630,16 @@ function Games() {
     if (
       featuredDetail &&
       featuredDetail.id === featuredGameId &&
-      !isNsfwGame(featuredDetail)
+      !isNsfwGame(featuredDetail) &&
+      !isNonBaseContentGame(featuredDetail)
     ) {
       return featuredDetail;
     }
-    if (featuredGame && !isNsfwGame(featuredGame)) {
+    if (
+      featuredGame &&
+      !isNsfwGame(featuredGame) &&
+      !isNonBaseContentGame(featuredGame)
+    ) {
       return featuredGame;
     }
     return null;
@@ -955,7 +973,7 @@ function Games() {
     [filteredUpcomingGames],
   );
   const safeTopAllTimeGames = useMemo(
-    () => topAllTimeGames.filter((game) => !isNsfwGame(game)),
+    () => topAllTimeGames.filter((game) => !isNsfwGame(game)).slice(0, 100),
     [topAllTimeGames],
   );
   const safeRecentPopularGames = useMemo(
