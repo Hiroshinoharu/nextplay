@@ -235,6 +235,7 @@ function Games({ authUser }: GamesProps) {
   const [searchQuery, setSearchQuery] = useState<string>(""); // Separate state for the actual search query to trigger searches on submit rather than on every keystroke
   const [searchPage, setSearchPage] = useState<number>(1);
   const avatarText = useMemo(() => getUserInitials(authUser), [authUser]);
+  const authToken = authUser?.token?.trim() ?? "";
   const searchGridSectionRef = useRef<HTMLElement | null>(null);
   const upcomingSectionRef = useRef<HTMLElement | null>(null);
   const topRatedSectionRef = useRef<HTMLElement | null>(null);
@@ -301,7 +302,12 @@ function Games({ authUser }: GamesProps) {
         `Fetching games from: ${root}/api/games?include_media=1&${query.toString()}`,
       );
       const url = `${root}/api/games?include_media=1&${query.toString()}`;
-      const response = await fetch(url, { signal });
+      const response = await fetch(url, {
+        signal,
+        ...(authToken
+          ? { headers: { Authorization: `Bearer ${authToken}` } }
+          : {}),
+      });
       if (!response.ok) {
         throw new Error(`API error: ${response.status} ${response.statusText}`);
       }
@@ -315,7 +321,7 @@ function Games({ authUser }: GamesProps) {
         hasMore: data.length === limit,
       };
     },
-    [baseUrl],
+    [authToken, baseUrl],
   );
 
   // Use the useInfiniteQuery hook to manage fetching paginated game data, with support for loading more pages and handling errors
@@ -360,7 +366,12 @@ function Games({ authUser }: GamesProps) {
           min_rating_count: "1",
           include_media: "1",
         });
-        const response = await fetch(`${root}/api/games/popular?${query.toString()}`, { signal });
+        const response = await fetch(`${root}/api/games/popular?${query.toString()}`, {
+          signal,
+          ...(authToken
+            ? { headers: { Authorization: `Bearer ${authToken}` } }
+            : {}),
+        });
         if (!response.ok) {
           throw new Error(`API error: ${response.status} ${response.statusText}`);
         }
@@ -433,6 +444,9 @@ function Games({ authUser }: GamesProps) {
       });
       const response = await fetch(`${root}/api/games/top?${query.toString()}`, {
         signal,
+        ...(authToken
+          ? { headers: { Authorization: `Bearer ${authToken}` } }
+          : {}),
       });
       if (!response.ok) {
         throw new Error(`API error: ${response.status} ${response.statusText}`);
@@ -474,7 +488,12 @@ function Games({ authUser }: GamesProps) {
         offset: String(searchOffset),
         include_media: "1",
       });
-      const response = await fetch(`${root}/api/games/search?${params.toString()}`, { signal });
+      const response = await fetch(`${root}/api/games/search?${params.toString()}`, {
+        signal,
+        ...(authToken
+          ? { headers: { Authorization: `Bearer ${authToken}` } }
+          : {}),
+      });
       if (!response.ok) {
         throw new Error(`API error: ${response.status} ${response.statusText}`);
       }
@@ -615,7 +634,12 @@ function Games({ authUser }: GamesProps) {
     const url = `${root}/api/games/${featuredGameId}`;
     const loadFeaturedDetail = async () => {
       try {
-        const response = await fetch(url, { signal: controller.signal });
+        const response = await fetch(url, {
+          signal: controller.signal,
+          ...(authToken
+            ? { headers: { Authorization: `Bearer ${authToken}` } }
+            : {}),
+        });
         if (!response.ok) {
           throw new Error(`Failed to load featured game: ${response.status}`);
         }

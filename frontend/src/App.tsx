@@ -100,6 +100,8 @@ const coerceAuthUser = (payload: unknown): AuthUser | null => {
       : typeof data.steamLinked === "boolean"
         ? data.steamLinked
         : undefined;
+  const token =
+    typeof data.token === "string" ? data.token.trim() : undefined;
 
   if (!id && !username && !email) return null;
 
@@ -108,6 +110,7 @@ const coerceAuthUser = (payload: unknown): AuthUser | null => {
     username,
     email,
     steam_linked: steamLinked,
+    token: token || undefined,
   };
 };
 
@@ -529,9 +532,18 @@ function App() {
           )
         }
       />
-      <Route path="/games" element={<Games authUser={authUser} />} />
-      <Route path="/discover" element={<SearchPage authUser={authUser} />} />
-      <Route path="/games/:gameId" element={<Game authUser={authUser} />} />
+      <Route
+        path="/games"
+        element={authUser ? <Games authUser={authUser} /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/discover"
+        element={authUser ? <SearchPage authUser={authUser} /> : <Navigate to="/login" replace />}
+      />
+      <Route
+        path="/games/:gameId"
+        element={authUser ? <Game authUser={authUser} /> : <Navigate to="/login" replace />}
+      />
       <Route
         path="/login"
         element={

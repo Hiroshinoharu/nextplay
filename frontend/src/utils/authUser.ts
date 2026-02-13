@@ -3,6 +3,7 @@ export type AuthUser = {
   username?: string;
   email?: string;
   steam_linked?: boolean;
+  token?: string;
 };
 
 export const getUserDisplayName = (authUser: AuthUser | null | undefined) =>

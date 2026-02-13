@@ -131,7 +131,9 @@ services:
       dockerfile: services/gateway/Dockerfile # Build gateway from its Dockerfile
     ports:
       - "8084:8084" # Main entry point for frontend <-> backend API
-    environment:
+    env_file:
+      - env/gateway.env
+    environment:      
       CONFIG_FILE: /config/config.yaml
       PORT: "8084"
     volumes:

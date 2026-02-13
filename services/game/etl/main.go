@@ -35,7 +35,8 @@ func run() error {
 	}
 
 	cfg, err := config.Load(config.Defaults{
-		DatabaseURL: "postgres://nextplay:nextplay@localhost:5432/nextplay?sslmode=disable",
+		DatabaseURL:       "postgres://nextplay:nextplay@localhost:5432/nextplay?sslmode=disable",
+		GatewayServiceURL: "http://localhost:8084",
 	})
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -736,6 +737,32 @@ func run() error {
 	// Mark as committed
 	committed = true
 	log.Println("ETL process completed successfully")
+
+	if shouldSyncViaGateway() {
+		gatewayURL := strings.TrimSpace(os.Getenv("GATEWAY_SERVICE_URL"))
+		if gatewayURL == "" {
+			gatewayURL = strings.TrimSpace(cfg.GatewayServiceURL)
+		}
+		serviceToken := strings.TrimSpace(os.Getenv("GATEWAY_SERVICE_TOKEN"))
+		if serviceToken == "" {
+			serviceToken = strings.TrimSpace(os.Getenv("SERVICE_TOKEN"))
+		}
+		if gatewayURL == "" || serviceToken == "" {
+			return fmt.Errorf("gateway sync enabled but GATEWAY_SERVICE_URL/GATEWAY_SERVICE_TOKEN is missing")
+		}
+		client := newGatewaySyncClient(gatewayURL, serviceToken)
+		limit := gatewayWriteLimit()
+		if limit > 0 {
+			log.Printf("Gateway sync enabled: syncing up to %d games via %s", limit, gatewayURL)
+		} else {
+			log.Printf("Gateway sync enabled: syncing all %d games via %s", len(gameRows), gatewayURL)
+		}
+		if err := syncGamesViaGateway(client, gameRows, gameIDByIGDB, limit); err != nil {
+			return fmt.Errorf("gateway sync failed: %w", err)
+		}
+		log.Println("Gateway sync completed successfully")
+	}
+
 	return nil
 }
 

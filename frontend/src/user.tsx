@@ -38,6 +38,7 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
   const [interactions, setInteractions] = useState<UserInteraction[]>([]);
   const [interactionsLoading, setInteractionsLoading] = useState(false);
   const [interactionsError, setInteractionsError] = useState<string | null>(null);
+  const authToken = authUser?.token?.trim() ?? "";
 
   const userDisplayName = getUserDisplayName(authUser);
   const avatarText = getUserInitials(authUser);
@@ -57,7 +58,12 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
       try {
         const response = await fetch(
           `${API_ROOT}/api/users/${authUser.id}/interactions`,
-          { signal: controller.signal },
+          {
+            signal: controller.signal,
+            ...(authToken
+              ? { headers: { Authorization: `Bearer ${authToken}` } }
+              : {}),
+          },
         );
         if (!response.ok) {
           setInteractionsError(`Failed to load interactions: ${response.status}`);
@@ -86,7 +92,7 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
 
     void loadInteractions();
     return () => controller.abort();
-  }, [authUser?.id]);
+  }, [authToken, authUser?.id]);
 
   const likedCount = useMemo(
     () => interactions.filter((item) => item.liked === true).length,

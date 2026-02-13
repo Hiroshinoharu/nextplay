@@ -230,6 +230,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   const [loadingRowTitle, setLoadingRowTitle] = useState<string | null>(null);
   const [visibleGenreRows, setVisibleGenreRows] = useState<number>(INITIAL_GENRE_ROWS);
   const avatarText = useMemo(() => getUserInitials(authUser), [authUser]);
+  const authToken = authUser?.token?.trim() ?? "";
   const randomPoolFetchPromiseRef = useRef<Promise<unknown> | null>(null);
   const searchGridSectionRef = useRef<HTMLElement | null>(null);
   const randomLanesSectionRef = useRef<HTMLDivElement | null>(null);
@@ -268,6 +269,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
         `${API_ROOT}/api/games/search?${query.toString()}`,
         {
           signal,
+          ...(authToken
+            ? { headers: { Authorization: `Bearer ${authToken}` } }
+            : {}),
         },
       );
       if (!response.ok) {
@@ -343,7 +347,12 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       });
       const response = await fetch(
         `${API_ROOT}/api/games?${query.toString()}`,
-        { signal },
+        {
+          signal,
+          ...(authToken
+            ? { headers: { Authorization: `Bearer ${authToken}` } }
+            : {}),
+        },
       );
       if (!response.ok) {
         throw new Error(`Random feed failed (${response.status})`);
