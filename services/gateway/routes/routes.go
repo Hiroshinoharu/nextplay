@@ -15,7 +15,7 @@ func SetUpRoutes(app *fiber.App) {
 	// --------------------------
 	health := api.Group("/health")
 	{
-		securedHealth := health.Group("/health", middleware.RequireJWT)
+		securedHealth := health.Group("/", middleware.RequireJWT)
 		
 		// Private health endpoints
 		securedHealth.Get("/", handlers.GetAllHealth)
@@ -30,29 +30,28 @@ func SetUpRoutes(app *fiber.App) {
 	// --------------------------
 	users := api.Group("/users")
 	{
-
-		securedUsers := users.Group("/", middleware.RequireJWT, middleware.RequireSameUserParam("id"))
-		
 		users.Post("/register", handlers.RegisterUser)
 		users.Post("/login", handlers.LoginUser)
+
+		securedUsers := users.Group("/:id", middleware.RequireJWT, middleware.RequireSameUserParam("id"))
 		
-		securedUsers.Get("/:id", handlers.GetUserByID)
-		securedUsers.Put("/:id", handlers.UpdateUser)
-		securedUsers.Delete("/:id", handlers.DeleteUser)
+		securedUsers.Get("/", handlers.GetUserByID)
+		securedUsers.Put("/", handlers.UpdateUser)
+		securedUsers.Delete("/", handlers.DeleteUser)
 
-		securedUsers.Get("/:id/interactions", handlers.GetUserInteraction)
-		securedUsers.Post("/:id/interactions", handlers.CreateUserInteraction)
-		securedUsers.Delete("/:id/interactions/:gameId", handlers.DeleteUserInteraction)
+		securedUsers.Get("/interactions", handlers.GetUserInteraction)
+		securedUsers.Post("/interactions", handlers.CreateUserInteraction)
+		securedUsers.Delete("/interactions/:gameId", handlers.DeleteUserInteraction)
 
-		securedUsers.Get("/:id/keywords", handlers.GetUserKeywordPreferences)
-		securedUsers.Post("/:id/keywords", handlers.CreateUserKeywordPreference)
-		securedUsers.Put("/:id/keywords/:keywordId", handlers.UpdateUserKeywordPreference)
-		securedUsers.Delete("/:id/keywords/:keywordId", handlers.DeleteUserKeywordPreference)
+		securedUsers.Get("/keywords", handlers.GetUserKeywordPreferences)
+		securedUsers.Post("/keywords", handlers.CreateUserKeywordPreference)
+		securedUsers.Put("/keywords/:keywordId", handlers.UpdateUserKeywordPreference)
+		securedUsers.Delete("/keywords/:keywordId", handlers.DeleteUserKeywordPreference)
 
-		securedUsers.Get("/:id/platforms", handlers.GetUserPlatformPreferences)
-		securedUsers.Post("/:id/platforms", handlers.CreateUserPlatformPreference)
-		securedUsers.Put("/:id/platforms/:platformId", handlers.UpdateUserPlatformPreference)
-		securedUsers.Delete("/:id/platforms/:platformId", handlers.DeleteUserPlatformPreference)
+		securedUsers.Get("/platforms", handlers.GetUserPlatformPreferences)
+		securedUsers.Post("/platforms", handlers.CreateUserPlatformPreference)
+		securedUsers.Put("/platforms/:platformId", handlers.UpdateUserPlatformPreference)
+		securedUsers.Delete("/platforms/:platformId", handlers.DeleteUserPlatformPreference)
 	}
 
 	// --------------------------
@@ -60,48 +59,46 @@ func SetUpRoutes(app *fiber.App) {
 	// --------------------------
 	games := api.Group("/games")
 	{
-		// User-facing read routes require JWT.
-		securedGames := games.Group("/", middleware.RequireJWT)
-		// ETL/admin operation routes require service auth token.
-		serviceGames := games.Group("/", middleware.RequireServiceAuth)
+		// Popular endpoint remains public for landing-page usage.
+		games.Get("/popular", handlers.GetPopularGames)
 		
-		securedGames.Get("/", handlers.GetAllGames)
-		securedGames.Get("/search", handlers.SearchGamesByName)
-		securedGames.Get("/popular", handlers.GetPopularGames)
-		securedGames.Get("/top", handlers.GetTopGames)
-		securedGames.Get("/:id", handlers.GetGameByID)
+		// User-facing read endpoints require JWT.
+		games.Get("/", middleware.RequireJWT, handlers.GetAllGames)
+		games.Get("/search", middleware.RequireJWT, handlers.SearchGamesByName)
+		games.Get("/top", middleware.RequireJWT, handlers.GetTopGames)
+		games.Get("/:id", middleware.RequireJWT, handlers.GetGameByID)
 		
 		// Internal operation routes
-		serviceGames.Post("/", handlers.CreateGame)
-		serviceGames.Put("/:id", handlers.UpdateGame)
-		serviceGames.Delete("/:id", handlers.DeleteGame)
+		games.Post("/", middleware.RequireServiceAuth, handlers.CreateGame)
+		games.Put("/:id", middleware.RequireServiceAuth, handlers.UpdateGame)
+		games.Delete("/:id", middleware.RequireServiceAuth, handlers.DeleteGame)
 
 		// Platforms
-		securedGames.Get("/:id/platforms", handlers.GetGamePlatforms)
-		serviceGames.Post("/:id/platforms", handlers.AddGamePlatform)
-		serviceGames.Delete("/:id/platforms/:platformId", handlers.RemoveGamePlatform)
+		games.Get("/:id/platforms", middleware.RequireJWT, handlers.GetGamePlatforms)
+		games.Post("/:id/platforms", middleware.RequireServiceAuth, handlers.AddGamePlatform)
+		games.Delete("/:id/platforms/:platformId", middleware.RequireServiceAuth, handlers.RemoveGamePlatform)
 
 		// Keywords
-		securedGames.Get("/:id/keywords", handlers.GetGameKeywords)
+		games.Get("/:id/keywords", middleware.RequireJWT, handlers.GetGameKeywords)
 		
-		serviceGames.Post("/:id/keywords", handlers.AddGameKeyword)
-		serviceGames.Delete("/:id/keywords/:keywordId", handlers.RemoveGameKeyword)
+		games.Post("/:id/keywords", middleware.RequireServiceAuth, handlers.AddGameKeyword)
+		games.Delete("/:id/keywords/:keywordId", middleware.RequireServiceAuth, handlers.RemoveGameKeyword)
 
 		// Companies
-		securedGames.Get("/:id/companies", handlers.GetGameCompanies)
+		games.Get("/:id/companies", middleware.RequireJWT, handlers.GetGameCompanies)
 		
-		serviceGames.Post("/:id/companies", handlers.AddGameCompany)
-		serviceGames.Delete("/:id/companies/:companyId", handlers.RemoveGameCompany)
+		games.Post("/:id/companies", middleware.RequireServiceAuth, handlers.AddGameCompany)
+		games.Delete("/:id/companies/:companyId", middleware.RequireServiceAuth, handlers.RemoveGameCompany)
 
 		// Franchise
-		securedGames.Get("/:id/franchise", handlers.GetGameFranchises)
-		serviceGames.Post("/:id/franchise", handlers.AddGameFranchise)
-		serviceGames.Delete("/:id/franchise/:franchiseId", handlers.RemoveGameFranchise)
+		games.Get("/:id/franchise", middleware.RequireJWT, handlers.GetGameFranchises)
+		games.Post("/:id/franchise", middleware.RequireServiceAuth, handlers.AddGameFranchise)
+		games.Delete("/:id/franchise/:franchiseId", middleware.RequireServiceAuth, handlers.RemoveGameFranchise)
 
 		// Series
-		securedGames.Get("/:id/series", handlers.GetGameSeries)
-		serviceGames.Post("/:id/series", handlers.AddGameSeries)
-		serviceGames.Delete("/:id/series/:seriesId", handlers.RemoveGameSeries)
+		games.Get("/:id/series", middleware.RequireJWT, handlers.GetGameSeries)
+		games.Post("/:id/series", middleware.RequireServiceAuth, handlers.AddGameSeries)
+		games.Delete("/:id/series/:seriesId", middleware.RequireServiceAuth, handlers.RemoveGameSeries)
 	}
 
 	// --------------------------

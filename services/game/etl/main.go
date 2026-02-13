@@ -204,6 +204,7 @@ func run() error {
 		if popularityMaxGames > 0 {
 			targetGames = popularityMaxGames
 		}
+		// Determine pool size: if not set, calculate based on targetGames with reasonable bounds to avoid excessively large pools
 		pool := popularityPool
 		if pool <= 0 {
 			pool = targetGames * 5
@@ -214,6 +215,7 @@ func run() error {
 				pool = 5000
 			}
 		}
+		// Fetch popularity seed IDs and their popularity values
 		seedIDs, seedPopularity, err := client.FetchTopPopularityGameIDs(pool, popularityType)
 		if err != nil {
 			return fmt.Errorf("failed to fetch popularity seed: %w", err)

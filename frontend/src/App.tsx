@@ -101,7 +101,13 @@ const coerceAuthUser = (payload: unknown): AuthUser | null => {
         ? data.steamLinked
         : undefined;
   const token =
-    typeof data.token === "string" ? data.token.trim() : undefined;
+    typeof data.token === "string"
+      ? data.token.trim()
+      : typeof data.access_token === "string"
+        ? data.access_token.trim()
+        : typeof data.jwt === "string"
+          ? data.jwt.trim()
+          : undefined;
 
   if (!id && !username && !email) return null;
 
