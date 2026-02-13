@@ -2,6 +2,8 @@ package main
 
 import (
 	"log"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -37,8 +39,15 @@ func main() {
 	log.Println("[Gateway] Game Service →", clients.GameServiceURL)
 	log.Println("[Gateway] Recommender Service →", clients.RecommenderServiceURL)
 
-	// Global HTTP client timeout for outbound requests
-	clients.HttpClient.Timeout = 5 * time.Second
+	// Global HTTP client timeout for outbound requests.
+	// Some game queries (e.g., random discovery feeds) can exceed 5s on larger datasets.
+	upstreamTimeoutSeconds := 20
+	if raw := os.Getenv("GATEWAY_UPSTREAM_TIMEOUT_SECONDS"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			upstreamTimeoutSeconds = parsed
+		}
+	}
+	clients.HttpClient.Timeout = time.Duration(upstreamTimeoutSeconds) * time.Second
 
 	// ---------------------------
 	// FIBER APP SETUP
@@ -57,7 +66,7 @@ func main() {
 
 	// Logging middleware
 	app.Use(logger.New())
-	
+
 	// Recovers from panics
 	app.Use(recover.New())
 
