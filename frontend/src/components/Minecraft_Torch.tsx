@@ -5,7 +5,7 @@ const Checkbox = () => {
     <StyledWrapper>
       <label className="container">
         <div className="simple-text">Click me!</div>
-        <input defaultChecked={true} type="checkbox" />
+        <input id="torch-toggle" name="torch_toggle" defaultChecked={true} type="checkbox" />
         <div className="checkmark" />
         <div className="torch">
           <div className="head">

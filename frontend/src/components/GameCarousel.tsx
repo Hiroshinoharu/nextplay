@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, ReactNode, UIEvent } from 'react'
+import type { CSSProperties, KeyboardEvent, ReactNode, UIEvent } from 'react'
 import Card from './card'
 
 // Type definition for individual game items in the carousel, including optional metadata fields
@@ -100,6 +100,10 @@ const GameCarousel = ({
   const hasExtendedNearEndRef = useRef(false)
   const hasTriggeredNoOverflowLoadRef = useRef(false)
   const nearEndActiveRef = useRef(false)
+  const [navState, setNavState] = useState<{ canPrev: boolean; canNext: boolean }>({
+    canPrev: false,
+    canNext: false,
+  })
   const [loopState, setLoopState] = useState<{ sourceKey: string; extraCycles: number }>({
     sourceKey: '',
     extraCycles: 0,
@@ -166,6 +170,18 @@ const GameCarousel = ({
     laneLoadingText,
   ])
 
+  const syncNavState = useCallback(() => {
+    const row = rowRef.current
+    if (!row) return
+    const maxScrollLeft = Math.max(0, row.scrollWidth - row.clientWidth)
+    const canPrev = row.scrollLeft > 2
+    const canNext = maxScrollLeft - row.scrollLeft > 2
+    setNavState((current) => {
+      if (current.canPrev === canPrev && current.canNext === canNext) return current
+      return { canPrev, canNext }
+    })
+  }, [])
+
   useEffect(() => {
     if (!isLoadingMore) {
       hasTriggeredNearEndRef.current = false
@@ -185,8 +201,36 @@ const GameCarousel = ({
     void onLoadMore()
   }, [canLoadMore, carouselItems.length, isLoadingMore, onLoadMore])
 
+  useEffect(() => {
+    syncNavState()
+    const row = rowRef.current
+    if (!row) return
+
+    const handleWindowResize = () => {
+      syncNavState()
+    }
+
+    window.addEventListener('resize', handleWindowResize)
+    const observer =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            syncNavState()
+          })
+        : null
+    observer?.observe(row)
+
+    return () => {
+      window.removeEventListener('resize', handleWindowResize)
+      observer?.disconnect()
+    }
+  }, [syncNavState, carouselItems.length, visibleCarouselItems.length])
+
+
+  // Handler for the scroll event on the carousel row, determining when to trigger loading more items or extending the visible range based on scroll position and thresholds.
   const handleRowScroll = useCallback(
+    // Calculate the remaining scrollable distance to the end of the row and determine if it's within the threshold to trigger loading more items or extending the visible range.
     (event: UIEvent<HTMLDivElement>) => {
+      syncNavState()
       const row = event.currentTarget
       const remaining = row.scrollWidth - row.scrollLeft - row.clientWidth
       const enterThreshold = loadMoreThreshold
@@ -253,9 +297,11 @@ const GameCarousel = ({
       sourceKey,
       visibleCount,
       visibleItemsStep,
+      syncNavState,
     ],
   )
 
+  // Scroll the carousel row left or right by a calculated step based on item width, gap, and responsive limits.
   const scrollRowByDirection = useCallback((direction: 1 | -1) => {
     const row = rowRef.current
     if (!row) return
@@ -263,7 +309,39 @@ const GameCarousel = ({
     const responsiveCap = row.clientWidth * 0.82
     const resolvedStep = Math.max(itemWidth + gap, Math.min(fixedStep, responsiveCap))
     row.scrollBy({ left: resolvedStep * direction, behavior: 'smooth' })
-  }, [gap, itemWidth, navStepItems])
+    window.setTimeout(syncNavState, 240)
+  }, [gap, itemWidth, navStepItems, syncNavState])
+
+  const handleRowKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault()
+        scrollRowByDirection(-1)
+        return
+      }
+      if (event.key === 'ArrowRight') {
+        event.preventDefault()
+        scrollRowByDirection(1)
+        return
+      }
+      if (event.key === 'Home') {
+        event.preventDefault()
+        const row = rowRef.current
+        if (!row) return
+        row.scrollTo({ left: 0, behavior: 'smooth' })
+        window.setTimeout(syncNavState, 240)
+        return
+      }
+      if (event.key === 'End') {
+        event.preventDefault()
+        const row = rowRef.current
+        if (!row) return
+        row.scrollTo({ left: row.scrollWidth, behavior: 'smooth' })
+        window.setTimeout(syncNavState, 240)
+      }
+    },
+    [scrollRowByDirection, syncNavState],
+  )
 
   return (
     <section className="games-section">
@@ -279,6 +357,8 @@ const GameCarousel = ({
           className="games-row-nav games-row-nav--prev"
           onClick={() => scrollRowByDirection(-1)}
           aria-label={`Scroll ${title} left`}
+          disabled={!navState.canPrev}
+          aria-disabled={!navState.canPrev}
         >
           ‹
         </button>
@@ -287,6 +367,9 @@ const GameCarousel = ({
           className="games-row"
           style={rowStyle}
           onScroll={handleRowScroll}
+          onKeyDown={handleRowKeyDown}
+          tabIndex={0}
+          aria-label={`${title} carousel`}
         >
           {visibleCarouselItems.map(({ key, game, index, coverSrc, description }) => {
             return (
@@ -323,6 +406,8 @@ const GameCarousel = ({
           className="games-row-nav games-row-nav--next"
           onClick={() => scrollRowByDirection(1)}
           aria-label={`Scroll ${title} right`}
+          disabled={!navState.canNext}
+          aria-disabled={!navState.canNext}
         >
           ›
         </button>

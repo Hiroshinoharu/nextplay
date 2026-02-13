@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Card from "./components/card";
 import GameCarousel from "./components/GameCarousel";
 import Navbar from "./components/Navbar";
@@ -132,6 +132,10 @@ const NSFW_TERMS = [
   "xxx",
   "cumming",
   "cum",
+  "fap",
+  "fapping",
+  "masturbate",
+  "masturbation",
   "spanking",
   "nude",
   "nudity",
@@ -176,6 +180,8 @@ const NSFW_TERMS = [
 
 const normalizeFilterText = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9+]+/g, " ").trim();
+const NORMALIZED_NSFW_TERMS = NSFW_TERMS.map((term) => normalizeFilterText(term))
+  .filter(Boolean);
 
 // A more comprehensive list of NSFW terms to check against game metadata for filtering out adult content from random carousels. This is still not perfect but should catch a wider range of explicit content based on common terminology.
 const NON_BASE_CONTENT_MATCHER =
@@ -188,7 +194,10 @@ const isNsfwGame = (game: GameItem) => {
     .filter(Boolean)
     .join(" ");
   const normalizedText = normalizeFilterText(metadataText);
-  return NSFW_TERMS.some((term) => normalizedText.includes(term));
+  const paddedText = ` ${normalizedText} `;
+  return NORMALIZED_NSFW_TERMS.some((term) =>
+    paddedText.includes(` ${term} `),
+  );
 };
 
 const isNonBaseContentGame = (game: GameItem) => {
@@ -207,15 +216,26 @@ type DiscoverCarousel = {
 
 function DiscoverPage() {
   const navigate = useNavigate();
-  const [searchInput, setSearchInput] = useState<string>("");
-  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchParams] = useSearchParams();
+  const urlQuery = collapseWhitespace(searchParams.get("q") ?? "");
+  const [searchInput, setSearchInput] = useState<string>(urlQuery);
+  const [searchQuery, setSearchQuery] = useState<string>(urlQuery);
   const [searchPage, setSearchPage] = useState<number>(1);
   const [rowSnapshots, setRowSnapshots] = useState<Record<string, number[]>>({});
   const [loadingRowTitle, setLoadingRowTitle] = useState<string | null>(null);
   const [visibleGenreRows, setVisibleGenreRows] = useState<number>(INITIAL_GENRE_ROWS);
+  const randomPoolFetchPromiseRef = useRef<Promise<unknown> | null>(null);
+  const searchGridSectionRef = useRef<HTMLElement | null>(null);
+  const randomLanesSectionRef = useRef<HTMLDivElement | null>(null);
   const normalizedSearchQuery = collapseWhitespace(searchQuery);
   const searchPageSize = 24;
   const searchOffset = (searchPage - 1) * searchPageSize;
+
+  useEffect(() => {
+    setSearchInput(urlQuery);
+    setSearchQuery(urlQuery);
+    setSearchPage(1);
+  }, [urlQuery]);
 
   const {
     data: searchData,
@@ -269,6 +289,18 @@ function DiscoverPage() {
     setSearchPage(1);
     setSearchQuery(collapseWhitespace(searchInput));
   }, [searchInput]);
+
+  const clearSearch = useCallback(() => {
+    setSearchInput("");
+    setSearchQuery("");
+    setSearchPage(1);
+    navigate("/discover");
+  }, [navigate]);
+
+  const scrollToSection = useCallback((target: HTMLElement | null) => {
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
   const getExploreDescription = useCallback((game: GameItem) => {
     const release = formatReleaseDate(game.release_date);
     return [
@@ -708,10 +740,16 @@ function DiscoverPage() {
       }
 
       if (!hasMoreRandomPool || randomPoolLoadingMore) return;
+      if (randomPoolFetchPromiseRef.current) return;
       setLoadingRowTitle(title);
+      const fetchPromise = fetchNextRandomPoolPage();
+      randomPoolFetchPromiseRef.current = fetchPromise;
       try {
-        await fetchNextRandomPoolPage();
+        await fetchPromise;
       } finally {
+        if (randomPoolFetchPromiseRef.current === fetchPromise) {
+          randomPoolFetchPromiseRef.current = null;
+        }
         setLoadingRowTitle((current) => (current === title ? null : current));
       }
     },
@@ -792,9 +830,50 @@ function DiscoverPage() {
                   </p>
                 )}
               </section>
+              <div className="search-quick-actions" aria-label="Discover quick actions">
+                {normalizedSearchQuery ? (
+                  <>
+                    <button
+                      type="button"
+                      className="search-quick-actions__button"
+                      onClick={() => scrollToSection(searchGridSectionRef.current)}
+                    >
+                      Jump to results
+                    </button>
+                    <button
+                      type="button"
+                      className="search-quick-actions__button"
+                      onClick={clearSearch}
+                    >
+                      Clear search
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="search-quick-actions__button"
+                      onClick={() => scrollToSection(randomLanesSectionRef.current)}
+                    >
+                      Jump to lanes
+                    </button>
+                    <button
+                      type="button"
+                      className="search-quick-actions__button"
+                      onClick={() =>
+                        setVisibleGenreRows((current) => current + GENRE_ROWS_STEP)
+                      }
+                      disabled={!hasMoreGenreRows}
+                    >
+                      Load genre rows
+                    </button>
+                  </>
+                )}
+              </div>
 
               {normalizedSearchQuery ? (
                 <section
+                  ref={searchGridSectionRef}
                   className="games-search-grid-section"
                   aria-live="polite"
                 >
@@ -826,8 +905,7 @@ function DiscoverPage() {
                       term.
                     </p>
                   )}
-                  {cards.length > 0 &&
-                  (searchPage > 1 || hasMoreSearchResults) ? (
+                  {searchPage > 1 || hasMoreSearchResults ? (
                     <div className="games-pagination">
                       <button
                         type="button"
@@ -852,9 +930,8 @@ function DiscoverPage() {
                   ) : null}
                 </section>
               ) : null}
-
               {!normalizedSearchQuery ? (
-                <div className="discover-random">
+                <div ref={randomLanesSectionRef} className="discover-random">
                   {visibleDisplayedDiscoverCarousels.map((section) => {
                     const sourceSection = discoverCarouselsByTitle.get(section.title);
                     const localHasMore = (sourceSection?.games.length ?? 0) > section.games.length;

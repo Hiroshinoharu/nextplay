@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import Card from "./components/card";
@@ -159,6 +159,10 @@ const NSFW_TERMS = [
   "xxx",
   "cumming",
   "cum",
+  "fap",
+  "fapping",
+  "masturbate",
+  "masturbation",
   "spanking",
   "nude",
   "nudity",
@@ -169,6 +173,8 @@ const NSFW_TERMS = [
 
 const normalizeFilterText = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9+]+/g, " ").trim();
+const NORMALIZED_NSFW_TERMS = NSFW_TERMS.map((term) => normalizeFilterText(term))
+  .filter(Boolean);
 
 const isNsfwGame = (game: GameItem) => {
   if (game.nsfw || game.is_nsfw || game.adult) return true;
@@ -177,7 +183,10 @@ const isNsfwGame = (game: GameItem) => {
     .filter(Boolean)
     .join(" ");
   const normalizedText = normalizeFilterText(metadataText);
-  return NSFW_TERMS.some((term) => normalizedText.includes(term));
+  const paddedText = ` ${normalizedText} `;
+  return NORMALIZED_NSFW_TERMS.some((term) =>
+    paddedText.includes(` ${term} `),
+  );
 };
 
 const NON_BASE_CONTENT_MATCHER =
@@ -220,6 +229,10 @@ function Games() {
   const [searchInput, setSearchInput] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>(""); // Separate state for the actual search query to trigger searches on submit rather than on every keystroke
   const [searchPage, setSearchPage] = useState<number>(1);
+  const searchGridSectionRef = useRef<HTMLElement | null>(null);
+  const upcomingSectionRef = useRef<HTMLElement | null>(null);
+  const topRatedSectionRef = useRef<HTMLElement | null>(null);
+  const trendingSectionRef = useRef<HTMLElement | null>(null);
   const normalizedSearchQuery = collapseWhitespace(searchQuery).toLowerCase();
   const pageSize = 48; // Number of games to fetch per page for general lists
   const upcomingPageSize = 24; // Number of unreleased games per page
@@ -1024,6 +1037,17 @@ function Games() {
     setSearchQuery(collapseWhitespace(searchInput));
   }, [searchInput]);
 
+  const clearSearch = useCallback(() => {
+    setSearchInput("");
+    setSearchQuery("");
+    setSearchPage(1);
+  }, []);
+
+  const scrollToSection = useCallback((target: HTMLElement | null) => {
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
   return (
     <div className="games-page">
       <div className="games-shell">
@@ -1193,9 +1217,57 @@ function Games() {
               </p>
             )}
           </section>
+          <div className="games-quick-actions" aria-label="Page quick actions">
+            {normalizedSearchQuery ? (
+              <>
+                <button
+                  type="button"
+                  className="games-quick-actions__button"
+                  onClick={() => scrollToSection(searchGridSectionRef.current)}
+                >
+                  Jump to results
+                </button>
+                <button
+                  type="button"
+                  className="games-quick-actions__button"
+                  onClick={clearSearch}
+                >
+                  Clear search
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="games-quick-actions__button"
+                  onClick={() => scrollToSection(upcomingSectionRef.current)}
+                >
+                  Upcoming
+                </button>
+                <button
+                  type="button"
+                  className="games-quick-actions__button"
+                  onClick={() => scrollToSection(topRatedSectionRef.current)}
+                >
+                  Top rated
+                </button>
+                <button
+                  type="button"
+                  className="games-quick-actions__button"
+                  onClick={() => scrollToSection(trendingSectionRef.current)}
+                >
+                  Trending
+                </button>
+              </>
+            )}
+          </div>
 
           {normalizedSearchQuery ? (
-            <section className="games-search-grid-section" aria-live="polite">
+            <section
+              ref={searchGridSectionRef}
+              className="games-search-grid-section"
+              aria-live="polite"
+            >
               {searchResults.length ? (
                 <div className="games-search-grid">
                   {searchResults.map((game) => (
@@ -1223,7 +1295,7 @@ function Games() {
                   No games matched that query. Try a shorter or broader term.
                 </p>
               )}
-              {searchResults.length > 0 && (searchPage > 1 || hasMoreSearchResults) ? (
+              {searchPage > 1 || hasMoreSearchResults ? (
                 <div className="games-pagination">
                   <button
                     type="button"
@@ -1251,39 +1323,45 @@ function Games() {
 
           {!normalizedSearchQuery ? (
             <>
-              <GameCarousel
-                title="Upcoming Games"
-                badge="Preview"
-                games={upcomingList}
-                onSelect={openGameDetail}
-                getCoverUrl={carouselCover}
-                itemWidth={190}
-                onLoadMore={loadMoreUpcomingGames}
-                canLoadMore={hasMoreUpcoming}
-                isLoadingMore={upcomingLoadingMore}
-                getDescription={getReleaseDescription}
-              />
+              <section ref={upcomingSectionRef}>
+                <GameCarousel
+                  title="Upcoming Games"
+                  badge="Preview"
+                  games={upcomingList}
+                  onSelect={openGameDetail}
+                  getCoverUrl={carouselCover}
+                  itemWidth={190}
+                  onLoadMore={loadMoreUpcomingGames}
+                  canLoadMore={hasMoreUpcoming}
+                  isLoadingMore={upcomingLoadingMore}
+                  getDescription={getReleaseDescription}
+                />
+              </section>
 
-              <GameCarousel
-                title="Top Rated of all time"
-                badge="Ranked"
-                games={topTenGames}
-                onSelect={openGameDetail}
-                getCoverUrl={carouselCover}
-                showRank
-                itemWidth={200}
-                getDescription={getReleaseDescription}
-              />
+              <section ref={topRatedSectionRef}>
+                <GameCarousel
+                  title="Top Rated of all time"
+                  badge="Ranked"
+                  games={topTenGames}
+                  onSelect={openGameDetail}
+                  getCoverUrl={carouselCover}
+                  showRank
+                  itemWidth={200}
+                  getDescription={getReleaseDescription}
+                />
+              </section>
 
-              <GameCarousel
-                title="Trending Games"
-                badge="Hot"
-                games={trendingList}
-                onSelect={openGameDetail}
-                getCoverUrl={carouselCover}
-                itemWidth={190}
-                getDescription={getReleaseDescription}
-              />
+              <section ref={trendingSectionRef}>
+                <GameCarousel
+                  title="Trending Games"
+                  badge="Hot"
+                  games={trendingList}
+                  onSelect={openGameDetail}
+                  getCoverUrl={carouselCover}
+                  itemWidth={190}
+                  getDescription={getReleaseDescription}
+                />
+              </section>
             </>
           ) : null}
 

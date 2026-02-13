@@ -44,6 +44,8 @@ const SiteFooter = () => {
           <p>Weekly drops, co-op nights, and hot releases.</p>
           <div className="landing__footer-form">
             <input
+              id="footer-email"
+              name="email"
               type="email"
               placeholder="you@email.com"
               aria-label="Email address"

@@ -50,11 +50,11 @@ const Navbar = () => {
 
 const StyledWrapper = styled.div`
   .nav {
-    width: min(520px, 100%);
+    width: 100%;
     height: auto;
     border-radius: 999px;
     box-sizing: border-box;
-    flex: 1 1 320px;
+    min-width: 0;
   }
 
   .container {
@@ -64,20 +64,21 @@ const StyledWrapper = styled.div`
     background: linear-gradient(145deg, rgba(8, 28, 44, 0.84), rgba(8, 22, 35, 0.72));
     display: flex;
     flex-direction: row;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
     gap: 8px;
     row-gap: 6px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     padding: 0.4em 0.6em;
     border-radius: 999px;
     border: 1px solid var(--games-border, rgba(140, 243, 122, 0.32));
     box-shadow: 0 14px 24px rgba(0, 0, 0, 0.28);
     box-sizing: border-box;
+    max-width: 100%;
   }
 
   .btn {
-    padding: 0.45em 1.2em;
+    padding: 0.45em 0.8em;
     color: var(--games-text, #e2f2ff);
     cursor: pointer;
     transition:
@@ -100,7 +101,8 @@ const StyledWrapper = styled.div`
     font-weight: 600;
     letter-spacing: 0.02em;
     appearance: none;
-    flex: 0 0 auto;
+    flex: 1 1 0;
+    min-width: 74px;
   }
 
   .btn:hover {
@@ -128,6 +130,30 @@ const StyledWrapper = styled.div`
     .nav {
       width: 100%;
     }
+
+    .container {
+      min-height: 50px;
+      padding: 0.3em 0.38em;
+      border-radius: 14px;
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x proximity;
+    }
+
+    .container::-webkit-scrollbar {
+      display: none;
+    }
+
+    .btn {
+      flex: 0 0 auto;
+      scroll-snap-align: start;
+      padding: 0.4em 0.78em;
+      font-size: 0.8rem;
+      border: 1px solid transparent;
+    }
   }
 
   @media (max-width: 640px) {
@@ -151,8 +177,8 @@ const StyledWrapper = styled.div`
     }
 
     .btn {
-      padding: 0.38em 0.7em;
-      font-size: 0.76rem;
+      padding: 0.34em 0.64em;
+      font-size: 0.74rem;
       border: 1px solid transparent;
       flex: 0 0 auto;
     }
@@ -164,12 +190,12 @@ const StyledWrapper = styled.div`
 
   @media (max-width: 420px) {
     .container {
-      gap: 6px;
+      gap: 5px;
     }
 
     .btn {
-      padding: 0.32em 0.62em;
-      font-size: 0.72rem;
+      padding: 0.3em 0.56em;
+      font-size: 0.7rem;
     }
   }`;
 

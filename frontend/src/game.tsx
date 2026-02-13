@@ -1,13 +1,18 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Button from './components/Button'
 import Lightbox from './components/Lightbox'
+import Navbar from './components/Navbar'
+import ScreenshotGallery from './components/ScreenshotGallery'
+import Searchbar from './components/Searchbar'
 import TrailerGallery from './components/TrailerGallery'
+import logoUrl from './assets/logo.png'
 import './game.css'
 
 // Define the structure of a game item based on expected API response fields
 type GameItem = {
   id: number
+  igdb_id?: number
   name: string
   description?: string
   release_date?: string
@@ -90,6 +95,10 @@ function Game() {
   const [gameLoading, setGameLoading] = useState<boolean>(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+  const [searchInput, setSearchInput] = useState<string>('')
+  const toastTimeoutRef = useRef<number | null>(null)
+  const screenshotsSectionRef = useRef<HTMLElement | null>(null)
+  const trailerSectionRef = useRef<HTMLElement | null>(null)
 
   const numericId = gameId ? Number(gameId) : null
   const isValidId = numericId !== null && !Number.isNaN(numericId)
@@ -139,22 +148,65 @@ function Game() {
     return () => controller.abort()
   }, [loadGame])
 
+  const showToast = useCallback((message: string, duration = 3200) => {
+    setToastMessage(message)
+    if (toastTimeoutRef.current !== null) {
+      window.clearTimeout(toastTimeoutRef.current)
+    }
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToastMessage(null)
+      toastTimeoutRef.current = null
+    }, duration)
+  }, [])
+
   useEffect(() => {
     if (!gameError) return
-    setToastMessage(gameError)
-    const timeout = window.setTimeout(() => {
-      setToastMessage(null)
-    }, 4500)
-    return () => window.clearTimeout(timeout)
-  }, [gameError])
+    showToast(gameError, 4500)
+  }, [gameError, showToast])
+
+  useEffect(
+    () => () => {
+      if (toastTimeoutRef.current !== null) {
+        window.clearTimeout(toastTimeoutRef.current)
+      }
+    },
+    [],
+  )
 
   const closeGameDetail = () => {
-    navigate('/games')
+    navigate('/discover')
   }
 
   const closeLightbox = useCallback(() => {
     setLightboxIndex(null)
   }, [])
+
+  const handleSearchSubmit = useCallback(() => {
+    const query = collapseWhitespace(searchInput)
+    if (!query) {
+      navigate('/discover')
+      return
+    }
+    const params = new URLSearchParams({ q: query })
+    navigate(`/discover?${params.toString()}`)
+  }, [navigate, searchInput])
+
+  const scrollToSection = useCallback((section: HTMLElement | null, sectionLabel: string) => {
+    if (!section) {
+      showToast(`${sectionLabel} are not available yet.`, 2800)
+      return
+    }
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [showToast])
+
+  const copyPageLink = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      showToast('Game link copied to clipboard.')
+    } catch {
+      showToast('Could not copy link in this browser.')
+    }
+  }, [showToast])
 
   // Prepare media items for display
   const mediaItems = Array.isArray(game?.media) ? game?.media : []
@@ -201,13 +253,34 @@ function Game() {
     <div className="game-page">
       <div className="game-shell">
         <header className="game-header">
-          <div className="game-brand">
-            <span className="game-brand__title">NextPlay</span>
-            <span className="game-brand__subtitle">Game Detail</span>
-          </div>
-          <div className="game-header__actions">
-            <Button label="Back to games" showIcon={false} onClick={() => navigate('/games')} />
-            <Button label='Back to Discover' showIcon={false} onClick={() => navigate('/discover')} />
+          <button
+            type="button"
+            className="game-brand"
+            onClick={() => navigate('/')}
+          >
+            <img src={logoUrl} alt="NextPlay Logo" />
+            <span className="game-brand__text">
+              <span className="game-brand__title">NextPlay</span>
+              <span className="game-brand__subtitle">Game Detail</span>
+            </span>
+          </button>
+          <nav className="game-nav" aria-label="Primary">
+            <Navbar />
+          </nav>
+          <div className="game-actions">
+            <Searchbar
+              value={searchInput}
+              onValueChange={setSearchInput}
+              onSubmit={handleSearchSubmit}
+            />
+            <button
+              type="button"
+              className="game-avatar"
+              aria-label="Account menu"
+              onClick={() => navigate('/user')}
+            >
+              NP
+            </button>
           </div>
         </header>
 
@@ -226,19 +299,22 @@ function Game() {
 
           {game && !gameLoading && (
             <div className="game-grid">
-              <div className="game-cover">
-                {detailCover ? (
+              {detailCover ? (
+                <div className="game-cover">
                   <img
                     src={detailCover}
                     alt={game.name || 'Game cover'}
                     className="game-cover__image"
+                    loading="eager"
                   />
-                ) : (
+                </div>
+              ) : (
+                <div className="game-cover">
                   <div className="game-cover__placeholder">
                     No cover available
                   </div>
-                )}
-              </div>
+                </div>
+              )}
               <div className="game-info">
                 <div className="game-info__header">
                   <p className="game-info__eyebrow">Selected game</p>
@@ -282,38 +358,49 @@ function Game() {
                     </span>
                   </div>
                 </div>
-                <section className="game-panel">
+                <div className="game-quick-actions" aria-label="Game quick actions">
+                  <button
+                    type="button"
+                    className="game-quick-actions__button"
+                    onClick={() => scrollToSection(screenshotsSectionRef.current, 'Screenshots')}
+                  >
+                    Jump to screenshots
+                  </button>
+                  <button
+                    type="button"
+                    className="game-quick-actions__button"
+                    onClick={() => scrollToSection(trailerSectionRef.current, 'Trailers')}
+                  >
+                    Jump to trailers
+                  </button>
+                  <button
+                    type="button"
+                    className="game-quick-actions__button"
+                    onClick={() => void copyPageLink()}
+                  >
+                    Copy page link
+                  </button>
+                </div>
+                <section className="game-panel" ref={screenshotsSectionRef}>
                   <div className="game-panel__header">
                     <h2 className="game-panel__title">Screenshots</h2>
                     <span className="game-panel__meta">
                       {mediaGallery.length ? `${mediaGallery.length} shots` : 'No shots'}
                     </span>
                   </div>
-                  <div className="game-gallery">
-                    {mediaGallery.length ? (
-                      mediaGallery.slice(0, 4).map((shot, index) => (
-                        <button
-                          key={`${shot}-${index}`}
-                          type="button"
-                          className="game-gallery__item game-gallery__item-button"
-                          onClick={() => setLightboxIndex(index)}
-                          aria-label={`Open screenshot ${index + 1} of ${game.name}`}
-                        >
-                          <img
-                            src={shot}
-                            alt={`${game.name} screenshot ${index + 1}`}
-                            className="game-gallery__image"
-                          />
-                        </button>
-                      ))
-                    ) : (
-                      <div className="game-gallery__empty">
-                        No screenshots available yet.
-                      </div>
-                    )}
-                  </div>
+                  {mediaGallery.length ? (
+                    <ScreenshotGallery
+                      screenshots={mediaGallery}
+                      gameName={game.name}
+                      onOpen={setLightboxIndex}
+                    />
+                  ) : (
+                    <div className="game-gallery__empty">
+                      No screenshots available yet.
+                    </div>
+                  )}
                 </section>
-                <section className="game-panel">
+                <section className="game-panel" ref={trailerSectionRef}>
                   <div className="game-panel__header">
                     <h2 className="game-panel__title">Trailers</h2>
                     <span className="game-panel__meta">
@@ -332,7 +419,8 @@ function Game() {
                   }
                 </section>
                 <div className="game-info__actions">
-                  <Button label="Back to list" showIcon={false} onClick={closeGameDetail} />
+                  <Button label="Back to Discover" showIcon={false} onClick={closeGameDetail} />
+                  <Button label="Back to Games" showIcon={false} onClick={() => navigate("/games")} />
                 </div>
               </div>
             </div>

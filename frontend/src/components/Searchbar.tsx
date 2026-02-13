@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import styled from 'styled-components';
 
 type SearchbarProps = {
@@ -9,6 +10,7 @@ type SearchbarProps = {
 
 // A reusable search input component with an icon and styled container.
 const Input = ({ value, onValueChange, onSubmit }: SearchbarProps) => {
+  const inputId = useId();
   return (
     <StyledWrapper>
       <form
@@ -30,6 +32,8 @@ const Input = ({ value, onValueChange, onSubmit }: SearchbarProps) => {
           </svg>
         </div>
         <input
+          id={inputId}
+          name="search_query"
           className="search_input"
           placeholder="Search games"
           type="text"

@@ -110,7 +110,13 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
       <div className="wrapper">
         <div className="card-switch">
           <label className="switch">
-            <input type="checkbox" className="toggle" defaultChecked={initialMode === 'register'} />
+            <input
+              id="auth-mode-toggle"
+              name="auth_mode_toggle"
+              type="checkbox"
+              className="toggle"
+              defaultChecked={initialMode === 'register'}
+            />
             <div className="switch-row">
               <span className="card-side" />
               <span className="slider" />
@@ -151,6 +157,7 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
                   <form className="flip-card__form" onSubmit={handleRegister}>
                     <input
                       className="flip-card__input"
+                      name="username"
                       placeholder="Name"
                       type="text"
                       value={signupName}

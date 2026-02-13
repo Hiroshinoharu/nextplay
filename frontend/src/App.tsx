@@ -248,6 +248,8 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
           }
           }>
             <input
+              id="hero-email"
+              name="email"
               className="hero__input"
               type="email"
               placeholder="Enter your email"
