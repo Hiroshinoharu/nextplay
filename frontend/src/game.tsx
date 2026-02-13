@@ -7,6 +7,7 @@ import ScreenshotGallery from './components/ScreenshotGallery'
 import Searchbar from './components/Searchbar'
 import TrailerGallery from './components/TrailerGallery'
 import logoUrl from './assets/logo.png'
+import { getUserInitials, type AuthUser } from './utils/authUser'
 import './game.css'
 
 // Define the structure of a game item based on expected API response fields
@@ -33,6 +34,11 @@ type GameMedia = {
   url?: string
   sort_order?: number
 }
+
+type GameProps = {
+  authUser: AuthUser | null;
+};
+
 
 // Determine the default base URL for the API from environment variables
 const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '')
@@ -85,7 +91,7 @@ const formatCommaSeparatedText = (value?: string) => {
 };
 
 // Main Game component handling individual game detail view
-function Game() {
+function Game({ authUser }: GameProps) {
   // Sets a navigation hook and state variables
   const navigate = useNavigate()
   const { gameId } = useParams()
@@ -96,10 +102,12 @@ function Game() {
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
   const [searchInput, setSearchInput] = useState<string>('')
+  const avatarText = useMemo(() => getUserInitials(authUser), [authUser])
   const toastTimeoutRef = useRef<number | null>(null)
   const screenshotsSectionRef = useRef<HTMLElement | null>(null)
   const trailerSectionRef = useRef<HTMLElement | null>(null)
 
+  // Validate and parse the game ID from URL parameters
   const numericId = gameId ? Number(gameId) : null
   const isValidId = numericId !== null && !Number.isNaN(numericId)
 
@@ -279,7 +287,7 @@ function Game() {
               aria-label="Account menu"
               onClick={() => navigate('/user')}
             >
-              NP
+              {avatarText}
             </button>
           </div>
         </header>

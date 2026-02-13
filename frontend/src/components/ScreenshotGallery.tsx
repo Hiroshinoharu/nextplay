@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import './screenshot-gallery.css'
 
 type ScreenshotGalleryProps = {
@@ -30,17 +30,10 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
 
   const [activeIndex, setActiveIndex] = useState(0)
 
-  useEffect(() => {
-    if (!items.length) {
-      setActiveIndex(0)
-      return
-    }
-    setActiveIndex((current) => (current < items.length ? current : 0))
-  }, [items])
-
   if (!items.length) return null
 
-  const activeShot = items[activeIndex]
+  const safeActiveIndex = activeIndex < items.length ? activeIndex : 0
+  const activeShot = items[safeActiveIndex]
   const canNavigate = items.length > 1
 
   const showPrevious = () => {
@@ -69,12 +62,12 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
         <button
           type="button"
           className="screenshot-gallery__frame"
-          onClick={() => onOpen?.(activeIndex)}
-          aria-label={`Open screenshot ${activeIndex + 1} of ${gameName}`}
+          onClick={() => onOpen?.(safeActiveIndex)}
+          aria-label={`Open screenshot ${safeActiveIndex + 1} of ${gameName}`}
         >
           <img
             src={activeShot.src}
-            alt={`${gameName} screenshot ${activeIndex + 1}`}
+            alt={`${gameName} screenshot ${safeActiveIndex + 1}`}
             className="screenshot-gallery__image"
           />
         </button>
@@ -91,7 +84,7 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
       </div>
       <div className="screenshot-gallery__meta">
         <span>
-          Screenshot {activeIndex + 1} of {items.length}
+          Screenshot {safeActiveIndex + 1} of {items.length}
         </span>
       </div>
       {canNavigate ? (
@@ -100,7 +93,7 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
             <button
               key={item.key}
               type="button"
-              className={`screenshot-gallery__thumb${index === activeIndex ? ' is-active' : ''}`}
+              className={`screenshot-gallery__thumb${index === safeActiveIndex ? ' is-active' : ''}`}
               onClick={() => setActiveIndex(index)}
               aria-label={`Show screenshot ${index + 1}`}
             >

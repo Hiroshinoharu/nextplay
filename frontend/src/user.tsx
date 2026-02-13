@@ -4,15 +4,8 @@ import Navbar from "./components/Navbar";
 import Searchbar from "./components/Searchbar";
 import SiteFooter from "./components/SiteFooter";
 import logoUrl from "./assets/logo.png";
+import { getUserDisplayName, getUserInitials, type AuthUser } from "./utils/authUser";
 import "./user.css";
-
-// Define the structure of the authenticated user object based on expected API response fields
-type AuthUser = {
-  id?: number;
-  username?: string;
-  email?: string;
-  steam_linked?: boolean;
-};
 
 // Define the props for the UserPage component
 type UserPageProps = {
@@ -46,17 +39,8 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
   const [interactionsLoading, setInteractionsLoading] = useState(false);
   const [interactionsError, setInteractionsError] = useState<string | null>(null);
 
-  const userDisplayName = authUser?.username ?? authUser?.email ?? "User";
-  const avatarText = useMemo(
-    () =>
-      userDisplayName
-        .split(/[\s@._-]+/)
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part[0]?.toUpperCase() ?? "")
-        .join("") || "NP",
-    [userDisplayName],
-  );
+  const userDisplayName = getUserDisplayName(authUser);
+  const avatarText = getUserInitials(authUser);
 
   useEffect(() => {
     if (!authUser?.id) {

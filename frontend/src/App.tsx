@@ -10,14 +10,7 @@ import Game from "./game";
 import Games from "./games";
 import SearchPage from "./discover";
 import UserPage from "./user";
-
-// Types for authenticated user
-type AuthUser = {
-  id?: number;
-  username?: string;
-  email?: string;
-  steam_linked?: boolean;
-};
+import { type AuthUser } from "./utils/authUser";
 
 // Types for health check statuses
 type HealthStatus = "idle" | "loading" | "ok" | "error";
@@ -536,9 +529,9 @@ function App() {
           )
         }
       />
-      <Route path="/games" element={<Games />} />
-      <Route path="/discover" element={<SearchPage />} />
-      <Route path="/games/:gameId" element={<Game />} />
+      <Route path="/games" element={<Games authUser={authUser} />} />
+      <Route path="/discover" element={<SearchPage authUser={authUser} />} />
+      <Route path="/games/:gameId" element={<Game authUser={authUser} />} />
       <Route
         path="/login"
         element={

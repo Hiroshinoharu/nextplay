@@ -7,6 +7,7 @@ import Navbar from "./components/Navbar";
 import Searchbar from "./components/Searchbar";
 import SiteFooter from "./components/SiteFooter";
 import logoUrl from "./assets/logo.png";
+import { getUserInitials, type AuthUser } from "./utils/authUser";
 import "./discover.css";
 import "./games.css";
 
@@ -37,6 +38,10 @@ type RandomPoolPage = {
   items: GameItem[];
   page: number;
   hasMore: boolean;
+};
+
+type DiscoverPageProps = {
+  authUser: AuthUser | null;
 };
 
 const INITIAL_ROW_ITEMS = 24;
@@ -214,7 +219,7 @@ type DiscoverCarousel = {
   rowType?: "genre";
 };
 
-function DiscoverPage() {
+function DiscoverPage({ authUser }: DiscoverPageProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const urlQuery = collapseWhitespace(searchParams.get("q") ?? "");
@@ -224,6 +229,7 @@ function DiscoverPage() {
   const [rowSnapshots, setRowSnapshots] = useState<Record<string, number[]>>({});
   const [loadingRowTitle, setLoadingRowTitle] = useState<string | null>(null);
   const [visibleGenreRows, setVisibleGenreRows] = useState<number>(INITIAL_GENRE_ROWS);
+  const avatarText = useMemo(() => getUserInitials(authUser), [authUser]);
   const randomPoolFetchPromiseRef = useRef<Promise<unknown> | null>(null);
   const searchGridSectionRef = useRef<HTMLElement | null>(null);
   const randomLanesSectionRef = useRef<HTMLDivElement | null>(null);
@@ -800,7 +806,7 @@ function DiscoverPage() {
               aria-label="Account menu"
               onClick={() => navigate("/user")}
             >
-              NP
+              {avatarText}
             </button>
           </div>
         </header>

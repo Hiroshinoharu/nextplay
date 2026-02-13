@@ -8,6 +8,7 @@ import Navbar from "./components/Navbar";
 import Searchbar from "./components/Searchbar";
 import SiteFooter from "./components/SiteFooter";
 import logoUrl from "./assets/logo.png";
+import { getUserInitials, type AuthUser } from "./utils/authUser";
 import "./games.css";
 
 // Define the structure of a game item based on expected API response fields
@@ -49,6 +50,10 @@ type GamesPage = {
 type SearchPageResult = {
   items: GameItem[];
   hasMore: boolean;
+};
+
+type GamesProps = {
+  authUser: AuthUser | null;
 };
 
 // Utility function to remove duplicate games from a list based on their unique IDs
@@ -212,7 +217,7 @@ const HERO_MIN_ASPECT = 1.3;
 const HERO_MAX_ASPECT = 2.2;
 
 // Main Games component handling game list view
-function Games() {
+function Games({ authUser }: GamesProps) {
   // Router and state hooks
   const navigate = useNavigate();
   const baseUrl = API_ROOT;
@@ -229,6 +234,7 @@ function Games() {
   const [searchInput, setSearchInput] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>(""); // Separate state for the actual search query to trigger searches on submit rather than on every keystroke
   const [searchPage, setSearchPage] = useState<number>(1);
+  const avatarText = useMemo(() => getUserInitials(authUser), [authUser]);
   const searchGridSectionRef = useRef<HTMLElement | null>(null);
   const upcomingSectionRef = useRef<HTMLElement | null>(null);
   const topRatedSectionRef = useRef<HTMLElement | null>(null);
@@ -1078,7 +1084,7 @@ function Games() {
               aria-label="Account menu"
               onClick={() => navigate("/user")}
             >
-              NP
+              {avatarText}
             </button>
           </div>
         </header>
