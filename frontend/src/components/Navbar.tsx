@@ -61,7 +61,9 @@ const StyledWrapper = styled.div`
     position: relative;
     width: 100%;
     min-height: 56px;
-    background: linear-gradient(145deg, rgba(8, 28, 44, 0.84), rgba(8, 22, 35, 0.72));
+    background:
+      radial-gradient(circle at top, rgba(140, 243, 122, 0.06), transparent 58%),
+      linear-gradient(145deg, rgba(8, 28, 44, 0.86), rgba(8, 22, 35, 0.74));
     display: flex;
     flex-direction: row;
     justify-content: space-between;
@@ -71,8 +73,10 @@ const StyledWrapper = styled.div`
     flex-wrap: nowrap;
     padding: 0.4em 0.6em;
     border-radius: 999px;
-    border: 1px solid var(--games-border, rgba(140, 243, 122, 0.32));
-    box-shadow: 0 14px 24px rgba(0, 0, 0, 0.28);
+    border: 1px solid var(--games-border, rgba(140, 243, 122, 0.3));
+    box-shadow:
+      0 16px 26px rgba(0, 0, 0, 0.28),
+      inset 0 0 0 1px rgba(140, 243, 122, 0.08);
     box-sizing: border-box;
     max-width: 100%;
   }
@@ -88,7 +92,7 @@ const StyledWrapper = styled.div`
       filter 0.22s ease,
       translate 0.22s ease,
       scale 0.14s ease;
-    font-size: 0.9rem;
+    font-size: 0.88rem;
     border-radius: 999px;
     white-space: nowrap;
     background: transparent;
@@ -98,7 +102,7 @@ const StyledWrapper = styled.div`
     align-items: center;
     justify-content: center;
     line-height: 1;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: 0.02em;
     appearance: none;
     flex: 1 1 0;
@@ -106,9 +110,11 @@ const StyledWrapper = styled.div`
   }
 
   .btn:hover {
-    background: rgba(140, 243, 122, 0.18);
+    background: rgba(140, 243, 122, 0.16);
     color: var(--games-text, #e2f2ff);
-    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+    box-shadow:
+      0 8px 16px rgba(0, 0, 0, 0.22),
+      inset 0 0 0 1px rgba(140, 243, 122, 0.15);
   }
 
   .btn.is-active {

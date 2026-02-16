@@ -58,15 +58,29 @@ const StyledWrapper = styled.div`
     box-sizing: border-box;
     width: min(320px, 100%);
     max-width: 100%;
-    height: 48px;
+    height: 50px;
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 0 14px;
-    border-radius: 14px;
-    background: linear-gradient(145deg, rgba(8, 28, 44, 0.86), rgba(9, 23, 36, 0.74));
-    border: 1px solid var(--games-border, rgba(140, 243, 122, 0.35));
-    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.28);
+    border-radius: 15px;
+    background:
+      radial-gradient(circle at top, rgba(140, 243, 122, 0.06), transparent 58%),
+      linear-gradient(145deg, rgba(8, 28, 44, 0.88), rgba(9, 23, 36, 0.76));
+    border: 1px solid var(--games-border, rgba(140, 243, 122, 0.33));
+    box-shadow:
+      0 12px 24px rgba(0, 0, 0, 0.28),
+      inset 0 0 0 1px rgba(140, 243, 122, 0.08);
+    transition:
+      border-color 220ms ease,
+      box-shadow 220ms ease;
+  }
+
+  .search:focus-within {
+    border-color: rgba(140, 243, 122, 0.62);
+    box-shadow:
+      0 14px 26px rgba(0, 0, 0, 0.3),
+      0 0 0 3px rgba(140, 243, 122, 0.14);
   }
 
   .search_input {
@@ -93,11 +107,11 @@ const StyledWrapper = styled.div`
     box-sizing: border-box;
     width: 28px;
     height: 28px;
-    border-radius: 8px;
+    border-radius: 9px;
     border: 1px solid rgba(140, 243, 122, 0.35);
     display: grid;
     place-items: center;
-    background: rgba(10, 30, 48, 0.6);
+    background: rgba(10, 30, 48, 0.7);
     flex: 0 0 auto;
     order: 2;
   }

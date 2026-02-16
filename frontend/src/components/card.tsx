@@ -51,7 +51,7 @@ const Card = ({
 const StyledWrapper = styled.div`
   .card {
     position: relative;
-    border-radius: 12px;
+    border-radius: 14px;
     display: flex;
     align-items: flex-end;
     justify-content: center;
@@ -87,18 +87,20 @@ const StyledWrapper = styled.div`
   .card--poster {
     width: 180px;
     height: 260px;
-    background: #0c141a;
-    box-shadow: 0 10px 30px rgba(7, 12, 16, 0.55);
+    background:
+      radial-gradient(circle at top, rgba(140, 243, 122, 0.06), transparent 55%),
+      linear-gradient(145deg, rgba(8, 22, 34, 0.94), rgba(6, 14, 22, 0.96));
+    box-shadow: 0 14px 30px rgba(7, 12, 16, 0.52);
     transform: translateZ(0);
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
-    clip-path: inset(0 round 12px);
+    clip-path: inset(0 round 14px);
     -webkit-mask-image: -webkit-radial-gradient(white, black);
   }
 
   .card--poster:hover {
-    transform: translateY(-6px) scale(1.04);
-    box-shadow: 0 18px 40px rgba(7, 12, 16, 0.75);
+    transform: translateY(-5px) scale(1.03);
+    box-shadow: 0 20px 40px rgba(7, 12, 16, 0.66);
   }
 
   .card--clickable:focus-visible {
@@ -123,7 +125,7 @@ const StyledWrapper = styled.div`
 
   .card__content {
     width: 100%;
-    padding: 14px 16px;
+    padding: 14px 15px;
     box-sizing: border-box;
     background: linear-gradient(180deg, rgba(4, 9, 12, 0.05) 0%, rgba(4, 9, 12, 0.65) 55%, rgba(4, 9, 12, 0.9) 100%);
     transition: transform 0.3s ease;
@@ -146,13 +148,13 @@ const StyledWrapper = styled.div`
     font-size: 15px;
     color: #f8fafc;
     font-weight: 700;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.015em;
   }
 
   .card__description {
     margin: 8px 0 0;
     font-size: 12px;
-    color: #cbd5f5;
+    color: #d2ddf7;
     line-height: 1.4;
     white-space: pre-line;
   }
@@ -163,12 +165,12 @@ const StyledWrapper = styled.div`
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: 12px;
+    border-radius: 14px;
     transition: transform 0.35s ease;
     transform: translateZ(0);
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
-    clip-path: inset(0 round 12px);
+    clip-path: inset(0 round 14px);
   }
 
   .card--poster:hover .card__image {
@@ -178,24 +180,29 @@ const StyledWrapper = styled.div`
   .card--info {
     width: 280px;
     min-height: 220px;
-    background: #f1f5f9;
-    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+    background:
+      radial-gradient(circle at top, rgba(140, 243, 122, 0.06), transparent 60%),
+      linear-gradient(150deg, rgba(8, 28, 44, 0.92), rgba(7, 19, 31, 0.9));
+    box-shadow:
+      0 16px 30px rgba(0, 0, 0, 0.28),
+      inset 0 0 0 1px rgba(140, 243, 122, 0.12);
     align-items: flex-start;
+    border: 1px solid rgba(140, 243, 122, 0.24);
   }
 
   .card--info .card__content {
     position: relative;
     background: none;
-    color: #0f172a;
+    color: #e2f2ff;
   }
 
   .card--info .card__title {
-    color: #0f172a;
+    color: #e2f2ff;
     font-size: 18px;
   }
 
   .card--info .card__description {
-    color: #334155;
+    color: rgba(226, 242, 255, 0.76);
     font-size: 13px;
   }
 

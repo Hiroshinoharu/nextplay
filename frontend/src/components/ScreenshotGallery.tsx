@@ -1,5 +1,16 @@
-import { useMemo, useState } from 'react'
-import './screenshot-gallery.css'
+import { useMemo, useRef, useState, type TouchEvent } from 'react'
+import {
+  FrameButton,
+  FrameImage,
+  FrameWrap,
+  Gallery,
+  Meta,
+  NavButton,
+  ThumbButton,
+  ThumbImage,
+  ThumbLabel,
+  Thumbs,
+} from './mediaGalleryStyles'
 
 type ScreenshotGalleryProps = {
   screenshots: string[]
@@ -29,6 +40,8 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
   }, [screenshots])
 
   const [activeIndex, setActiveIndex] = useState(0)
+  const touchStartX = useRef<number | null>(null)
+  const touchStartY = useRef<number | null>(null)
 
   if (!items.length) return null
 
@@ -46,69 +59,86 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
     setActiveIndex((current) => (current + 1) % items.length)
   }
 
+  const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
+    if (!canNavigate) return
+    const touch = event.changedTouches[0]
+    touchStartX.current = touch.clientX
+    touchStartY.current = touch.clientY
+  }
+
+  const handleTouchEnd = (event: TouchEvent<HTMLElement>) => {
+    if (!canNavigate || touchStartX.current === null || touchStartY.current === null) return
+    const touch = event.changedTouches[0]
+    const deltaX = touch.clientX - touchStartX.current
+    const deltaY = touch.clientY - touchStartY.current
+
+    touchStartX.current = null
+    touchStartY.current = null
+
+    const swipeThreshold = 48
+    const verticalTolerance = 32
+    if (Math.abs(deltaX) < swipeThreshold || Math.abs(deltaY) > verticalTolerance) return
+
+    if (deltaX > 0) {
+      showPrevious()
+      return
+    }
+    showNext()
+  }
+
   return (
-    <div className="screenshot-gallery">
-      <div className="screenshot-gallery__frame-wrap">
+    <Gallery>
+      <FrameWrap onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         {canNavigate ? (
-          <button
+          <NavButton
             type="button"
-            className="screenshot-gallery__nav screenshot-gallery__nav--prev"
+            $position="prev"
             onClick={showPrevious}
             aria-label="Show previous screenshot"
           >
-            Prev
-          </button>
+            Back
+          </NavButton>
         ) : null}
-        <button
+        <FrameButton
           type="button"
-          className="screenshot-gallery__frame"
           onClick={() => onOpen?.(safeActiveIndex)}
           aria-label={`Open screenshot ${safeActiveIndex + 1} of ${gameName}`}
         >
-          <img
-            src={activeShot.src}
-            alt={`${gameName} screenshot ${safeActiveIndex + 1}`}
-            className="screenshot-gallery__image"
-          />
-        </button>
+          <FrameImage src={activeShot.src} alt={`${gameName} screenshot ${safeActiveIndex + 1}`} />
+        </FrameButton>
         {canNavigate ? (
-          <button
+          <NavButton
             type="button"
-            className="screenshot-gallery__nav screenshot-gallery__nav--next"
+            $position="next"
             onClick={showNext}
             aria-label="Show next screenshot"
           >
             Next
-          </button>
+          </NavButton>
         ) : null}
-      </div>
-      <div className="screenshot-gallery__meta">
+      </FrameWrap>
+      <Meta>
         <span>
           Screenshot {safeActiveIndex + 1} of {items.length}
         </span>
-      </div>
+      </Meta>
       {canNavigate ? (
-        <div className="screenshot-gallery__thumbs" aria-label="Choose screenshot">
+        <Thumbs aria-label="Choose screenshot">
           {items.map((item, index) => (
-            <button
+            <ThumbButton
               key={item.key}
               type="button"
-              className={`screenshot-gallery__thumb${index === safeActiveIndex ? ' is-active' : ''}`}
+              data-active={index === safeActiveIndex}
               onClick={() => setActiveIndex(index)}
               aria-label={`Show screenshot ${index + 1}`}
             >
-              <img
-                src={item.src}
-                alt=""
-                className="screenshot-gallery__thumb-image"
-                loading="lazy"
-              />
-              <span className="screenshot-gallery__thumb-label">Screenshot {index + 1}</span>
-            </button>
+              <ThumbImage src={item.src} alt="" loading="lazy" />
+              <ThumbLabel>Screenshot {index + 1}</ThumbLabel>
+            </ThumbButton>
           ))}
-        </div>
+        </Thumbs>
       ) : null}
-    </div>
+    </Gallery>
   )
 }
 

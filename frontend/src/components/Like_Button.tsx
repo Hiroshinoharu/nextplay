@@ -20,50 +20,54 @@ const Button = () => {
 
 const StyledWrapper = styled.div`
   button {
+    position: relative;
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 20px 25px 20px 22px;
-    box-shadow: rgba(10, 37, 64, 0.35) 0px -2px 6px 0px inset;
-    background-color: #e8e8e8;
-    border-color: #ffe2e2;
-    border-style: solid;
-    border-width: 9px;
-    border-radius: 35px;
-    font-size: 25px;
+    gap: 8px;
+    padding: 10px 16px;
+    box-shadow:
+      0 10px 22px rgba(3, 11, 18, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    background: linear-gradient(155deg, rgba(8, 28, 44, 0.94), rgba(7, 19, 30, 0.9));
+    border: 1px solid rgba(140, 243, 122, 0.36);
+    border-radius: 999px;
+    font-size: 15px;
     cursor: pointer;
-    font-weight: 900;
-    color: rgb(134, 124, 124);
-    font-family: monospace;
+    font-weight: 700;
+    color: #e2f2ff;
+    font-family: inherit;
     transition:
-      transform 400ms cubic-bezier(0.68, -0.55, 0.27, 2.5),
-      border-color 400ms ease-in-out,
-      background-color 400ms ease-in-out;
-    word-spacing: -2px;
+      transform 280ms ease,
+      border-color 280ms ease,
+      background-color 280ms ease,
+      box-shadow 280ms ease;
   }
 
   @keyframes movingBorders {
     0% {
-      border-color: #fce4e4;
+      border-color: rgba(140, 243, 122, 0.42);
     }
 
     50% {
-      border-color: #ffd8d8;
+      border-color: rgba(199, 240, 0, 0.62);
     }
 
     90% {
-      border-color: #fce4e4;
+      border-color: rgba(140, 243, 122, 0.42);
     }
   }
 
   button:hover {
-    background-color: #eee;
-    transform: scale(105%);
+    background: linear-gradient(155deg, rgba(10, 34, 52, 0.94), rgba(9, 24, 38, 0.9));
+    transform: translateY(-1px);
     animation: movingBorders 3s infinite;
+    box-shadow:
+      0 12px 24px rgba(3, 11, 18, 0.36),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
   }
 
   button svg {
-    margin-right: 11px;
     fill: rgb(255, 110, 110);
     transition: opacity 100ms ease-in-out;
   }
@@ -71,8 +75,8 @@ const StyledWrapper = styled.div`
   .filled {
     position: absolute;
     opacity: 0;
-    top: 20px;
-    left: 22px;
+    top: 9px;
+    left: 14px;
   }
 
   @keyframes beatingHeart {

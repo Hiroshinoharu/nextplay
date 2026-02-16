@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/maxceban/nextplay/services/game/models"
@@ -68,7 +69,7 @@ func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool, searchQue
 	args = append(args, limit, offset)
 	limitArgPos := len(args) - 1
 	offsetArgPos := len(args)
-	query := baseQuery + fmt.Sprintf("\nLIMIT $%d OFFSET $%d;", limitArgPos, offsetArgPos)
+	query := baseQuery + "\nLIMIT $" + strconv.Itoa(limitArgPos) + " OFFSET $" + strconv.Itoa(offsetArgPos) + ";"
 
 	rows, err := DB.Query(query, args...)
 	if err != nil {
@@ -198,22 +199,19 @@ func SearchGamesByName(query string, mode string, limit int, offset int, include
 		argValue = "%" + trimmedQuery + "%"
 	}
 
-	querySQL := fmt.Sprintf(
-		`
+	querySQL := `
 		SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url, aggregated_rating, aggregated_rating_count, total_rating, total_rating_count, popularity
 		FROM games g
-		WHERE %s
+		WHERE ` + whereClause + `
 		ORDER BY g.game_id
-	`,
-		whereClause,
-	)
+	`
 	args := []interface{}{argValue}
 	if limit > 0 {
 		args = append(args, limit, offset)
-		querySQL += fmt.Sprintf(" LIMIT $%d OFFSET $%d;", len(args)-1, len(args))
+		querySQL += " LIMIT $" + strconv.Itoa(len(args)-1) + " OFFSET $" + strconv.Itoa(len(args)) + ";"
 	} else if offset > 0 {
 		args = append(args, offset)
-		querySQL += fmt.Sprintf(" OFFSET $%d;", len(args))
+		querySQL += " OFFSET $" + strconv.Itoa(len(args)) + ";"
 	} else {
 		querySQL += ";"
 	}

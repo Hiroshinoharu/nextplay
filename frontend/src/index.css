@@ -6,6 +6,13 @@
   font-weight: 400;
   color: #e2e8f0;
   background-color: #0b141a;
+  --np-text: #e2f2ff;
+  --np-text-muted: rgba(226, 242, 255, 0.72);
+  --np-surface-1: rgba(10, 30, 48, 0.9);
+  --np-surface-2: rgba(8, 22, 35, 0.78);
+  --np-border-soft: rgba(140, 243, 122, 0.32);
+  --np-accent: #8cf37a;
+  --np-accent-strong: #c7f000;
   --np-btn-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --np-btn-shadow-hover: 0 10px 22px rgba(3, 11, 18, 0.35);
   --np-btn-shadow-active: 0 4px 12px rgba(3, 11, 18, 0.24);

@@ -1,5 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
-import './trailer-gallery.css'
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react'
+import styled from 'styled-components'
+import {
+  FramePanel,
+  FrameWrap,
+  Gallery,
+  Meta,
+  NavButton,
+  ThumbButton,
+  ThumbImage,
+  ThumbLabel,
+  Thumbs,
+} from './mediaGalleryStyles'
 
 type TrailerGalleryProps = {
   trailers: string[]
@@ -73,6 +84,8 @@ const TrailerGallery = ({ trailers, gameName = 'game' }: TrailerGalleryProps) =>
   }, [trailers])
 
   const [activeIndex, setActiveIndex] = useState(0)
+  const touchStartX = useRef<number | null>(null)
+  const touchStartY = useRef<number | null>(null)
 
   useEffect(() => {
     if (!items.length) {
@@ -100,81 +113,132 @@ const TrailerGallery = ({ trailers, gameName = 'game' }: TrailerGalleryProps) =>
     setActiveIndex((current) => (current + 1) % items.length)
   }
 
+  const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
+    if (!canNavigate) return
+    const touch = event.changedTouches[0]
+    touchStartX.current = touch.clientX
+    touchStartY.current = touch.clientY
+  }
+
+  const handleTouchEnd = (event: TouchEvent<HTMLElement>) => {
+    if (!canNavigate || touchStartX.current === null || touchStartY.current === null) return
+    const touch = event.changedTouches[0]
+    const deltaX = touch.clientX - touchStartX.current
+    const deltaY = touch.clientY - touchStartY.current
+
+    touchStartX.current = null
+    touchStartY.current = null
+
+    const swipeThreshold = 48
+    const verticalTolerance = 32
+    if (Math.abs(deltaX) < swipeThreshold || Math.abs(deltaY) > verticalTolerance) return
+
+    if (deltaX > 0) {
+      showPrevious()
+      return
+    }
+    showNext()
+  }
+
   return (
-    <div className="trailer-gallery">
-      <div className="trailer-gallery__frame-wrap">
+    <Gallery>
+      <FrameWrap onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         {canNavigate ? (
-          <button
+          <NavButton
             type="button"
-            className="trailer-gallery__nav trailer-gallery__nav--prev"
+            $position="prev"
             onClick={showPrevious}
             aria-label="Show previous trailer"
           >
-            Prev
-          </button>
+            Back
+          </NavButton>
         ) : null}
-        <div className="trailer-gallery__frame">
-          <iframe
+        <FramePanel>
+          <TrailerFrame
             src={activeTrailer.embedUrl}
             title={`${gameName} trailer ${activeIndex + 1}`}
-            className="trailer-gallery__iframe"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
           />
-        </div>
+        </FramePanel>
         {canNavigate ? (
-          <button
+          <NavButton
             type="button"
-            className="trailer-gallery__nav trailer-gallery__nav--next"
+            $position="next"
             onClick={showNext}
             aria-label="Show next trailer"
           >
             Next
-          </button>
+          </NavButton>
         ) : null}
-      </div>
-      <div className="trailer-gallery__meta">
+      </FrameWrap>
+      <Meta>
         <span>
           Trailer {activeIndex + 1} of {items.length}
         </span>
-        <a
+        <MetaLink
           href={toWatchUrl(activeTrailer.sourceUrl, activeTrailer.videoId)}
           target="_blank"
           rel="noreferrer"
-          className="trailer-gallery__link"
         >
           Open on YouTube
-        </a>
-      </div>
+        </MetaLink>
+      </Meta>
       {canNavigate ? (
-        <div className="trailer-gallery__thumbs" aria-label="Choose trailer">
+        <Thumbs aria-label="Choose trailer">
           {items.map((item, index) => (
-            <button
+            <ThumbButton
               key={item.key}
               type="button"
-              className={`trailer-gallery__thumb${index === activeIndex ? ' is-active' : ''}`}
+              data-active={index === activeIndex}
               onClick={() => setActiveIndex(index)}
               aria-label={`Play trailer ${index + 1}`}
             >
               {item.thumbnailUrl ? (
-                <img
-                  src={item.thumbnailUrl}
-                  alt=""
-                  className="trailer-gallery__thumb-image"
-                  loading="lazy"
-                />
+                <ThumbImage src={item.thumbnailUrl} alt="" loading="lazy" />
               ) : (
-                <span className="trailer-gallery__thumb-fallback" aria-hidden="true">
-                  Trailer
-                </span>
+                <ThumbFallback aria-hidden="true">Trailer</ThumbFallback>
               )}
-              <span className="trailer-gallery__thumb-label">Trailer {index + 1}</span>
-            </button>
+              <ThumbLabel>Trailer {index + 1}</ThumbLabel>
+            </ThumbButton>
           ))}
-        </div>
+        </Thumbs>
       ) : null}
-    </div>
+    </Gallery>
   )
 }
+
+const TrailerFrame = styled.iframe`
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+`
+
+
+const MetaLink = styled.a`
+  color: var(--game-accent, #8cf37a);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+
+  &:hover {
+    border-color: currentColor;
+  }
+`
+
+
+const ThumbFallback = styled.span`
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(226, 242, 255, 0.85);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+`
+
 
 export default TrailerGallery

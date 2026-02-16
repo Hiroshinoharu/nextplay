@@ -49,19 +49,26 @@ const StyledWrapper = styled.div`
     cursor: pointer;
     font-weight: 700;
     transition:
-      transform 400ms cubic-bezier(0.68, -0.55, 0.27, 2.5),
-      border-color 400ms ease-in-out,
-      background-color 400ms ease-in-out;
-    padding: 10px 20px;
+      transform 280ms var(--np-btn-ease),
+      border-color 280ms ease-in-out,
+      background-color 280ms ease-in-out,
+      box-shadow 280ms ease-in-out;
+    padding: 11px 20px;
     border-radius: 100px;
-    background: #cfef00;
-    border: 2px solid transparent;
+    background: linear-gradient(135deg, #c7f000, #8cf37a);
+    color: #07131a;
+    border: 1px solid rgba(199, 240, 0, 0.55);
     display: flex;
     align-items: center;
+    gap: 8px;
     font-size: 15px;
     position: relative;
     min-height: 42px;
     justify-content: center;
+    letter-spacing: 0.01em;
+    box-shadow:
+      0 10px 20px rgba(7, 15, 22, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
   }
 
   @keyframes movingBorders {
@@ -79,15 +86,26 @@ const StyledWrapper = styled.div`
   }
 
   button:hover {
-    background: #c4e201;
-    transform: scale(1.03);
+    background: linear-gradient(135deg, #d2f72d, #a6f08a);
+    transform: translateY(-1px);
     animation: movingBorders 3s infinite;
+    box-shadow:
+      0 14px 24px rgba(7, 15, 22, 0.34),
+      inset 0 1px 0 rgba(255, 255, 255, 0.34);
   }
 
   .button__icon-arrow {
     width: 34px;
-    margin-left: 10px;
+    margin-left: 2px;
     transition: transform 0.3s ease-in-out;
+  }
+
+  .button__icon-arrow circle {
+    stroke: #08161f;
+  }
+
+  .button__icon-arrow path {
+    fill: #08161f;
   }
 
   button:hover .button__icon-arrow {
@@ -148,7 +166,7 @@ const StyledWrapper = styled.div`
   }
 
   button:active {
-    transform: scale(0.95);
+    transform: translateY(0) scale(0.98);
   }
 
   button:disabled {
