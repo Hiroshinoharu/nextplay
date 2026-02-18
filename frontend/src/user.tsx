@@ -36,6 +36,12 @@ type GameItem = {
 
 type ListFilter = "all" | "liked" | "favorited" | "rated" | "reviewed";
 
+const hasMeaningfulInteraction = (item: UserInteraction) =>
+  (typeof item.rating === "number" && Number.isFinite(item.rating)) ||
+  item.liked === true ||
+  item.favorited === true ||
+  Boolean(item.review?.trim());
+
 // Base URL for API requests, ensuring no trailing slash
 const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(/\/+$/, "");
 const API_ROOT = RAW_BASE_URL.endsWith("/api")
@@ -106,7 +112,9 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
           setInteractionsError("Unexpected interactions response.");
           return;
         }
-        const sorted = [...payload].sort((a, b) => {
+        const sorted = [...payload]
+          .filter(hasMeaningfulInteraction)
+          .sort((a, b) => {
           const left = a.timestamp ? new Date(a.timestamp).getTime() : 0;
           const right = b.timestamp ? new Date(b.timestamp).getTime() : 0;
           return right - left;

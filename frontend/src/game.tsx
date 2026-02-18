@@ -62,6 +62,12 @@ type InteractionInput = {
   favorited: boolean | null;
 };
 
+const hasMeaningfulInteractionInput = (value: InteractionInput) =>
+  (typeof value.rating === "number" && Number.isFinite(value.rating)) ||
+  value.liked === true ||
+  value.favorited === true ||
+  Boolean(value.review?.trim());
+
 // Determine the default base URL for the API from environment variables
 const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(
   /\/+$/,
@@ -313,6 +319,30 @@ function Game({ authUser }: GameProps) {
         controller.abort();
       }, 12000);
       try {
+        if (!hasMeaningfulInteractionInput(next)) {
+          const deleteUrl = `${userInteractionsUrl}/${next.game_id}`;
+          const deleteResponse = await fetch(deleteUrl, {
+            method: "DELETE",
+            signal: controller.signal,
+            headers: {
+              Authorization: `Bearer ${authToken}`,
+            },
+          });
+          if (!deleteResponse.ok && deleteResponse.status !== 404) {
+            let errorData: { message?: string } | null = null;
+            try {
+              errorData = (await deleteResponse.json()) as { message?: string };
+            } catch {
+              errorData = null;
+            }
+            showToast(errorData?.message || "Failed to clear interaction.");
+            return false;
+          }
+          setInteraction(null);
+          setReviewDraft("");
+          showToast("Interaction cleared.");
+          return true;
+        }
         const response = await fetch(userInteractionsUrl, {
           method: "POST",
           signal: controller.signal,

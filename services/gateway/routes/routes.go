@@ -14,15 +14,13 @@ func SetUpRoutes(app *fiber.App) {
 	// HEALTH ROUTES
 	// --------------------------
 	health := api.Group("/health")
-	{
-		securedHealth := health.Group("/", middleware.RequireJWT)
-		
-		// Private health endpoints
-		securedHealth.Get("/", handlers.GetAllHealth)
-		securedHealth.Get("/gateway", handlers.GetGatewayHealth)
-		securedHealth.Get("/user", handlers.GetUserHealth)
-		securedHealth.Get("/game", handlers.GetGameHealth)
-		securedHealth.Get("/recommender", handlers.GetRecommenderHealth)
+	{	
+		// Public health endpoints
+		health.Get("/", handlers.GetAllHealth)
+		health.Get("/gateway", handlers.GetGatewayHealth)
+		health.Get("/user", handlers.GetUserHealth)
+		health.Get("/game", handlers.GetGameHealth)
+		health.Get("/recommender", handlers.GetRecommenderHealth)
 	}
 
 	// --------------------------

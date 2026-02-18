@@ -527,9 +527,11 @@
 
 .game-interaction__review {
   margin-top: 8px;
-  min-height: 90px;
+  min-height: 120px;
+  height: 120px;
+  max-height: 180px;
   width: 100%;
-  resize: vertical;
+  resize: none;
   border-radius: 12px;
   border: 1px solid var(--game-border);
   background: rgba(6, 20, 31, 0.72);
@@ -790,6 +792,12 @@
 
   .game-cover__placeholder {
     min-height: 220px;
+  }
+
+  .game-interaction__review {
+    min-height: 104px;
+    height: 104px;
+    max-height: 140px;
   }
 
   .game-info__title {
