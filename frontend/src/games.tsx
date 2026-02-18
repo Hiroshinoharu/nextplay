@@ -659,7 +659,7 @@ function Games({ authUser }: GamesProps) {
     };
     loadFeaturedDetail();
     return () => controller.abort();
-  }, [baseUrl, featuredGameId]);
+  }, [baseUrl, featuredGameId, authToken]);
 
   const featuredGame = featuredGameId
     ? (featuredCandidates.find((game) => game.id === featuredGameId) ?? null)
@@ -878,13 +878,14 @@ function Games({ authUser }: GamesProps) {
     () => heroPreferredPool.join("|"),
     [heroPreferredPool],
   );
-
+  
   useEffect(() => {
     if (!heroPreferredPool.length) {
       setFeaturedMediaPick((current) => (current === 0 ? current : 0));
       return;
     }
 
+    // If the current pick is out of bounds for the new pool, reset to 0. Otherwise, randomly pick a new index that is different from the current one to ensure variety in the hero images while maintaining consistency when possible.
     setFeaturedMediaPick((current) => {
       const next = Math.floor(Math.random() * heroPreferredPool.length);
       if (heroPreferredPool.length === 1) return 0;
@@ -957,6 +958,8 @@ function Games({ authUser }: GamesProps) {
       : activeHeroMedia?.source === "artwork"
         ? "games-hero__image games-hero__image--artwork"
         : "games-hero__image games-hero__image--screenshot";
+  
+  // The featuredScreenshots list is created by selecting the appropriate pool of media URLs based on their eligibility for use as hero images, and then applying a rotation based on the featuredMediaPick index to ensure that different media items are showcased in the hero section over time. This allows the component to dynamically display a variety of media from the featured game while prioritizing those that are best suited for the hero image based on their dimensions and aspect ratios.
   const featuredScreenshots = useMemo(() => {
     const base = heroEligibleScreenshotPool.length
       ? heroEligibleScreenshotPool

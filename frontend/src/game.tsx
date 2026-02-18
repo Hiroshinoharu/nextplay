@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Button from "./components/Button";
+import LikeButton from "./components/Like_Button";
 import Lightbox from "./components/Lightbox";
 import Navbar from "./components/Navbar";
+import RateRadio from "./components/rateRadio";
 import ScreenshotGallery from "./components/ScreenshotGallery";
 import Searchbar from "./components/Searchbar";
 import TrailerGallery from "./components/TrailerGallery";
@@ -40,6 +42,24 @@ type GameMedia = {
 // Define the props for the Game component
 type GameProps = {
   authUser: AuthUser | null;
+};
+
+type UserInteraction = {
+  user_id: number;
+  game_id: number;
+  rating?: number | null;
+  review?: string | null;
+  liked?: boolean | null;
+  favorited?: boolean | null;
+  timestamp?: string | null;
+};
+
+type InteractionInput = {
+  game_id: number;
+  rating: number | null;
+  review: string | null;
+  liked: boolean | null;
+  favorited: boolean | null;
 };
 
 // Determine the default base URL for the API from environment variables
@@ -115,9 +135,14 @@ function Game({ authUser }: GameProps) {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [searchInput, setSearchInput] = useState<string>("");
+  const [interaction, setInteraction] = useState<UserInteraction | null>(null);
+  const [interactionLoading, setInteractionLoading] = useState<boolean>(false);
+  const [interactionSaving, setInteractionSaving] = useState<boolean>(false);
+  const [reviewDraft, setReviewDraft] = useState<string>("");
   const avatarText = useMemo(() => getUserInitials(authUser), [authUser]);
   const authToken = authUser?.token?.trim() ?? "";
   const toastTimeoutRef = useRef<number | null>(null);
+  const savingGuardTimeoutRef = useRef<number | null>(null);
   const screenshotsSectionRef = useRef<HTMLElement | null>(null);
   const trailerSectionRef = useRef<HTMLElement | null>(null);
 
@@ -146,15 +171,12 @@ function Game({ authUser }: GameProps) {
       setGameLoading(true);
       setGameError(null);
       try {
-        const responseValue = await fetch(
-          gameUrl,
-          {
-            ...(signal ? { signal } : {}),
-            ...(authToken
-              ? { headers: { Authorization: `Bearer ${authToken}` } }
-              : {}),
-          },
-        );
+        const responseValue = await fetch(gameUrl, {
+          ...(signal ? { signal } : {}),
+          ...(authToken
+            ? { headers: { Authorization: `Bearer ${authToken}` } }
+            : {}),
+        });
         if (!responseValue.ok) {
           setGameError(`Failed to load game: ${responseValue.status}`);
           return;
@@ -201,9 +223,30 @@ function Game({ authUser }: GameProps) {
       if (toastTimeoutRef.current !== null) {
         window.clearTimeout(toastTimeoutRef.current);
       }
+      if (savingGuardTimeoutRef.current !== null) {
+        window.clearTimeout(savingGuardTimeoutRef.current);
+      }
     },
     [],
   );
+
+  useEffect(() => {
+    if (!interactionSaving) {
+      if (savingGuardTimeoutRef.current !== null) {
+        window.clearTimeout(savingGuardTimeoutRef.current);
+        savingGuardTimeoutRef.current = null;
+      }
+      return;
+    }
+    if (savingGuardTimeoutRef.current !== null) {
+      window.clearTimeout(savingGuardTimeoutRef.current);
+    }
+    savingGuardTimeoutRef.current = window.setTimeout(() => {
+      setInteractionSaving(false);
+      showToast("Save is taking too long. Please try again.");
+      savingGuardTimeoutRef.current = null;
+    }, 15000);
+  }, [interactionSaving, showToast]);
 
   const closeGameDetail = () => {
     navigate("/discover");
@@ -244,6 +287,164 @@ function Game({ authUser }: GameProps) {
       showToast("Could not copy link in this browser.");
     }
   }, [showToast]);
+
+  // Construct the user interactions API URL using the base URL and memoization, returning null if the user is not authenticated
+  const userInteractionsUrl = useMemo(() => {
+    if (!authUser?.id) return null;
+    const trimmedBase = baseUrl.replace(/\/+$/, "");
+    const root = trimmedBase.endsWith("/api")
+      ? trimmedBase.slice(0, -4)
+      : trimmedBase;
+    return `${root}/api/users/${authUser.id}/interactions`;
+  }, [authUser?.id, baseUrl]);
+
+  // Function to save user interactions (like rating, review, etc.) to the API, with error handling and user feedback
+  // This function checks for authentication, sends a POST request to save the interaction, updates local state with the new interaction data, and provides feedback to the user through toast messages. It also handles loading state to prevent multiple simultaneous saves and ensures that the review draft is updated with the latest review text.
+  const saveInteraction = useCallback(
+    async (next: InteractionInput, sucessMessage: string) => {
+      if (!userInteractionsUrl || !authToken) {
+        showToast("You must be logged in to perform this action.");
+        return false;
+      }
+
+      setInteractionSaving(true);
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => {
+        controller.abort();
+      }, 12000);
+      try {
+        const response = await fetch(userInteractionsUrl, {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify(next),
+        });
+        if (!response.ok) {
+          let errorData: { message?: string } | null = null;
+          try {
+            errorData = (await response.json()) as { message?: string };
+          } catch {
+            errorData = null;
+          }
+          const errorMessage =
+            errorData?.message || "Failed to save interaction.";
+          showToast(errorMessage);
+          return false;
+        }
+        const nowIso = new Date().toISOString();
+        setInteraction({
+          user_id: authUser?.id ?? 0,
+          game_id: next.game_id,
+          rating: next.rating,
+          review: next.review,
+          liked: next.liked,
+          favorited: next.favorited,
+          timestamp: nowIso,
+        });
+        setReviewDraft(next.review ?? "");
+        showToast(sucessMessage);
+        return true;
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error && err.name === "AbortError"
+            ? "Save timed out. Please try again."
+            : err instanceof Error
+              ? err.message
+              : "An error occurred while saving your interaction.";
+        showToast(errorMessage);
+        return false;
+      } finally {
+        window.clearTimeout(timeout);
+        setInteractionSaving(false);
+      }
+    },
+    [authUser?.id, authToken, showToast, userInteractionsUrl],
+  );
+
+  // Load the user's existing interaction for this game when the component mounts or when relevant dependencies change, with error handling and user feedback. This effect checks if the necessary parameters are available, fetches the user's interactions from the API, finds the interaction for the current game, and updates local state accordingly. It also handles loading state and provides feedback through toast messages if there are issues with loading the interaction.
+  useEffect(() => {
+    if (
+      !userInteractionsUrl ||
+      !authToken ||
+      numericId === null ||
+      !isValidId
+    ) {
+      setInteraction(null);
+      setReviewDraft("");
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const loadInteraction = async () => {
+      setInteractionLoading(true);
+      const timeout = window.setTimeout(() => {
+        controller.abort();
+      }, 12000);
+      try {
+        const response = await fetch(userInteractionsUrl, {
+          signal: controller.signal,
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        if (!response.ok) {
+          if (response.status !== 404) {
+            showToast(`Could not load interaction (${response.status}).`, 3600);
+          }
+          return;
+        }
+        const payload = (await response.json()) as UserInteraction[];
+        if (!Array.isArray(payload)) return;
+        const existing =
+          payload.find((item) => item.game_id === numericId) ?? null;
+        setInteraction(existing);
+        setReviewDraft(existing?.review ?? "");
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          showToast("Loading your interaction timed out.", 3600);
+          return;
+        }
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "An error occurred while loading your interaction.";
+        showToast(errorMessage, 3600);
+      } finally {
+        window.clearTimeout(timeout);
+        setInteractionLoading(false);
+      }
+    };
+    void loadInteraction();
+    return () => controller.abort();
+  }, [authToken, numericId, isValidId, showToast, userInteractionsUrl]);
+
+  const interactionUpdatedText = interaction?.timestamp
+    ? String(new Date(interaction.timestamp).getTime())
+    : "Not saved yet";
+  const existingReview = collapseWhitespace(interaction?.review ?? "");
+  const currentReview = collapseWhitespace(reviewDraft);
+  const reviewCharsRemaining = 500 - reviewDraft.length;
+  const reviewChanged = currentReview !== existingReview;
+  const canSaveReview = reviewChanged && !interactionSaving;
+  const canClearReview = (currentReview.length > 0 || existingReview.length > 0) && !interactionSaving;
+  
+   const interactionInput: InteractionInput | null =
+    numericId === null
+      ? null
+      : {
+          game_id: numericId,
+          rating:
+            typeof interaction?.rating === "number" && Number.isFinite(interaction.rating)
+              ? interaction.rating
+              : null,
+          review: reviewDraft.trim() || null,
+          liked: typeof interaction?.liked === "boolean" ? interaction.liked : null,
+          favorited:
+            typeof interaction?.favorited === "boolean" ? interaction.favorited : null,
+        };
+
 
   // Prepare media items for display
   const mediaItems = Array.isArray(game?.media) ? game?.media : [];
@@ -339,22 +540,147 @@ function Game({ authUser }: GameProps) {
 
           {game && !gameLoading && (
             <div className="game-grid">
-              {detailCover ? (
-                <div className="game-cover">
-                  <img
-                    src={detailCover}
-                    alt={game.name || "Game cover"}
-                    className="game-cover__image"
-                    loading="eager"
-                  />
-                </div>
-              ) : (
-                <div className="game-cover">
-                  <div className="game-cover__placeholder">
-                    No cover available
+              <div className="game-side">
+                {detailCover ? (
+                  <div className="game-cover">
+                    <img
+                      src={detailCover}
+                      alt={game.name || "Game cover"}
+                      className="game-cover__image"
+                      loading="eager"
+                    />
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="game-cover">
+                    <div className="game-cover__placeholder">
+                      No cover available
+                    </div>
+                  </div>
+                )}
+                <section className="game-panel game-panel--interactions" aria-label="Your interaction">
+                  <div className="game-panel__header">
+                    <h2 className="game-panel__title">Your interaction</h2>
+                    <span className="game-panel__meta game-panel__meta--updated">
+                      Updated: {interactionUpdatedText}
+                    </span>
+                  </div>
+
+                  {!authUser?.id ? (
+                    <div className="game-gallery__empty">Sign in to rate, review, like, and favorite this game.</div>
+                  ) : interactionLoading ? (
+                    <div className="game-gallery__empty">Loading your interaction...</div>
+                  ) : (
+                    <div className="game-interaction">
+                      <div className="game-interaction__row">
+                        <span className="game-interaction__label">Rating</span>
+                        <RateRadio
+                          value={
+                            typeof interaction?.rating === "number" &&
+                            Number.isFinite(interaction.rating)
+                              ? interaction.rating
+                              : null
+                          }
+                          disabled={interactionSaving}
+                          onChange={(value) => {
+                            if (!interactionInput) return;
+                            void saveInteraction(
+                              { ...interactionInput, rating: value },
+                              `Saved ${value}-star rating.`,
+                            );
+                          }}
+                          onClear={() => {
+                            if (!interactionInput) return;
+                            void saveInteraction(
+                              { ...interactionInput, rating: null },
+                              "Rating cleared.",
+                            );
+                          }}
+                        />
+                      </div>
+
+                      <div className="game-interaction__row">
+                        <span className="game-interaction__label">Actions</span>
+                        <div className="game-interaction__buttons">
+                          <LikeButton
+                            label={interaction?.liked === true ? "Liked" : "Like"}
+                            active={interaction?.liked === true}
+                            disabled={interactionSaving}
+                            onClick={() => {
+                              if (!interactionInput) return;
+                              const likedNext = interaction?.liked === true ? null : true;
+                              void saveInteraction(
+                                { ...interactionInput, liked: likedNext },
+                                likedNext ? "Added to liked." : "Removed from liked.",
+                              );
+                            }}
+                          />
+                          <LikeButton
+                            label={interaction?.favorited === true ? "Favorited" : "Favorite"}
+                            icon="star"
+                            active={interaction?.favorited === true}
+                            disabled={interactionSaving}
+                            onClick={() => {
+                              if (!interactionInput) return;
+                              const favoritedNext = interaction?.favorited === true ? null : true;
+                              void saveInteraction(
+                                { ...interactionInput, favorited: favoritedNext },
+                                favoritedNext ? "Added to favorites." : "Removed from favorites.",
+                              );
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="game-interaction__row game-interaction__row--column">
+                        <label className="game-interaction__label" htmlFor="game-review">Review</label>
+                        <textarea
+                          id="game-review"
+                          className="game-interaction__review"
+                          value={reviewDraft}
+                          onChange={(event) => setReviewDraft(event.target.value)}
+                          placeholder="Write your quick review..."
+                          maxLength={500}
+                        />
+                        <div className="game-interaction__review-meta">
+                          <span>{reviewCharsRemaining} characters left</span>
+                          {reviewChanged ? <span>Unsaved changes</span> : null}
+                        </div>
+                        <div className="game-interaction__buttons">
+                          <button
+                            type="button"
+                            className="game-interaction__chip is-active"
+                            onClick={() => {
+                              if (!interactionInput) return;
+                              void saveInteraction(
+                                { ...interactionInput, review: reviewDraft.trim() || null },
+                                "Review saved.",
+                              );
+                            }}
+                            disabled={!canSaveReview}
+                          >
+                            {interactionSaving ? "Saving..." : "Save review"}
+                          </button>
+                          <button
+                            type="button"
+                            className="game-interaction__chip"
+                            onClick={() => {
+                              if (!interactionInput) return;
+                              setReviewDraft("");
+                              void saveInteraction(
+                                { ...interactionInput, review: null },
+                                "Review cleared.",
+                              );
+                            }}
+                            disabled={!canClearReview}
+                          >
+                            Clear review
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              </div>
               <div className="game-info">
                 <div className="game-info__header">
                   <p className="game-info__eyebrow">Selected game</p>
@@ -479,18 +805,18 @@ function Game({ authUser }: GameProps) {
                     </div>
                   )}
                 </section>
-                <div className="game-info__actions">
-                  <Button
-                    label="Back to Discover"
-                    showIcon={false}
-                    onClick={closeGameDetail}
-                  />
-                  <Button
-                    label="Back to Games"
-                    showIcon={false}
-                    onClick={() => navigate("/games")}
-                  />
-                </div>
+              </div>
+              <div className="game-info__actions">
+                <Button
+                  label="Back to Discover"
+                  showIcon={false}
+                  onClick={closeGameDetail}
+                />
+                <Button
+                  label="Back to Games"
+                  showIcon={false}
+                  onClick={() => navigate("/games")}
+                />
               </div>
             </div>
           )}

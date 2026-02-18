@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
+import Card from "./components/card";
+import FilterRadio from "./components/filterRadio";
 import Navbar from "./components/Navbar";
 import Searchbar from "./components/Searchbar";
 import SiteFooter from "./components/SiteFooter";
@@ -24,11 +26,38 @@ type UserInteraction = {
   timestamp?: string | null;
 };
 
+type GameItem = {
+  id: number;
+  name: string;
+  cover_image?: string;
+  genre?: string;
+  release_date?: string;
+};
+
+type ListFilter = "all" | "liked" | "favorited" | "rated" | "reviewed";
+
 // Base URL for API requests, ensuring no trailing slash
 const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(/\/+$/, "");
 const API_ROOT = RAW_BASE_URL.endsWith("/api")
   ? RAW_BASE_URL.slice(0, -4)
   : RAW_BASE_URL;
+
+const normalizeCoverUrl = (url?: string) => {
+  if (!url) return null;
+  if (url.startsWith("//")) return `https:${url}`;
+  return url;
+};
+
+const formatReleaseDate = (value?: string) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  });
+};
 
   // Main component for the user account page, displaying user info and interactions
 const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
@@ -38,6 +67,9 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
   const [interactions, setInteractions] = useState<UserInteraction[]>([]);
   const [interactionsLoading, setInteractionsLoading] = useState(false);
   const [interactionsError, setInteractionsError] = useState<string | null>(null);
+  const [gamesById, setGamesById] = useState<Record<number, GameItem>>({});
+  const [gamesLoading, setGamesLoading] = useState(false);
+  const [listFilter, setListFilter] = useState<ListFilter>("all");
   const authToken = authUser?.token?.trim() ?? "";
 
   const userDisplayName = getUserDisplayName(authUser);
@@ -94,6 +126,62 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
     return () => controller.abort();
   }, [authToken, authUser?.id]);
 
+  // Effect to load game details for all games that the user has interacted with, based on the interactions data. This ensures that we can display relevant game information alongside each interaction in the user's list.
+  useEffect(() => {
+    const gameIds = Array.from(
+      new Set(
+        interactions
+          .map((item) => item.game_id)
+          .filter((gameId) => Number.isFinite(gameId) && gameId > 0),
+      ),
+    );
+
+    if (!gameIds.length) {
+      setGamesById({});
+      setGamesLoading(false);
+      return;
+    }
+
+    // Using Promise.all to fetch details for all games in parallel, while also handling potential errors and ensuring that the component's state is updated appropriately based on the success or failure of these requests.
+    const controller = new AbortController();
+    const loadGames = async () => {
+      setGamesLoading(true);
+      try {
+        const responses = await Promise.all(
+          gameIds.map(async (gameId) => {
+            const response = await fetch(`${API_ROOT}/api/games/${gameId}`, {
+              signal: controller.signal,
+              ...(authToken
+                ? { headers: { Authorization: `Bearer ${authToken}` } }
+                : {}),
+            });
+            if (!response.ok) return null;
+            const payload = (await response.json()) as GameItem;
+            if (!payload || typeof payload.id !== "number") return null;
+            return payload;
+          }),
+        );
+
+        const nextGamesById: Record<number, GameItem> = {};
+        for (const game of responses) {
+          if (!game) continue;
+          nextGamesById[game.id] = game;
+        }
+        setGamesById(nextGamesById);
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setGamesById({});
+      } finally {
+        if (!controller.signal.aborted) {
+          setGamesLoading(false);
+        }
+      }
+    };
+
+    void loadGames();
+    return () => controller.abort();
+  }, [authToken, interactions]);
+
   const likedCount = useMemo(
     () => interactions.filter((item) => item.liked === true).length,
     [interactions],
@@ -115,6 +203,36 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
     const total = ratedItems.reduce((sum, item) => sum + item.rating, 0);
     return total / ratedItems.length;
   }, [ratedItems]);
+  const reviewedCount = useMemo(
+    () => interactions.filter((item) => Boolean(item.review?.trim())).length,
+    [interactions],
+  );
+  const filteredInteractions = useMemo(() => {
+    switch (listFilter) {
+      case "liked":
+        return interactions.filter((item) => item.liked === true);
+      case "favorited":
+        return interactions.filter((item) => item.favorited === true);
+      case "rated":
+        return interactions.filter(
+          (item) => typeof item.rating === "number" && Number.isFinite(item.rating),
+        );
+      case "reviewed":
+        return interactions.filter((item) => Boolean(item.review?.trim()));
+      default:
+        return interactions;
+    }
+  }, [interactions, listFilter]);
+  const filterOptions = useMemo(
+    () => [
+      { value: "all", label: "All", count: interactions.length },
+      { value: "liked", label: "Liked", count: likedCount },
+      { value: "favorited", label: "Favorited", count: favoritedCount },
+      { value: "rated", label: "Rated", count: ratedItems.length },
+      { value: "reviewed", label: "Reviewed", count: reviewedCount },
+    ],
+    [favoritedCount, interactions.length, likedCount, ratedItems.length, reviewedCount],
+  );
 
   const handleSearchSubmit = useCallback(() => {
     const query = searchInput.trim();
@@ -175,8 +293,8 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
             <p className="user-hero__eyebrow">Signed in as</p>
             <h1 className="user-hero__title">{userDisplayName}</h1>
             <p className="user-hero__subtitle">
-              Placeholder account dashboard. You can replace these sections with
-              real list data and actions later.
+              Track what you liked, favorited, rated, and reviewed. Use filters to
+              focus your list quickly.
             </p>
             <div className="user-hero__actions">
               <button type="button" className="user-hero__button" onClick={() => navigate("/games")}>
@@ -191,42 +309,82 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
           <section className="user-panel">
             <header className="user-panel__header">
               <h2 className="user-panel__title">My List</h2>
-              <span className="user-panel__meta">{interactions.length} entries</span>
+              <span className="user-panel__meta">{filteredInteractions.length} entries</span>
             </header>
+            <div className="user-list-filters">
+              <FilterRadio
+                value={listFilter}
+                options={filterOptions}
+                onChange={(value) => setListFilter(value as ListFilter)}
+                ariaLabel="Filter your game interactions"
+              />
+            </div>
             {interactionsLoading ? (
               <div className="user-empty-state">Loading interactions...</div>
+            ) : gamesLoading ? (
+              <div className="user-empty-state">Loading game cards...</div>
             ) : interactionsError ? (
               <div className="user-empty-state">{interactionsError}</div>
-            ) : interactions.length === 0 ? (
+            ) : filteredInteractions.length === 0 ? (
               <div className="user-empty-state">
-                No interactions yet. Once you rate/review/like/favorite games, they will appear here.
+                No entries found for this filter yet.
               </div>
             ) : (
               <div className="user-interaction-list">
-                {interactions.map((item) => {
+                {filteredInteractions.map((item) => {
+                  const game = gamesById[item.game_id];
+                  const gameTitle = game?.name?.trim() || `Game #${item.game_id}`;
+                  const gameCover = normalizeCoverUrl(game?.cover_image);
+                  const gameRelease = formatReleaseDate(game?.release_date);
                   const timestampText = item.timestamp
                     ? new Date(item.timestamp).toLocaleString()
                     : "n/a";
+                  const cardDescription = [
+                    gameRelease ? `Release: ${gameRelease}` : null,
+                    game?.genre ? `Genre: ${game.genre}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join("\n");
                   return (
                     <article key={`${item.user_id}-${item.game_id}`} className="user-interaction-card">
-                      <div className="user-interaction-card__top">
-                        <h3>Game #{item.game_id}</h3>
-                        <span>{timestampText}</span>
+                      <div className="user-interaction-card__game">
+                        <Card
+                          title={gameTitle}
+                          description={cardDescription || "Open details"}
+                          icon={
+                            gameCover ? (
+                              <img
+                                src={gameCover}
+                                alt={gameTitle}
+                                className="card__image"
+                                loading="lazy"
+                              />
+                            ) : undefined
+                          }
+                          onClick={() => navigate(`/games/${item.game_id}`)}
+                          ariaLabel={`View details for ${gameTitle}`}
+                        />
                       </div>
-                      <div className="user-interaction-card__meta">
-                        <span className="user-chip">
-                          Rating: {typeof item.rating === "number" ? item.rating.toFixed(1) : "n/a"}
-                        </span>
-                        <span className="user-chip">
-                          Liked: {item.liked === true ? "Yes" : item.liked === false ? "No" : "n/a"}
-                        </span>
-                        <span className="user-chip">
-                          Favorited: {item.favorited === true ? "Yes" : item.favorited === false ? "No" : "n/a"}
-                        </span>
+                      <div className="user-interaction-card__details">
+                        <div className="user-interaction-card__top">
+                          <h3>Your interaction</h3>
+                          <span className="user-interaction-card__updated">Updated: {timestampText}</span>
+                        </div>
+                        <div className="user-interaction-card__meta">
+                          <span className="user-chip">
+                            Rating: {typeof item.rating === "number" ? item.rating.toFixed(1) : "n/a"}
+                          </span>
+                          <span className="user-chip">
+                            Liked: {item.liked === true ? "Yes" : item.liked === false ? "No" : "n/a"}
+                          </span>
+                          <span className="user-chip">
+                            Favorited: {item.favorited === true ? "Yes" : item.favorited === false ? "No" : "n/a"}
+                          </span>
+                        </div>
+                        <p className="user-interaction-card__review">
+                          {item.review?.trim() ? item.review : "No review text provided."}
+                        </p>
                       </div>
-                      <p className="user-interaction-card__review">
-                        {item.review?.trim() ? item.review : "No review text provided."}
-                      </p>
                     </article>
                   );
                 })}
