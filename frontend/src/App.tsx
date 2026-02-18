@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { Route, Routes, useLocation ,useNavigate, Navigate } from "react-router-dom";
 import "./App.css";
 import "./health.css";
 import BrandLogo from "./components/BrandLogo";
 import Button from "./components/Button";
-import Form from "./components/Form";
 import SiteFooter from "./components/SiteFooter";
 import Game from "./game";
 import Games from "./games";
 import SearchPage from "./discover";
 import UserPage from "./user";
+import Login from "./login";
 import { type AuthUser } from "./utils/authUser";
 
 // Types for health check statuses
@@ -123,11 +123,6 @@ const coerceAuthUser = (payload: unknown): AuthUser | null => {
 type HomeProps = {
   authUser: AuthUser | null;
   onSignOut: () => void;
-};
-
-type AuthHandlers = {
-  authUser: AuthUser | null;
-  onAuthSuccess: (payload: unknown) => void;
 };
 
 const Home = ({ authUser, onSignOut }: HomeProps) => {
@@ -495,6 +490,8 @@ const HealthPage = () => {
 };
 
 function App() {
+  const navigate = useNavigate();
+  const unauthorizedRedirectingRef = useRef(false);
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
     if (typeof window === "undefined") return null;
     try {
@@ -517,14 +514,37 @@ function App() {
     }
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = useCallback(() => {
     setAuthUser(null);
     try {
       localStorage.removeItem(AUTH_STORAGE_KEY);
     } catch {
       // Ignore storage errors
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = (async (
+      ...args: Parameters<typeof fetch>
+    ): Promise<Response> => {
+      const response = await originalFetch(...args);
+      if (
+        response.status === 401 &&
+        authUser &&
+        !unauthorizedRedirectingRef.current
+      ) {
+        unauthorizedRedirectingRef.current = true;
+        handleSignOut();
+        navigate("/", { replace: true });
+      }
+      return response;
+    }) as typeof window.fetch;
+
+    return () => {
+      window.fetch = originalFetch;
+    };
+  }, [authUser, handleSignOut, navigate]);
 
   return (
     <Routes>
@@ -553,7 +573,7 @@ function App() {
       <Route
         path="/login"
         element={
-          <LoginRoute authUser={authUser} onAuthSuccess={handleAuthSuccess} />
+          <Login apiBaseUrl={API_ROOT} authUser={authUser} onAuthSuccess={handleAuthSuccess} />
         }
       />
       <Route
@@ -578,43 +598,3 @@ function App() {
 }
 
 export default App;
-const LoginRoute = ({ authUser, onAuthSuccess }: AuthHandlers) => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const emailFromQuery = new URLSearchParams(location.search).get("email") ?? undefined;
-  const modeFromQuery = new URLSearchParams(location.search).get("mode") ?? undefined;
-  const initialMode = modeFromQuery === "signup" || modeFromQuery === "register"
-    ? "register"
-    : "login";
-  useEffect(() => {
-    if (authUser) {
-      const timeoutId = window.setTimeout(() => {
-        navigate("/games", { replace: true });
-      }, 1000);
-      return () => window.clearTimeout(timeoutId);
-    }
-  }, [authUser, navigate]);
-
-  return (
-    <div className="landing landing--auth">
-      <div className="landing__container landing__container--auth">
-        <nav className="landing__nav">
-          <BrandLogo onClick={() => navigate("/")} />
-        </nav>
-        <main className="auth-page">
-          {authUser && (
-            <div className="auth-status">
-              Signed in as {authUser.username ?? authUser.email ?? "User"}
-            </div>
-          )}
-          <Form
-            apiBaseUrl={API_ROOT}
-            onAuthSuccess={onAuthSuccess}
-            initialEmail={emailFromQuery}
-            initialMode={initialMode}
-          />
-        </main>
-      </div>
-    </div>
-  );
-};

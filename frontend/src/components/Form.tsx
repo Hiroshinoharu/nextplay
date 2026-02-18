@@ -72,7 +72,7 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
     const payload: Record<string, string> = { password: loginPassword.trim() };
     if (loginIdentifier.includes('@')) {
       payload.email = loginIdentifier.trim();
-    } else {
+    } else if (loginIdentifier.trim()) {
       payload.username = loginIdentifier.trim();
     }
 
@@ -524,20 +524,24 @@ const StyledWrapper = styled.div`
   }
 
   .auth-message {
-    margin-top: 6px;
-    padding: 8px 12px;
-    border-radius: 6px;
+    box-sizing: border-box;
+    margin-top: 8px;
+    width: 100%;
+    max-width: min(260px, 100%);
+    padding: 10px 12px;
+    border-radius: 10px;
     font-size: 13px;
     font-weight: 600;
     text-align: center;
-    border: 1px solid rgba(14, 229, 203, 0.55);
-    background: rgba(10, 30, 48, 0.85);
+    border: 1px solid rgba(140, 243, 122, 0.5);
+    background: linear-gradient(160deg, rgba(10, 30, 48, 0.9), rgba(8, 20, 34, 0.85));
     color: #e2f2ff;
     box-shadow:
-      0 8px 18px rgba(0, 0, 0, 0.28),
-      0 0 16px rgba(14, 229, 203, 0.22);
+      0 10px 18px rgba(0, 0, 0, 0.26),
+      inset 0 0 0 1px rgba(140, 243, 122, 0.08);
     z-index: 1;
-    max-width: 100%;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
   }
 
   .flip-card__front .auth-message {
@@ -594,6 +598,12 @@ const StyledWrapper = styled.div`
       font-size: 15px;
       margin: 8px 0 10px;
     }
+
+    .auth-message {
+      max-width: 100%;
+      padding: 10px;
+      font-size: 12px;
+    }
   }
 
   @media (max-width: 768px) {
@@ -611,19 +621,21 @@ const StyledWrapper = styled.div`
   }
 
   .auth-message.error {
-    border-color: rgba(255, 125, 125, 0.85);
-    color: #ffd0d0;
+    border-color: rgba(255, 125, 125, 0.75);
+    color: #ffd7d7;
+    background: linear-gradient(160deg, rgba(52, 16, 18, 0.9), rgba(36, 13, 16, 0.85));
     box-shadow:
-      0 8px 18px rgba(0, 0, 0, 0.3),
-      0 0 18px rgba(255, 125, 125, 0.28);
+      0 10px 18px rgba(0, 0, 0, 0.3),
+      inset 0 0 0 1px rgba(255, 125, 125, 0.15);
   }
 
   .auth-message.success {
-    border-color: rgba(140, 243, 122, 0.85);
-    color: #c7f000;
+    border-color: rgba(140, 243, 122, 0.75);
+    color: #d4f932;
+    background: linear-gradient(160deg, rgba(12, 36, 28, 0.9), rgba(10, 28, 22, 0.85));
     box-shadow:
-      0 8px 18px rgba(0, 0, 0, 0.3),
-      0 0 18px rgba(140, 243, 122, 0.3);
+      0 10px 18px rgba(0, 0, 0, 0.3),
+      inset 0 0 0 1px rgba(140, 243, 122, 0.16);
   }`;
 
 export default Form;

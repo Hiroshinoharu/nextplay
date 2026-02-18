@@ -1,4 +1,11 @@
-import { useMemo, useRef, useState, type TouchEvent } from 'react'
+import {
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent,
+  type TouchEvent,
+} from 'react'
 import {
   FrameButton,
   FrameImage,
@@ -59,6 +66,54 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
     setActiveIndex((current) => (current + 1) % items.length)
   }
 
+  // Use pointer-up for touch devices to avoid mobile tap/click conflicts.
+  const handleFramePointerUp = (event: PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    onOpen?.(safeActiveIndex)
+  }
+
+  const handleFrameClick = (event: MouseEvent<HTMLButtonElement>) => {
+    if (event.detail !== 0) return
+    onOpen?.(safeActiveIndex)
+  }
+
+  const handlePrevPointerUp = (event: PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    showPrevious()
+  }
+
+  const handlePrevClick = (event: MouseEvent<HTMLButtonElement>) => {
+    if (event.detail !== 0) return
+    showPrevious()
+  }
+
+  const handleNextPointerUp = (event: PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    showNext()
+  }
+
+  const handleNextClick = (event: MouseEvent<HTMLButtonElement>) => {
+    if (event.detail !== 0) return
+    showNext()
+  }
+
+  const handleThumbPointerUp = (
+    event: PointerEvent<HTMLButtonElement>,
+    index: number,
+  ) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setActiveIndex(index)
+  }
+
+  const handleThumbClick = (event: MouseEvent<HTMLButtonElement>, index: number) => {
+    if (event.detail !== 0) return
+    setActiveIndex(index)
+  }
+
   const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
     if (!canNavigate) return
     const touch = event.changedTouches[0]
@@ -81,9 +136,9 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
 
     if (deltaX > 0) {
       showPrevious()
-      return
+    } else if (deltaX < 0) {
+      showNext()
     }
-    showNext()
   }
 
   return (
@@ -93,7 +148,8 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
           <NavButton
             type="button"
             $position="prev"
-            onClick={showPrevious}
+            onPointerUp={handlePrevPointerUp}
+            onClick={handlePrevClick}
             aria-label="Show previous screenshot"
           >
             Back
@@ -101,7 +157,8 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
         ) : null}
         <FrameButton
           type="button"
-          onClick={() => onOpen?.(safeActiveIndex)}
+          onPointerUp={handleFramePointerUp}
+          onClick={handleFrameClick}
           aria-label={`Open screenshot ${safeActiveIndex + 1} of ${gameName}`}
         >
           <FrameImage src={activeShot.src} alt={`${gameName} screenshot ${safeActiveIndex + 1}`} />
@@ -110,7 +167,8 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
           <NavButton
             type="button"
             $position="next"
-            onClick={showNext}
+            onPointerUp={handleNextPointerUp}
+            onClick={handleNextClick}
             aria-label="Show next screenshot"
           >
             Next
@@ -129,7 +187,8 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
               key={item.key}
               type="button"
               data-active={index === safeActiveIndex}
-              onClick={() => setActiveIndex(index)}
+              onPointerUp={(event) => handleThumbPointerUp(event, index)}
+              onClick={(event) => handleThumbClick(event, index)}
               aria-label={`Show screenshot ${index + 1}`}
             >
               <ThumbImage src={item.src} alt="" loading="lazy" />

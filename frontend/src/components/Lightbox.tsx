@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, type MouseEvent, type PointerEvent } from 'react'
 import './lightbox.css'
 
 type LightboxProps = {
@@ -50,16 +50,51 @@ const Lightbox = ({
 
   if (!isOpen || activeIndex === null) return null
 
+  const closeFromPointer = (event: PointerEvent<HTMLElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    onClose()
+  }
+
+  const closeFromClick = (event: MouseEvent<HTMLElement>) => {
+    if (event.detail !== 0) return
+    onClose()
+  }
+
+  const prevFromPointer = (event: PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    showPrev()
+  }
+
+  const prevFromClick = (event: MouseEvent<HTMLButtonElement>) => {
+    if (event.detail !== 0) return
+    showPrev()
+  }
+
+  const nextFromPointer = (event: PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    showNext()
+  }
+
+  const nextFromClick = (event: MouseEvent<HTMLButtonElement>) => {
+    if (event.detail !== 0) return
+    showNext()
+  }
+
   return (
-    <div className="media-lightbox" onClick={onClose}>
+    <div className="media-lightbox" onPointerUp={closeFromPointer} onClick={closeFromClick}>
       <div
         className="media-lightbox__dialog"
+        onPointerUp={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
       >
         <button
           type="button"
           className="media-lightbox__close"
-          onClick={onClose}
+          onPointerUp={closeFromPointer}
+          onClick={closeFromClick}
           aria-label="Close lightbox"
         >
           Close
@@ -67,7 +102,8 @@ const Lightbox = ({
         <button
           type="button"
           className="media-lightbox__nav media-lightbox__nav--prev"
-          onClick={showPrev}
+          onPointerUp={prevFromPointer}
+          onClick={prevFromClick}
           aria-label="Previous image"
         >
           Prev
@@ -82,7 +118,8 @@ const Lightbox = ({
         <button
           type="button"
           className="media-lightbox__nav media-lightbox__nav--next"
-          onClick={showNext}
+          onPointerUp={nextFromPointer}
+          onClick={nextFromClick}
           aria-label="Next image"
         >
           Next

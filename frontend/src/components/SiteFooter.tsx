@@ -1,12 +1,12 @@
 import BrandLogo from "./BrandLogo";
 
-// A component for rendering the site footer with multiple sections and a subscription form.
 const SiteFooter = () => {
   return (
-    <footer className="landing__footer">
+    <footer className="landing__footer" aria-label="Site footer">
       <div className="landing__footer-grid">
         <div className="landing__footer-brand">
           <BrandLogo width={56} height={56} />
+          <p className="landing__footer-eyebrow">Play better together</p>
           <p>
             Find your next obsession with curated picks, social play, and smart
             recommendations.
@@ -15,34 +15,35 @@ const SiteFooter = () => {
         <div className="landing__footer-section">
           <h4>Product</h4>
           <ul>
-            <li>Discover</li>
-            <li>Collections</li>
-            <li>Party Finder</li>
-            <li>Wishlist</li>
+            <li><a href="#">Discover</a></li>
+            <li><a href="#">Collections</a></li>
+            <li><a href="#">Party Finder</a></li>
+            <li><a href="#">Wishlist</a></li>
           </ul>
         </div>
         <div className="landing__footer-section">
           <h4>Company</h4>
           <ul>
-            <li>About</li>
-            <li>Careers</li>
-            <li>Press</li>
-            <li>Contact</li>
+            <li><a href="#">About</a></li>
+            <li><a href="#">Careers</a></li>
+            <li><a href="#">Press</a></li>
+            <li><a href="#">Contact</a></li>
           </ul>
         </div>
         <div className="landing__footer-section">
           <h4>Resources</h4>
           <ul>
-            <li>Help Center</li>
-            <li>Community</li>
-            <li>Developers</li>
-            <li>Status</li>
+            <li><a href="#">Help Center</a></li>
+            <li><a href="#">Community</a></li>
+            <li><a href="#">Developers</a></li>
+            <li><a href="#">Status</a></li>
           </ul>
         </div>
-        <div className="landing__footer-section">
+        <div className="landing__footer-section landing__footer-section--subscribe">
           <h4>Stay in the loop</h4>
           <p>Weekly drops, co-op nights, and hot releases.</p>
-          <div className="landing__footer-form">
+          <form className="landing__footer-form" onSubmit={event => event.preventDefault()}>
+            <label htmlFor="footer-email" className="landing__sr-only">Email address</label>
             <input
               id="footer-email"
               name="email"
@@ -50,16 +51,16 @@ const SiteFooter = () => {
               placeholder="you@email.com"
               aria-label="Email address"
             />
-            <button type="button">Subscribe</button>
-          </div>
+            <button type="submit">Subscribe</button>
+          </form>
         </div>
       </div>
       <div className="landing__footer-bottom">
         <span>© 2026 NextPlay. All rights reserved.</span>
-        <div className="landing__footer-links">
-          <span>Privacy</span>
-          <span>Terms</span>
-          <span>Cookies</span>
+        <div className="landing__footer-links" aria-label="Legal links">
+          <a href="#">Privacy</a>
+          <a href="#">Terms</a>
+          <a href="#">Cookies</a>
         </div>
       </div>
     </footer>
