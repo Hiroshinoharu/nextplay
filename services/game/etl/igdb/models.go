@@ -14,6 +14,8 @@ type Game struct {
 	Genres                []int   `json:"genres"`
 	Platforms             []int   `json:"platforms"`
 	Keywords              []int   `json:"keywords"`
+	Franchises            []int   `json:"franchises"`
+	Collections           []int   `json:"collections"`
 	CoverID               int     `json:"cover"`
 	InvolvedCompanies     []int   `json:"involved_companies"`
 	ExternalGames         []int   `json:"external_games"`

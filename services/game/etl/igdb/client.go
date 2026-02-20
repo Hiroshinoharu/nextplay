@@ -111,7 +111,7 @@ func (client *Client) FetchGamesByIDs(ids []int) ([]Game, error) {
 	var games []Game
 	for _, chunk := range chunkIDs(ids, 200) {
 		query := fmt.Sprintf(
-			"fields name,summary,first_release_date,aggregated_rating,aggregated_rating_count,total_rating,total_rating_count,genres,platforms,keywords,storyline,cover,involved_companies,external_games,artworks,screenshots,videos; where id = (%s); limit %d;",
+			"fields name,summary,first_release_date,aggregated_rating,aggregated_rating_count,total_rating,total_rating_count,genres,platforms,keywords,franchises, collections,storyline,cover,involved_companies,external_games,artworks,screenshots,videos; where id = (%s); limit %d;",
 			joinIDs(chunk),
 			len(chunk),
 		)

@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+
 from ..models.request import RecommendRequest, SimilarRequest
 
 async def recommend(payload: RecommendRequest):
@@ -25,6 +26,24 @@ async def recommend_similar(item_id: int):
     return {
         "item_id": item_id,
         "similar_items": similar
+    }
+
+async def recommend_for_user(user_id: int):
+    """
+    Placeholder for user-based recommendations
+    Returns deterministic game IDs for initial route wiring.
+    Args:
+        user_id (int): The ID of the user to generate recommendations for.
+    """
+    if user_id <= 0:
+        raise HTTPException(status_code=400, detail="Invalid user id")
+
+    # Dummy logic; replace with real user-based recommendation algorithm
+    recommended_games = [user_id * 10 + i for i in range(1, 6)]
+    return {
+        "user_id": user_id,
+        "recommended_games": recommended_games,
+        "strategy": "placeholder_user_based"
     }
 
 async def recommend_similar_post(payload: SimilarRequest):

@@ -25,6 +25,12 @@ func upsertNamedRows(tx DBTX, table, column string, source map[int]string) (map[
 		return out, nil
 	}
 
+	// Resolve naming mismatches across schema variants (e.g. "name" vs "franchise_name").
+	resolvedColumn, err := resolveEntityNameColumn(tx, table, column)
+	if err != nil {
+		return nil, err
+	}
+
 	// Prepare slices for IDs and names
 	ids := make([]int, 0, len(source))
 	names := make([]string, 0, len(source))
@@ -51,9 +57,9 @@ func upsertNamedRows(tx DBTX, table, column string, source map[int]string) (map[
 		 SET %s = EXCLUDED.%s
 		 RETURNING igdb_id, %s`,
 		table,
-		column,
-		column,
-		column,
+		resolvedColumn,
+		resolvedColumn,
+		resolvedColumn,
 		idColumn,
 	)
 
@@ -82,7 +88,40 @@ func upsertNamedRows(tx DBTX, table, column string, source map[int]string) (map[
 	return out, nil
 }
 
+// resolveEntityNameColumn checks if the preferred name column exists in the specified table, and falls back to "name" if it doesn't. 
+// This allows the ETL to work with schema variants that may have different naming conventions for entity names (e.g. "franchise_name" vs "name" in the "game_franchise" table).
+func resolveEntityNameColumn(tx DBTX, table, preferred string) (string, error) {
+	if hasColumn(tx, table, preferred) {
+		return preferred, nil
+	}
+	if preferred != "name" && hasColumn(tx, table, "name") {
+		return "name", nil
+	}
+	return "", fmt.Errorf("table %q has neither %q nor fallback %q column", table, preferred, "name")
+}
+
+// hasColumn checks if the specified column exists in the given table within the current database schema. 
+// It queries the information_schema.columns view to determine if the column is present, returning true if found and false otherwise.
+func hasColumn(tx DBTX, table, column string) bool {
+	rows, err := tx.Query(
+		`SELECT 1
+		 FROM information_schema.columns
+		 WHERE table_schema = current_schema()
+		   AND table_name = $1
+		   AND column_name = $2
+		 LIMIT 1`,
+		table,
+		column,
+	)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	return rows.Next()
+}
+
 // gameUpsertRow represents a single row for upserting a game.
+// It includes all the fields needed for the upsert operation, with pointers for nullable fields. This struct is serialized to JSON and used as input for the batchUpsertGames function.
 type gameUpsertRow struct {
 	IGDBID        int     `json:"igdb_id"`
 	Name          string  `json:"game_name"`

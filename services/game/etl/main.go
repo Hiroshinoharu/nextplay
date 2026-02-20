@@ -76,7 +76,7 @@ func run() error {
 		log.Printf("Extracting %d games from IGDB", maxGames)
 	}
 
-	// Initialize IGDB client and fetch data
+	// Initialize IGDB client and fetch data with rate limiting and concurrency settings
 	rps := 4
 	if raw := strings.TrimSpace(os.Getenv("IGDB_RPS")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
@@ -86,6 +86,8 @@ func run() error {
 			rps = parsed
 		}
 	}
+	// Default max concurrent is set to 2 to allow some concurrency while avoiding excessive parallelism that could lead to rate limit issues or resource exhaustion.
+	// Adjust as needed based on testing and IGDB's tolerance.
 	maxConcurrent := 2
 	if raw := strings.TrimSpace(os.Getenv("IGDB_MAX_CONCURRENT")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
@@ -96,6 +98,7 @@ func run() error {
 		}
 	}
 
+	// Popularity settings - these control how we fetch games based on IGDB's popularity metrics, allowing for more targeted extraction of popular games if desired.
 	popularityYear := 0
 	if raw := strings.TrimSpace(os.Getenv("IGDB_POPULARITY_YEAR")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
@@ -105,6 +108,8 @@ func run() error {
 			popularityYear = parsed
 		}
 	}
+
+	// Popularity pool size controls how many top games to consider when using popularity-based seeding. If not set, it will be calculated based on the target number of games with reasonable bounds.
 	popularityPool := 0
 	if raw := strings.TrimSpace(os.Getenv("IGDB_POPULARITY_POOL")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
@@ -114,6 +119,7 @@ func run() error {
 			popularityPool = parsed
 		}
 	}
+	// Popularity max games and max IDs provide additional limits when using popularity-based seeding, allowing for more control over how many games are ultimately fetched based on popularity criteria.
 	popularityMaxGames := 0
 	if raw := strings.TrimSpace(os.Getenv("IGDB_POPULARITY_MAX_GAMES")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
@@ -123,6 +129,7 @@ func run() error {
 			popularityMaxGames = parsed
 		}
 	}
+	// popularityMaxIDs and popularityMaxPages are used when fetching all games sorted by popularity, allowing for limits on how many games to consider and how many pages of results to fetch, which can help manage the scope of the extraction when using popularity as a criterion.
 	popularityMaxIDs := 0
 	if raw := strings.TrimSpace(os.Getenv("IGDB_POPULARITY_MAX_IDS")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
@@ -132,6 +139,7 @@ func run() error {
 			popularityMaxIDs = parsed
 		}
 	}
+	// popularityMaxPages is an additional safeguard to prevent excessive paging when fetching games by popularity, which can be useful if the IGDB API has limits on how many results can be fetched or if there are concerns about long-running requests.
 	popularityMaxPages := 0
 	if raw := strings.TrimSpace(os.Getenv("IGDB_POPULARITY_MAX_PAGES")); raw != "" {
 		parsed, err := strconv.Atoi(raw)
@@ -141,6 +149,7 @@ func run() error {
 			popularityMaxPages = parsed
 		}
 	}
+	// popularityType allows for selecting different types of popularity metrics from IGDB, which can provide flexibility in how games are ranked and selected based on popularity criteria.
 	usePopularitySeed := strings.EqualFold(strings.TrimSpace(os.Getenv("IGDB_POPULARITY_SEED")), "true") ||
 		strings.TrimSpace(os.Getenv("IGDB_POPULARITY_SEED")) == "1" ||
 		popularityYear > 0
@@ -178,6 +187,7 @@ func run() error {
 
 	// Fetch games
 	var games []igdb.Game
+	// popularityByGame will hold the popularity values for games when using popularity-based fetching, allowing us to include this data in the upsert rows later on. It is populated during the fetching process based on the selected popularity criteria.
 	popularityByGame := map[int]float64{}
 	if usePopularityAll {
 		seedIDs, seedPopularity, err := client.FetchAllPopularityGameIDs(popularityType, popularityMaxIDs, popularityMaxPages)
@@ -250,6 +260,8 @@ func run() error {
 	genreIDs := collectIDs(games, func(game igdb.Game) []int { return game.Genres })
 	platformIDs := collectIDs(games, func(game igdb.Game) []int { return game.Platforms })
 	keywordIDs := collectIDs(games, func(game igdb.Game) []int { return game.Keywords })
+	franchiseIDs := collectIDs(games, func(game igdb.Game) []int { return game.Franchises })
+	seriesIDs := collectIDs(games, func(game igdb.Game) []int { return game.Collections })
 	// Collect cover IDs
 	coverIDs := collectIDs(games, func(game igdb.Game) []int {
 		if game.CoverID > 0 {
@@ -273,6 +285,8 @@ func run() error {
 	genreNames := map[int]string{}
 	platformNames := map[int]string{}
 	keywordNames := map[int]string{}
+	franchiseNames := map[int]string{}
+	seriesNames := map[int]string{}
 	involvedCompanies := map[int]igdb.InvolvedCompany{}
 	coverImageIDs := map[int]string{}
 	artworkImageIDs := map[int]string{}
@@ -332,6 +346,20 @@ func run() error {
 		fetch("fetch keywords", func() error {
 			var err error
 			keywordNames, err = client.FetchNamed("/keywords", keywordIDs)
+			return err
+		})
+	}
+	if len(franchiseIDs) > 0 {
+		fetch("fetch franchises", func() error {
+			var err error
+			franchiseNames, err = client.FetchNamed("/franchises", franchiseIDs)
+			return err
+		})
+	}
+	if len(seriesIDs) > 0 {
+		fetch("fetch series", func() error {
+			var err error
+			seriesNames, err = client.FetchNamed("/collections", seriesIDs)
 			return err
 		})
 	}
@@ -402,6 +430,16 @@ func run() error {
 	if fetchErr != nil {
 		return fetchErr
 	}
+	if len(genreIDs) > 0 {
+		missingGenreIDs := unresolvedIDs(genreIDs, genreNames)
+		log.Printf(
+			"Genre lookup coverage: requested=%d, resolved=%d, missing=%d",
+			len(genreIDs),
+			len(genreNames),
+			len(missingGenreIDs),
+		)
+		log.Printf("Sample unresolved genre IDs: %s", sampleIDs(missingGenreIDs, 10))
+	}
 
 	// Begin database transaction
 	companyNames, err := client.FetchNamed("/companies", collectCompanyIDs(involvedCompanies))
@@ -432,6 +470,14 @@ func run() error {
 	keywordDBIDs, err := upsertNamedRows(tx, "keyword", "keyword_name", keywordNames)
 	if err != nil {
 		return fmt.Errorf("failed to upsert keywords: %w", err)
+	}
+	franchiseDBIDs, err := upsertNamedRows(tx, "franchise", "franchise_name", franchiseNames)
+	if err != nil {
+		return fmt.Errorf("failed to upsert franchises: %w", err)
+	}
+	seriesDBIDs, err := upsertNamedRows(tx, "series", "series_name", seriesNames)
+	if err != nil {
+		return fmt.Errorf("failed to upsert series: %w", err)
 	}
 	genreDBIDs, err := upsertNamedRows(tx, "genre", "genre_name", genreNames)
 	if err != nil {
@@ -511,6 +557,7 @@ func run() error {
 				aggregatedRatingCountValue = game.TotalRatingCount
 			}
 		}
+		// If there are multiple entries for the same IGDB ID, we merge them by preferring non-empty fields. This can happen if the IGDB data has duplicates or if we fetch the same game multiple times due to different seeding strategies. The mergeRow function handles this logic, and we keep track of duplicates for logging purposes.
 		row := gameUpsertRow{
 			IGDBID:        game.ID,
 			Name:          gameName,
@@ -585,9 +632,15 @@ func run() error {
 	keywordRight := make([]int, 0, len(games)*6)
 	genreLeft := make([]int, 0, len(games)*4)
 	genreRight := make([]int, 0, len(games)*4)
+	franchiseLeft := make([]int, 0, len(games)*2)
+	franchiseRight := make([]int, 0, len(games)*2)
+	seriesLeft := make([]int, 0, len(games)*2)
+	seriesRight := make([]int, 0, len(games)*2)
 	platformIndex := make(map[[2]int]struct{}, len(games)*4)
 	keywordIndex := make(map[[2]int]struct{}, len(games)*6)
 	genreIndex := make(map[[2]int]struct{}, len(games)*4)
+	franchiseIndex := make(map[[2]int]struct{}, len(games)*2)
+	seriesIndex := make(map[[2]int]struct{}, len(games)*2)
 	companyGameIDs := make([]int, 0, len(games)*4)
 	companyIDs := make([]int, 0, len(games)*4)
 	companyIsDeveloper := make([]bool, 0, len(games)*4)
@@ -663,6 +716,32 @@ func run() error {
 			}
 		}
 
+		// Link franchise
+		for _, franchiseID := range game.Franchises {
+			if dbID, ok := franchiseDBIDs[franchiseID]; ok {
+				key := [2]int{gameID, dbID}
+				if _, exists := franchiseIndex[key]; exists {
+					continue
+				}
+				franchiseIndex[key] = struct{}{}
+				franchiseLeft = append(franchiseLeft, gameID)
+				franchiseRight = append(franchiseRight, dbID)
+			}
+		}
+
+		// Link series
+		for _, seriesID := range game.Collections {
+			if dbID, ok := seriesDBIDs[seriesID]; ok {
+				key := [2]int{gameID, dbID}
+				if _, exists := seriesIndex[key]; exists {
+					continue
+				}
+				seriesIndex[key] = struct{}{}
+				seriesLeft = append(seriesLeft, gameID)
+				seriesRight = append(seriesRight, dbID)
+			}
+		}
+
 		// Link companies (publisher/developer roles)
 		for _, involvedID := range game.InvolvedCompanies {
 			entry, ok := involvedCompanies[involvedID]
@@ -724,6 +803,12 @@ func run() error {
 	}
 	if err := bulkInsertJoinPairs(tx, "game_genre", "game_id", "genre_id", genreLeft, genreRight); err != nil {
 		return fmt.Errorf("failed to bulk link genres: %w", err)
+	}
+	if err := bulkInsertJoinPairs(tx, "game_franchise", "game_id", "franchise_id", franchiseLeft, franchiseRight); err != nil {
+		return fmt.Errorf("failed to bulk link franchises: %w", err)
+	}
+	if err := bulkInsertJoinPairs(tx, "game_series", "game_id", "series_id", seriesLeft, seriesRight); err != nil {
+		return fmt.Errorf("failed to bulk link series: %w", err)
 	}
 	if err := bulkInsertGameCompaniesPairs(tx, companyGameIDs, companyIDs, companyIsDeveloper, companyIsPublisher); err != nil {
 		return fmt.Errorf("failed to bulk link companies: %w", err)
@@ -974,6 +1059,19 @@ func hasGenreNames(ids []int, genreNames map[int]string) bool {
 		}
 	}
 	return false
+}
+
+func unresolvedIDs(ids []int, names map[int]string) []int {
+	if len(ids) == 0 {
+		return nil
+	}
+	out := make([]int, 0, len(ids))
+	for _, id := range ids {
+		if name := strings.TrimSpace(sanitizeText(names[id])); name == "" {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // findEnvFile searches for a .env file starting from the current working directory
