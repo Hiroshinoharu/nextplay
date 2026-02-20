@@ -8,6 +8,7 @@ patches:
     - path: frontend-service.yaml
     - path: game-service.yaml
     - path: gateway-service.yaml
+    - path: postgres-postgres_data-persistentVolumeClaim.yaml
     - path: postgres-service.yaml
     - path: recommender-service.yaml
     - path: user-service.yaml

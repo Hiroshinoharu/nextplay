@@ -28,12 +28,36 @@ spec:
                   image: deploy-game
                   imagePullPolicy: IfNotPresent
                   env:
+                    - name: CONFIG_FILE
+                      value: "/config/config.yaml"
                     - name: DATABASE_URL
                       value: "postgres://nextplay:nextplay@postgres:5432/nextplay?sslmode=disable"
                     - name: IGDB_ACCESS_TOKEN
-                      value: "takqo6hgibvbknsdbf3bptqksj0m41"
+                      value: "u9qt9fupddzrykcr6zo99op85sku9y"
                     - name: IGDB_CLIENT_ID
                       value: "1slvq78fhrvhf8ia04mwwy21o9kh2d"
+                    - name: IGDB_MAX_CONCURRENT
+                      value: "1"
+                    - name: IGDB_MAX_GAMES
+                      value: "0"
+                    - name: IGDB_POPULARITY_ALL
+                      value: "1"
+                    - name: IGDB_POPULARITY_MAX_GAMES
+                      value: "0"
+                    - name: IGDB_POPULARITY_MAX_PAGES
+                      value: "0"
+                    - name: IGDB_POPULARITY_POOL
+                      value: "0"
+                    - name: IGDB_POPULARITY_SEED
+                      value: "1"
+                    - name: IGDB_POPULARITY_TYPE
+                      value: "3"
+                    - name: IGDB_POPULARITY_YEAR
+                      value: "0"
+                    - name: IGDB_RPS
+                      value: "2"
+                    - name: LOCAL_DATABASE_URL
+                      value: "postgres://nextplay:nextplay@localhost:5432/nextplay?sslmode=disable"
                     - name: PORT
                       value: "8081"
                   livenessProbe:
@@ -45,3 +69,12 @@ spec:
                   ports:
                     - name: game-8081
                       containerPort: 8081
+                  volumeMounts:
+                    - name: config-config-yaml
+                      mountPath: /config/config.yaml
+                      readOnly: true
+            volumes:
+                - name: config-config-yaml
+                  hostPath:
+                    path: /Users/maxceban/Documents/nextplay/deploy/config/config.yaml
+                  readOnly: true

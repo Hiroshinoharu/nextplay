@@ -47,3 +47,38 @@ spec:
                   ports:
                     - name: postgres-5432
                       containerPort: 5432
+                  volumeMounts:
+                    - name: var-lib-postgresql-data
+                      mountPath: /var/lib/postgresql/data
+                    - name: docker-entrypoint-initdb-d-init-db-sql
+                      mountPath: /docker-entrypoint-initdb.d/init_db.sql
+                      readOnly: true
+                    - name: docker-entrypoint-initdb-d-migrations-migrate-igdb-db-sql
+                      mountPath: /docker-entrypoint-initdb.d/migrations/migrate_igdb_db.sql
+                      readOnly: true
+                    - name: docker-entrypoint-initdb-d-migrations-add-total-rating-sql
+                      mountPath: /docker-entrypoint-initdb.d/migrations/add_total_rating.sql
+                      readOnly: true
+                    - name: docker-entrypoint-initdb-d-migrations-add-popularity-sql
+                      mountPath: /docker-entrypoint-initdb.d/migrations/add_popularity.sql
+                      readOnly: true
+            volumes:
+                - name: var-lib-postgresql-data
+                  persistentVolumeClaim:
+                    claimName: postgres-postgres-data
+                - name: docker-entrypoint-initdb-d-init-db-sql
+                  hostPath:
+                    path: /Users/maxceban/Documents/nextplay/deploy/init_db.sql
+                  readOnly: true
+                - name: docker-entrypoint-initdb-d-migrations-migrate-igdb-db-sql
+                  hostPath:
+                    path: /Users/maxceban/Documents/nextplay/deploy/migrations
+                  readOnly: true
+                - name: docker-entrypoint-initdb-d-migrations-add-total-rating-sql
+                  hostPath:
+                    path: /Users/maxceban/Documents/nextplay/deploy/migrations
+                  readOnly: true
+                - name: docker-entrypoint-initdb-d-migrations-add-popularity-sql
+                  hostPath:
+                    path: /Users/maxceban/Documents/nextplay/deploy/migrations
+                  readOnly: true

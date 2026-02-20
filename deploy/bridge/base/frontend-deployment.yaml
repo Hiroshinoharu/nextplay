@@ -27,6 +27,15 @@ spec:
                 - name: frontend
                   image: deploy-frontend
                   imagePullPolicy: IfNotPresent
+                  livenessProbe:
+                    exec:
+                        command:
+                            - /bin/sh
+                            - -c
+                            - wget -qO- http://localhost/api/health >/dev/null 2>&1 || exit 1
+                    periodSeconds: 10
+                    timeoutSeconds: 5
+                    failureThreshold: 5
                   ports:
                     - name: frontend-80
                       containerPort: 80

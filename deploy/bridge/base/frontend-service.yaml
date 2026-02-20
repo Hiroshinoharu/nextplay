@@ -15,8 +15,8 @@ spec:
         com.docker.compose.project: deploy
         com.docker.compose.service: frontend
     ports:
-        - name: frontend-80
-          port: 80
+        - name: frontend-5173
+          port: 5173
           protocol: TCP
           targetPort: frontend-80
 

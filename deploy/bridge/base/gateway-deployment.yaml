@@ -28,8 +28,12 @@ spec:
                   image: deploy-gateway
                   imagePullPolicy: IfNotPresent
                   env:
+                    - name: CONFIG_FILE
+                      value: "/config/config.yaml"
                     - name: GAME_SERVICE_URL
                       value: "http://game:8081"
+                    - name: JWT_SECRET
+                      value: "FOHnngwPWbmYHSDAguUNItjx7WDmhFcqWLv0kI7cRX8="
                     - name: PORT
                       value: "8084"
                     - name: RECOMMENDER_SERVICE_URL
@@ -45,3 +49,12 @@ spec:
                   ports:
                     - name: gateway-8084
                       containerPort: 8084
+                  volumeMounts:
+                    - name: config-config-yaml
+                      mountPath: /config/config.yaml
+                      readOnly: true
+            volumes:
+                - name: config-config-yaml
+                  hostPath:
+                    path: /Users/maxceban/Documents/nextplay/deploy/config/config.yaml
+                  readOnly: true

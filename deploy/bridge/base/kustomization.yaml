@@ -16,6 +16,7 @@ resources:
     - gateway-service.yaml
     - postgres-deployment.yaml
     - postgres-expose.yaml
+    - postgres-postgres_data-persistentVolumeClaim.yaml
     - postgres-service.yaml
     - recommender-deployment.yaml
     - recommender-expose.yaml

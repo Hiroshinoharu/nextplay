@@ -28,6 +28,8 @@ spec:
                   image: deploy-recommender
                   imagePullPolicy: IfNotPresent
                   env:
+                    - name: CONFIG_FILE
+                      value: "/config/config.yaml"
                     - name: DATABASE_URL
                       value: "postgres://nextplay:nextplay@postgres:5432/nextplay?sslmode=disable"
                     - name: PORT
@@ -41,3 +43,12 @@ spec:
                   ports:
                     - name: recommende-8082
                       containerPort: 8082
+                  volumeMounts:
+                    - name: config-config-yaml
+                      mountPath: /config/config.yaml
+                      readOnly: true
+            volumes:
+                - name: config-config-yaml
+                  hostPath:
+                    path: /Users/maxceban/Documents/nextplay/deploy/config/config.yaml
+                  readOnly: true
