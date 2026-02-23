@@ -33,6 +33,12 @@ venv/
 ml-env/
 .env/
 .envrc
+.pytest_cache/
+.coverage
+.coverage.*
+.cache/
+nosetests.xml
+coverage.xml
 
 # === Docker ===
 # Ignore build artifacts and cache

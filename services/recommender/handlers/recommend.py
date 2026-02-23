@@ -3,6 +3,7 @@ from fastapi import HTTPException, Request
 from ..models.request import RecommendRequest, SimilarRequest
 from ..models.response import RecommendResponse, SimilarResponse, UserRecommendResponse
 
+# Placeholder POST /recommend route to handle recommendation requests
 async def recommend(payload: RecommendRequest) -> RecommendResponse:
     """
     Placeholder recommendation engine.
@@ -14,7 +15,7 @@ async def recommend(payload: RecommendRequest) -> RecommendResponse:
         received=payload
     )
 
-
+# New GET /recommend/item/{item_id} route to return similar items based on item ID
 async def recommend_similar(item_id: int) -> SimilarResponse:
     """
     Placeholder for item-to-item recommendations.
@@ -30,6 +31,7 @@ async def recommend_similar(item_id: int) -> SimilarResponse:
         similar_items=similar
     )
 
+# Helper function to safely perform GET requests and parse JSON responses
 def _safe_get_json(http, url: str, timeout):
     try:
         resp = http.get(url, timeout=timeout)
@@ -39,6 +41,7 @@ def _safe_get_json(http, url: str, timeout):
     except Exception:
         return None
 
+# Helper function to extract a set of integers from a list of dicts based on a specified field
 def _extract_int_set(items, field_name: str):
     """
     Extracts a set of integers from a list of dictionaries based on a field name.
@@ -61,6 +64,7 @@ def _extract_int_set(items, field_name: str):
             continue
     return values
 
+# New GET /recommend/user/{user_id} route to generate user-specific recommendations
 async def recommend_for_user(user_id: int, request: Request) -> UserRecommendResponse:
     """
     Generate user recommendations by combining user preferences and game metadata.
@@ -128,6 +132,7 @@ async def recommend_for_user(user_id: int, request: Request) -> UserRecommendRes
     )
 
 
+# New POST /recommend/item route to handle more complex similarity requests
 async def recommend_similar_post(payload: SimilarRequest):
     if payload.item_id <= 0:
         raise HTTPException(status_code=400, detail="Invalid item id")

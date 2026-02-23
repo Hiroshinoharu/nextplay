@@ -1,12 +1,12 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 
 class RecommendRequest(BaseModel):
     user_id: Optional[int] = None
-    liked_keywords: List[int] = []
-    liked_platforms: List[int] = []
-    disliked_keywords: List[int] = []
-    disliked_platforms: List[int] = []
+    liked_keywords: List[int] = Field(default_factory=list)
+    liked_platforms: List[int] = Field(default_factory=list)
+    disliked_keywords: List[int] = Field(default_factory=list)
+    disliked_platforms: List[int] = Field(default_factory=list)
     questionnaire: Optional[dict] = None   # future quiz input
 
 
