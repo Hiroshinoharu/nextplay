@@ -7,32 +7,19 @@ from pydantic import BaseModel, Field
 from .request import RecommendRequest
 from .response import UserRecommendResponse
 
-class ModelInputSchema(BaseModel):
-    """
-    Normalized model input schema that can be used across different recommendation strategies.
 
-    Args:
-        BaseModel (class): The base Pydantic model class.
-    """
-    
-    user_id : int | None = None
+class ModelInputSchema(BaseModel):
+    """Normalized model input payload produced from API request objects."""
+
+    user_id: int | None = None
     liked_keyword_ids: list[int] = Field(default_factory=list)
     liked_platform_ids: list[int] = Field(default_factory=list)
     disliked_keyword_ids: list[int] = Field(default_factory=list)
     disliked_platform_ids: list[int] = Field(default_factory=list)
     questionnaire: dict[str, Any] = Field(default_factory=dict)
-    
-    @classmethod
-    def from_recommend_request(cls, payload: RecommendRequest) -> ModelInputSchema:
-        """
-        Factory method to create a ModelInputSchema instance from a RecommendRequest.
 
-        Args:
-            payload (RecommendRequest): The incoming recommendation request.
-            
-        Returns:
-            ModelInputSchema: An instance of ModelInputSchema populated with data from the request.
-        """
+    @classmethod
+    def from_recommend_request(cls, payload: RecommendRequest) -> "ModelInputSchema":
         return cls(
             user_id=payload.user_id,
             liked_keyword_ids=list(payload.liked_keywords),
@@ -42,14 +29,10 @@ class ModelInputSchema(BaseModel):
             questionnaire=dict(payload.questionnaire or {}),
         )
 
-class ModelCandidateScore(BaseModel):
-    """
-    Schema for representing a candidate item and its associated score.
 
-    Args:
-        BaseModel (class): The base Pydantic model class.
-    """
-    
+class ModelCandidateScore(BaseModel):
+    """Single ranked candidate returned by model inference."""
+
     game_id: int
     score: float = 0.0
     rank: int = 1
@@ -57,12 +40,7 @@ class ModelCandidateScore(BaseModel):
 
 
 class ModelOutputSchema(BaseModel):
-    """
-    Normalized model output used to create API responses.
-    
-    Args:
-        BaseModel (class): The base Pydantic model class.
-    """
+    """Normalized model output used to create API responses."""
 
     user_id: int | None = None
     strategy: str

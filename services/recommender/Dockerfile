@@ -3,6 +3,9 @@ FROM python:3.11-slim
 WORKDIR /app
 
 ENV PYTHONPATH=/app
+ENV MODEL_PATH=""
+ENV MODEL_VERSION="dev"
+ENV MODEL_REQUIRED="false"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
