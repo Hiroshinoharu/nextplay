@@ -1,9 +1,12 @@
 from fastapi import FastAPI
+
 from ..handlers.recommend import (
     recommend, 
     recommend_for_user, 
     recommend_similar, 
     recommend_similar_post)
+
+from ..models.response import RecommendResponse, SimilarResponse, UserRecommendResponse
 
 def register_routes(app: FastAPI):
     
@@ -12,13 +15,13 @@ def register_routes(app: FastAPI):
         return {"service": "recommender", "status" : "running"}
 
     # POST /recommend
-    app.post("/recommend")(recommend)
+    app.post("/recommend", response_model=RecommendResponse)(recommend)
 
     # GET /recommend/user/{user_id}
-    app.get("/recommend/user/{user_id}")(recommend_for_user)
+    app.get("/recommend/user/{user_id}", response_model=UserRecommendResponse)(recommend_for_user)
 
     # GET /recommend/item/{item_id}
-    app.get("/recommend/item/{item_id}")(recommend_similar)
+    app.get("/recommend/item/{item_id}", response_model=SimilarResponse)(recommend_similar)
 
     # POST /recommend/item
-    app.post("/recommend/item")(recommend_similar_post)
+    app.post("/recommend/item", response_model=SimilarResponse)(recommend_similar_post)
