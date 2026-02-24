@@ -1,14 +1,22 @@
 from fastapi import HTTPException, Request
 
+from ..models.model_schema import ModelInputSchema
 from ..models.request import RecommendRequest, SimilarRequest
 from ..models.response import RecommendResponse, SimilarResponse, UserRecommendResponse
 
 # Placeholder POST /recommend route to handle recommendation requests
-async def recommend(payload: RecommendRequest) -> RecommendResponse:
+async def recommend(payload: RecommendRequest, request: Request) -> RecommendResponse:
     """
     Placeholder recommendation engine.
     ML logic will be added later.
     """
+    
+    inference = getattr(request.app.state, "inference_service", None)
+    if inference is None:
+        inference = getattr(request.app.state, "inference", None)
+    if inference is not None:
+        model_input = ModelInputSchema.from_recommend_request(payload)
+        inference.infer(model_input)
 
     return RecommendResponse(
         message="Recommendation placeholder response",

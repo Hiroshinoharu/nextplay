@@ -17,6 +17,7 @@ def test_lifespan_loads_model_and_exposes_state(monkeypatch) -> None:
     )
     monkeypatch.setattr(main, "_validate_model_config", lambda _: Path("/tmp/model.keras"))
     monkeypatch.setattr(main, "load_model", lambda path: {"loaded_from": path})
+    monkeypatch.setattr(main, "build_inference_service", lambda model: {"wrapped_model": model})
     
     app = FastAPI()
     
@@ -26,7 +27,7 @@ def test_lifespan_loads_model_and_exposes_state(monkeypatch) -> None:
             assert app.state.model_version == "v42"
             assert app.state.model_path == "/tmp/model.keras"
             assert app.state.model == {"loaded_from": "/tmp/model.keras"}
-    
+            assert app.state.inference_service == {"wrapped_model": {"loaded_from": "/tmp/model.keras"}}
     asyncio.run(runner())
 
 def test_lifespan_skips_model_loading_when_model_path_missing(monkeypatch) -> None:
@@ -44,6 +45,7 @@ def test_lifespan_skips_model_loading_when_model_path_missing(monkeypatch) -> No
         return "unused"
 
     monkeypatch.setattr(main, "load_model", _record_load)
+    monkeypatch.setattr(main, "build_inference_service", lambda model: "rule-based" if model is None else "model-based")
 
     app = FastAPI()
 
@@ -52,6 +54,7 @@ def test_lifespan_skips_model_loading_when_model_path_missing(monkeypatch) -> No
             assert app.state.model_path is None
             assert app.state.model is None
             assert app.state.model_version == "dev"
+            assert app.state.inference_service == "rule-based"
 
     asyncio.run(runner())
 

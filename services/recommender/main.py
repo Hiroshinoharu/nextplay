@@ -5,6 +5,7 @@ import uvicorn
 import requests
 from fastapi import FastAPI
 
+from services.recommender.models.inference import build_inference_service
 from services.recommender.models.model_loader import load_model
 from services.recommender.routes.routes import register_routes
 
@@ -60,7 +61,10 @@ async def lifespan(app: FastAPI):
         validated_model_path.as_posix() if validated_model_path else None
     )
     app.state.model = load_model(app.state.model_path) if app.state.model_path else None
-
+    app.state.inference_service = build_inference_service(app.state.model)
+    # Backward-compatible alias used by existing route tests/handlers.
+    app.state.inference = app.state.inference_service
+    
     session = requests.Session()
     session.mount("http://", requests.adapters.HTTPAdapter(pool_connections=50, pool_maxsize=50))
     app.state.http = session

@@ -68,3 +68,32 @@ def test_existing_recommend_item_and_recommend_routes_still_respond_as_expected(
         'top_k': 5,
         'filters': {}
     }
+
+# Test that POST /recommend calls the inference service when available
+def test_recommend_route_calls_inference_service_when_available():
+    class _StubInference:
+        def __init__(self):
+            self.calls = []
+
+        def infer(self, payload):
+            self.calls.append(payload)
+            return None
+
+    stub = _StubInference()
+    app.state.inference = stub
+
+    response = client.post(
+        '/recommend',
+        json={
+            'user_id': 33,
+            'liked_keywords': [1],
+            'liked_platforms': [2],
+            'disliked_platforms': [],
+        },
+    )
+
+    assert response.status_code == 200
+    assert len(stub.calls) == 1
+    assert stub.calls[0].user_id == 33
+
+    delattr(app.state, 'inference')
