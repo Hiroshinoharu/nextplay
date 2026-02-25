@@ -1,4 +1,5 @@
-"""Pytest path setup for recommender tests.
+"""
+Pytest path setup for recommender tests.
 
 Allows absolute imports like `services.recommender.main` whether tests are run
 from repo root or from `services/recommender`.

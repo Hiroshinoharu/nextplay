@@ -28,9 +28,21 @@ def test_lifespan_loads_model_and_exposes_state(monkeypatch) -> None:
             assert app.state.model_path == "/tmp/model.keras"
             assert app.state.model == {"loaded_from": "/tmp/model.keras"}
             assert app.state.inference_service == {"wrapped_model": {"loaded_from": "/tmp/model.keras"}}
+            assert app.state.fallback_inference is not None  # Fallback inference should be set even when model is loaded
+            assert app.state.metrics["recommend_requests_total"] == 0  # Metrics should be initialized
     asyncio.run(runner())
 
 def test_lifespan_skips_model_loading_when_model_path_missing(monkeypatch) -> None:
+    """
+    This will test what happens when the model path is missing from the configuration. 
+    Since the model is not required, 
+    it should skip loading and set the model and inference service to None or rule-based.
+    Args:
+        monkeypatch (): Pytest fixture for monkeypatching functions and attributes during the test.
+
+    Returns:
+        None: This function does not return anything. It will raise assertions if the expected behavior is not met.
+    """
     monkeypatch.setattr(
         main,
         "_build_model_config",
@@ -55,7 +67,8 @@ def test_lifespan_skips_model_loading_when_model_path_missing(monkeypatch) -> No
             assert app.state.model is None
             assert app.state.model_version == "dev"
             assert app.state.inference_service == "rule-based"
-
+            assert app.state.fallback_inference == "rule-based"  # Fallback inference should be rule-based when model is not loaded
+            assert app.state.metrics["recommend_fallback_total"] == 0  # Metrics should be initialized
     asyncio.run(runner())
 
     assert load_calls == []
