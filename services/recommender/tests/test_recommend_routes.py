@@ -199,6 +199,10 @@ def test_post_recommend_items_invalid_id_returns_400():
 
 
 def test_recommend_route_falls_back_when_inference_raises_and_records_metrics():
+    """
+    This will test that the recommend route correctly falls back to the fallback inference when the main inference service raises an error, and that it records metrics for total requests, fallback usage, and latency.
+    It uses a stub inference service that raises an error, and a fallback inference that records calls to its infer method. It then asserts that the fallback was called and that the metrics were updated as
+    """
     class _FailingInference:
         def infer(self, payload):
             raise RuntimeError("boom")
@@ -247,7 +251,13 @@ def test_recommend_route_falls_back_when_inference_raises_and_records_metrics():
     delattr(app.state, 'metrics')
 
 def test_reccomend_route_records_metrics_without_fallback():
+    """This will test that the recommend route correctly records metrics when the inference service is available and does not raise an error.
+        It uses a stub inference service that does not raise an error, and then asserts that the metrics for total requests, fallback usage, and latency are recorded as expected.
+    """
     class _Inference:
+        """
+        A stub inference service that simulates a successful inference call.
+        """
         def infer(self, payload):
             class _Output:
                 strategy = "keras_inference_v1"
