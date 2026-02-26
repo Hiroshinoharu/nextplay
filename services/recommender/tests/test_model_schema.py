@@ -1,5 +1,6 @@
 import pytest
 
+from services.recommender.models.feature_contract import FEATURE_SCHEMA_VERSION
 from services.recommender.models.model_schema import (
     ModelCandidateScore,
     ModelInputSchema,
@@ -29,6 +30,36 @@ def test_model_input_schema_maps_from_recommend_request() -> None:
     assert model_input.disliked_platform_ids == [3]
     assert model_input.questionnaire == {"session_length": "short"}
 
+# Test feature schema version defaults to the shared contract version
+def test_model_input_schema_defaults_feature_schema_version() -> None:
+    payload = RecommendRequest(
+        user_id=3,
+        liked_keywords=[],
+        liked_platforms=[],
+        disliked_keywords=[],
+        disliked_platforms=[],
+        questionnaire={},
+    )
+
+    model_input = ModelInputSchema.from_recommend_request(payload)
+
+    assert model_input.feature_schema_version == FEATURE_SCHEMA_VERSION
+
+
+# Test feature schema version can be set explicitly from questionnaire metadata
+def test_model_input_schema_uses_explicit_feature_schema_version() -> None:
+    payload = RecommendRequest(
+        user_id=3,
+        liked_keywords=[],
+        liked_platforms=[],
+        disliked_keywords=[],
+        disliked_platforms=[],
+        questionnaire={"feature_schema_version": "recommender_feature_schema_v2"},
+    )
+
+    model_input = ModelInputSchema.from_recommend_request(payload)
+
+    assert model_input.feature_schema_version == "recommender_feature_schema_v2"
 
 # Additional tests for ModelOutputSchema to validate conversion to API response format.
 def test_model_output_schema_maps_to_user_recommend_response() -> None:

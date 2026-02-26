@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from .feature_contract import FEATURE_SCHEMA_VERSION
 from .request import RecommendRequest
 from .response import UserRecommendResponse
 
@@ -17,9 +18,31 @@ class ModelInputSchema(BaseModel):
     disliked_keyword_ids: list[int] = Field(default_factory=list)
     disliked_platform_ids: list[int] = Field(default_factory=list)
     questionnaire: dict[str, Any] = Field(default_factory=dict)
+    feature_schema_version: str = FEATURE_SCHEMA_VERSION
 
     @classmethod
     def from_recommend_request(cls, payload: RecommendRequest) -> "ModelInputSchema":
+        """
+        Create a ModelInputSchema instance from a RecommendRequest payload.
+        
+        Converts a RecommendRequest object into a ModelInputSchema by extracting and
+        formatting user preferences, keywords, platforms, and questionnaire data.
+        
+        Args:
+            cls: The class being instantiated.
+            payload (RecommendRequest): The recommendation request containing user preferences
+                and questionnaire information.
+        
+        Returns:
+            ModelInputSchema: An instance populated with user preferences, liked/disliked
+                keywords and platforms, questionnaire data, and schema version information.
+        
+        Notes:
+            - If questionnaire is not provided, defaults to an empty dictionary.
+            - feature_schema_version is extracted from the questionnaire if available,
+              otherwise defaults to FEATURE_SCHEMA_VERSION constant.
+        """
+        schema_version = payload.questionnaire.get("feature_schema_version") if payload.questionnaire else None
         return cls(
             user_id=payload.user_id,
             liked_keyword_ids=list(payload.liked_keywords),
@@ -27,6 +50,7 @@ class ModelInputSchema(BaseModel):
             disliked_keyword_ids=list(payload.disliked_keywords),
             disliked_platform_ids=list(payload.disliked_platforms),
             questionnaire=dict(payload.questionnaire or {}),
+            feature_schema_version=schema_version or FEATURE_SCHEMA_VERSION,
         )
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from .feature_contract import build_feature_vector_from_payload
 from .model_schema import ModelCandidateScore, ModelInputSchema, ModelOutputSchema
 
 class InferenceService(Protocol):
@@ -49,7 +50,7 @@ class KerasInferenceService:
     model: Any
 
     def infer(self, payload: ModelInputSchema) -> ModelOutputSchema:
-        feature_vector = _build_feature_vector(payload)
+        feature_vector = build_feature_vector_from_payload(payload)
         scores = _predict_scores(self.model, feature_vector)
 
         ranked = sorted(
@@ -82,23 +83,6 @@ def build_inference_service(model: Any | None) -> InferenceService:
         return KerasInferenceService(model=model)
     else:
         return RuleBasedInferenceService()
-
-def _build_feature_vector(payload: ModelInputSchema) -> list[float]:
-    """
-    Build a simple feature vector from the input schema for demonstration purposes.
-
-    Args:
-        payload (ModelInputSchema): The normalized input data for the model.
-
-    Returns:
-        list[float]: A simple feature vector representing the input data, which can be used for model inference.
-    """
-    return [
-        float(len(payload.liked_keyword_ids)),
-        float(len(payload.liked_platform_ids)),
-        float(len(payload.disliked_keyword_ids)),
-        float(len(payload.disliked_platform_ids)),
-    ]
 
 def _predict_scores(model: Any, feature_vector: list[float]) -> list[float]:
     """
