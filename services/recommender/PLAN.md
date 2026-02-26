@@ -5,8 +5,8 @@
 Repo-only audit result for `services/recommender`:
 
 - Overall: **No-go for full training rollout yet**
-- Section score: **1 Pass / 3 Partial / 4 Missing**
-- Blocking gaps: data split/leakage protocol, offline ranking eval with thresholds, training-runtime parity tests, experiment reproducibility
+- Section score: **2 Pass / 3 Partial / 3 Missing**
+- Blocking gaps: training-runtime parity tests, experiment reproducibility
 
 Current evidence was taken from:
 
@@ -20,8 +20,8 @@ Current evidence was taken from:
 
 | Section | Status | Repo-Only Evidence | Gap to Close |
 |---|---|---|---|
-| 1) Data + labels | Missing | No training dataset/split/label policy files found | Define target, leakage boundaries, time split, dataset hash/versioning |
-| 2) Offline evaluation protocol | Missing | No Recall@K/NDCG@K/MAP@K eval scripts or thresholds | Add offline evaluator + baseline comparison + acceptance gates |
+| 1) Data + labels | Pass | Spec + splitter implementation + tests in [SECTION_1_DATA_LABEL_SPEC.md](/Users/maxceban/Documents/nextplay/services/recommender/training/SECTION_1_DATA_LABEL_SPEC.md), [data_prep.py](/Users/maxceban/Documents/nextplay/services/recommender/training/data_prep.py), [test_data_prep.py](/Users/maxceban/Documents/nextplay/services/recommender/tests/training/test_data_prep.py) | Keep schema stable as Keras training features are finalized |
+| 2) Offline evaluation protocol | Pass | Protocol + evaluator + thresholds + gate tests in [SECTION_2_OFFLINE_EVAL_PROTOCOL.md](/Users/maxceban/Documents/nextplay/services/recommender/training/SECTION_2_OFFLINE_EVAL_PROTOCOL.md), [offline_eval.py](/Users/maxceban/Documents/nextplay/services/recommender/training/offline_eval.py), [offline_eval_thresholds.json](/Users/maxceban/Documents/nextplay/services/recommender/training/offline_eval_thresholds.json), [test_offline_eval.py](/Users/maxceban/Documents/nextplay/services/recommender/tests/training/test_offline_eval.py) | Calibrate thresholds once first Keras model baseline is frozen |
 | 3) Feature pipeline contract | Partial | Runtime schema exists in [model_schema.py](/Users/maxceban/Documents/nextplay/services/recommender/models/model_schema.py) | Add shared train/infer transform module + explicit schema versioning + parity test |
 | 4) Artifact + serving compatibility | Partial | Env-config + model loading/fail behavior in [main.py](/Users/maxceban/Documents/nextplay/services/recommender/main.py), loader in [model_loader.py](/Users/maxceban/Documents/nextplay/services/recommender/models/model_loader.py) | Add artifact manifest (feature schema version, candidate mapping, train config, seed) |
 | 5) Inference correctness checks | Partial | Inference behavior tests in [test_inference_service.py](/Users/maxceban/Documents/nextplay/services/recommender/tests/test_inference_service.py) | Add golden train-vs-runtime parity test + NaN/Inf/empty-candidate canary |
@@ -39,10 +39,12 @@ Current evidence was taken from:
 ### Implementation Plan (Decision-Complete)
 
 1. Define training contract docs in recommender
+   - Status: completed.
    - Create explicit task definition (top-N ranking), label window, leakage policy, and time-based split rules.
    - Acceptance: reproducible split spec with fixed dates/rules and dataset hash format.
 
 2. Implement offline evaluator + baseline gates
+   - Status: completed.
    - Add script(s) to compute Recall@K, NDCG@K, MAP@K, coverage/diversity.
    - Add baseline runner for popularity and current rule-based fallback.
    - Acceptance: thresholds committed and CI/local command returns pass/fail.
