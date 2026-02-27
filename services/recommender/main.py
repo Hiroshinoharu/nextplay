@@ -7,11 +7,13 @@ from fastapi import FastAPI
 import uvicorn
 import requests
 
+from services.recommender.models.artifact_manifest import ArtifactManifest, load_artifact_manifest
 from services.recommender.models.inference import build_inference_service
 from services.recommender.models.model_loader import load_model
 from services.recommender.routes.routes import register_routes
 
 logger = logging.getLogger(__name__)
+
 
 def _service_url(env_key: str, default: str) -> str:
     """Helper function to get service URLs from environment variables with defaults."""
@@ -32,10 +34,26 @@ def _build_model_config() -> dict[str, str | bool]:
         "path": os.getenv("MODEL_PATH", "").strip(),
         "version": os.getenv("MODEL_VERSION", "dev").strip() or "dev",
         "required": _bool_env("MODEL_REQUIRED", default=False),
+        "manifest_path": os.getenv("MODEL_MANIFEST_PATH", "").strip(),
     }
 
 
 def _validate_model_config(model_config: dict[str, str | bool]) -> Path | None:
+    """
+    Validate the model configuration and resolve the model file path.
+    This function checks that required parameters are present in the model configuration
+    and verifies that the specified model file exists when required.
+    Args:
+        model_config: A dictionary containing model configuration with keys:
+            - "path" (str): The file path to the model, may be empty or use ~ for home directory
+            - "required" (bool): Whether the model is required
+    Returns:
+        Path | None: The resolved absolute path to the model file if valid and present,
+            or None if the model is not required and no path is specified
+    Raises:
+        RuntimeError: If the model is required but MODEL_PATH is not set
+        RuntimeError: If the specified MODEL_PATH does not exist
+    """
     """Validate the model configuration, ensuring that required parameters are present and that the specified model file exists if required. Returns the resolved model path if valid, or None if not required."""
     model_path = str(model_config["path"])
     required = bool(model_config["required"])
@@ -51,6 +69,28 @@ def _validate_model_config(model_config: dict[str, str | bool]) -> Path | None:
 
     return resolved_path
 
+def _resolve_manifest_path(model_config: dict[str, str | bool], validated_model_path: Path | None) -> str | None:
+    """Resolve explicit manifest path from config or derive a default alongside model file."""
+    manifest_path = str(model_config.get("manifest_path", "") or "").strip()
+    if manifest_path:
+        return Path(manifest_path).expanduser().resolve().as_posix()
+
+    if validated_model_path is None:
+        return None
+
+    return validated_model_path.with_suffix(".manifest.json").as_posix()
+
+def _load_model_manifest(model_config: dict[str, str | bool], model_path: str | None) -> ArtifactManifest | None:
+    """Load and validate model manifest metadata when a model is configured."""
+    manifest_path = _resolve_manifest_path(model_config, Path(model_path) if model_path else None)
+    if not manifest_path:
+        return None
+
+    return load_artifact_manifest(
+        manifest_path=manifest_path,
+        model_path=model_path,
+        expected_model_version=str(model_config["version"]),
+    )
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -71,6 +111,7 @@ async def lifespan(app: FastAPI):
 
     validated_model_path = _validate_model_config(app.state.model_config)
     app.state.model_path = (validated_model_path.as_posix() if validated_model_path else None)
+    app.state.model_manifest = _load_model_manifest(app.state.model_config, app.state.model_path)
     app.state.model = load_model(app.state.model_path) if app.state.model_path else None
     
     # The inference service will be model-based if the model was loaded successfully, or rule-based if the model is not required or failed to load. This allows the application to continue functioning with a fallback recommendation strategy even if the ML model is not available.

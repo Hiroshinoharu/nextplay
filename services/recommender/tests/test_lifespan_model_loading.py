@@ -16,6 +16,7 @@ def test_lifespan_loads_model_and_exposes_state(monkeypatch) -> None:
         lambda: {"path": "/tmp/model.keras", "version": "v42", "required": True},
     )
     monkeypatch.setattr(main, "_validate_model_config", lambda _: Path("/tmp/model.keras"))
+    monkeypatch.setattr(main, "_load_model_manifest", lambda *_args, **_kwargs: {"manifest": "ok"})
     monkeypatch.setattr(main, "load_model", lambda path: {"loaded_from": path})
     monkeypatch.setattr(main, "build_inference_service", lambda model: {"wrapped_model": model})
     
@@ -26,6 +27,7 @@ def test_lifespan_loads_model_and_exposes_state(monkeypatch) -> None:
             assert app.state.model_config["version"] == "v42"
             assert app.state.model_version == "v42"
             assert app.state.model_path == "/tmp/model.keras"
+            assert app.state.model_manifest == {"manifest": "ok"}
             assert app.state.model == {"loaded_from": "/tmp/model.keras"}
             assert app.state.inference_service == {"wrapped_model": {"loaded_from": "/tmp/model.keras"}}
             assert app.state.fallback_inference is not None  # Fallback inference should be set even when model is loaded
@@ -49,6 +51,8 @@ def test_lifespan_skips_model_loading_when_model_path_missing(monkeypatch) -> No
         lambda: {"path": "", "version": "dev", "required": False},
     )
     monkeypatch.setattr(main, "_validate_model_config", lambda _: None)
+    monkeypatch.setattr(main, "_load_model_manifest", lambda *_args, **_kwargs: None)
+
 
     load_calls = []
 
@@ -64,6 +68,7 @@ def test_lifespan_skips_model_loading_when_model_path_missing(monkeypatch) -> No
     async def runner() -> None:
         async with main.lifespan(app):
             assert app.state.model_path is None
+            assert app.state.model_manifest is None
             assert app.state.model is None
             assert app.state.model_version == "dev"
             assert app.state.inference_service == "rule-based"

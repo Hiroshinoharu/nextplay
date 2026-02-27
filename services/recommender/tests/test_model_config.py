@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from services.recommender.main import _build_model_config, _validate_model_config
+from services.recommender.main import _build_model_config, _validate_model_config, _resolve_manifest_path
 
 
 def test_build_model_config_uses_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -21,6 +21,7 @@ def test_build_model_config_uses_defaults(monkeypatch: pytest.MonkeyPatch) -> No
         "path": "",
         "version": "dev",
         "required": False,
+        "manifest_path": "",
     }
 
 
@@ -68,3 +69,35 @@ def test_validate_model_config_returns_resolved_path_for_existing_file(tmp_path:
     resolved = _validate_model_config(cfg)
 
     assert resolved == model_file.resolve()
+
+def test_resolve_manifest_path_uses_explicit_value(tmp_path: Path) -> None:
+    """
+    Test that _resolve_manifest_path uses an explicitly provided manifest path.
+    This test verifies that when a manifest_path is explicitly configured in the config dictionary,
+    the function returns the resolved absolute path in POSIX format, regardless of any other parameters.
+    Args:
+        tmp_path: A temporary directory path fixture provided by pytest.
+    Asserts:
+        That the resolved manifest path matches the expected absolute path in POSIX format.
+    """
+    manifest_file = tmp_path / "model.manifest.json"
+    cfg = {"manifest_path": str(manifest_file)}
+
+    resolved = _resolve_manifest_path(cfg, None)
+
+    assert resolved == manifest_file.resolve().as_posix()
+
+
+def test_resolve_manifest_path_defaults_from_model_path(tmp_path: Path) -> None:
+    """
+    Test that _resolve_manifest_path defaults to a manifest file path based on the model file path.
+    When an empty manifest_path is provided, the function should return a path derived from
+    the model file by replacing its suffix with ".manifest.json" and converting it to POSIX format.
+    Args:
+        tmp_path: Pytest fixture providing a temporary directory path for test isolation.
+    """
+    model_file = tmp_path / "model.keras"
+
+    resolved = _resolve_manifest_path({"manifest_path": ""}, model_file)
+
+    assert resolved == model_file.with_suffix(".manifest.json").as_posix()
