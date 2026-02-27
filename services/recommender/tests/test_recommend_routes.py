@@ -224,6 +224,7 @@ def test_recommend_route_falls_back_when_inference_raises_and_records_metrics():
     app.state.metrics = {
         "recommend_requests_total": 0,
         "recommend_fallback_total": 0,  # Start with 1 to verify it increments to 2
+        "recommend_errors_total": 0,
         "recommend_latency_ms_total": 0.0,
         "recommend_latency_ms_max": 0.0,
     }
@@ -242,6 +243,7 @@ def test_recommend_route_falls_back_when_inference_raises_and_records_metrics():
     assert len(fallback.calls) == 1
     assert app.state.metrics["recommend_requests_total"] == 1
     assert app.state.metrics["recommend_fallback_total"] == 1
+    assert app.state.metrics["recommend_errors_total"] == 1
     assert app.state.metrics["recommend_latency_ms_total"] >= 0.0
     assert app.state.metrics["recommend_latency_ms_max"] >= 0.0
     
@@ -268,6 +270,7 @@ def test_reccomend_route_records_metrics_without_fallback():
     app.state.metrics = {
         "recommend_requests_total": 0,
         "recommend_fallback_total": 0,
+        "recommend_errors_total": 0,
         "recommend_latency_ms_total": 0.0,
         "recommend_latency_ms_max": 0.0,
     }
@@ -285,6 +288,7 @@ def test_reccomend_route_records_metrics_without_fallback():
     assert response.status_code == 200
     assert app.state.metrics["recommend_requests_total"] == 1
     assert app.state.metrics["recommend_fallback_total"] == 0
+    assert app.state.metrics["recommend_errors_total"] == 0
     assert app.state.metrics["recommend_latency_ms_total"] >= 0.0
     assert app.state.metrics["recommend_latency_ms_max"] >= 0.0
     

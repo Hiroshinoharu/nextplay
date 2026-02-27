@@ -10,7 +10,7 @@ from ..models.response import RecommendResponse, SimilarResponse, UserRecommendR
 
 logger = logging.getLogger(__name__)
 
-def _record_recommend_metrics(request: Request, *, latency_ms: float, fallback_used: bool) -> None:
+def _record_recommend_metrics(request: Request, *, latency_ms: float, fallback_used: bool, error_occurred: bool) -> None:
     """
     Record metrics related to recommendation requests, such as total requests, latency, and fallback usage.
     
@@ -33,6 +33,11 @@ def _record_recommend_metrics(request: Request, *, latency_ms: float, fallback_u
     if fallback_used:
         metrics["recommend_fallback_total"] = int(metrics.get("recommend_fallback_total", 0)) + 1
         metrics["recommend_fallbacks_total"] = int(metrics.get("recommend_fallbacks_total", 0)) + 1
+
+    if error_occurred:
+        # Keep both key variants for backward compatibility across tests/services.
+        metrics["recommend_errors_total"] = int(metrics.get("recommend_errors_total", 0)) + 1
+        metrics["recommend_error_total"] = int(metrics.get("recommend_error_total", 0)) + 1
         
 # Placeholder POST /recommend route to handle recommendation requests
 async def recommend(payload: RecommendRequest, request: Request) -> RecommendResponse:
@@ -43,6 +48,7 @@ async def recommend(payload: RecommendRequest, request: Request) -> RecommendRes
     
     start = time.perf_counter()
     fallback_used = False
+    error_occurred = False
     model_version = getattr(request.app.state, "model_version", "unknown")
     
     model_input = ModelInputSchema.from_recommend_request(payload)
@@ -65,11 +71,17 @@ async def recommend(payload: RecommendRequest, request: Request) -> RecommendRes
             f"recommender.inference_error user_id={model_input.user_id} model_version={model_version} error={str(e)}"
         )
         fallback_used = True
+        error_occurred = True
         fallback_inference = getattr(request.app.state, "fallback_inference", None) or build_inference_service(None)
         inference_output = fallback_inference.infer(model_input)   
     
     latency_ms = (time.perf_counter() - start) * 1000
-    _record_recommend_metrics(request, latency_ms=latency_ms, fallback_used=fallback_used)
+    _record_recommend_metrics(
+        request,
+        latency_ms=latency_ms,
+        fallback_used=fallback_used,
+        error_occurred=error_occurred,
+    )
     
     strategy = getattr(inference_output, "strategy", "unknown")
 

@@ -124,6 +124,7 @@ async def lifespan(app: FastAPI):
     app.state.metrics = {
         "recommend_requests_total": 0,
         "recommend_fallback_total": 0,
+        "recommend_errors_total": 0,
         "recommend_latency_ms_total": 0.0,
         "recommend_latency_ms_max": 0.0,
     }
