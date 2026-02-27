@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from typing import Any, Protocol
 
 from .feature_contract import build_feature_vector_from_payload
@@ -52,9 +53,10 @@ class KerasInferenceService:
     def infer(self, payload: ModelInputSchema) -> ModelOutputSchema:
         feature_vector = build_feature_vector_from_payload(payload)
         scores = _predict_scores(self.model, feature_vector)
+        valid_scores = [(game_id, score) for game_id, score in enumerate(scores, start=1) if math.isfinite(score)]
 
         ranked = sorted(
-            enumerate(scores, start=1),
+            valid_scores,
             key=lambda row: row[1],
             reverse=True,
         )
