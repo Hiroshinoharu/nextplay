@@ -1,0 +1,68 @@
+{
+    "version": "2026-03-01",
+    "shadow_run": {
+        "duration_hours": 48,
+        "traffic_percent": 10,
+        "promotion_gate": {
+            "max_relative_ctr_drop": 0.02,
+            "max_relative_recall_at_20_drop": 0.03,
+            "max_error_rate": 0.01,
+            "max_p95_latency_ms": 120
+        },
+        "rollback_triggers": {
+            "error_rate": 0.02,
+            "p95_latency_ms": 150,
+            "empty_recommendations_rate": 0.03
+        }
+    },
+    "drift_monitors":[
+        {
+            "name": "recall_at_20_relative_drop",
+            "type": "quality",
+            "window": "24h",
+            "threshold": -0.05,
+            "severity": "high",
+            "action": "trigger_retrain"
+        },
+        {
+            "name": "ndcg_at_20_relative_drop",
+            "type": "quality",
+            "window": "24h",
+            "threshold": -0.05,
+            "severity": "high",
+            "action": "trigger_retrain"
+        },
+        {
+            "name": "catalog_coverage_at_20_relative_drop",
+            "type": "distribution",
+            "window": "24h",
+            "threshold": -0.1,
+            "severity": "medium",
+            "action": "open_investigation"
+        },
+        {
+            "name": "cold_start_empty_rate",
+            "type": "serving",
+            "window": "6h",
+            "threshold": 0.08,
+            "severity": "high",
+            "action": "fallback_only"
+        },
+        {
+            "name": "popularity_share_top_10",
+            "type": "distribution",
+            "window": "24h",
+            "threshold": 0.75,
+            "severity": "medium",
+            "action": "open_investigation"
+        }
+    ],
+    "retrain": {
+    "schedule": "weekly",
+    "full_retrain_day": "monday",
+    "incremental_check": "daily",
+    "max_model_age_days": 21,
+    "auto_retrain_on_high_severity_drift": true,
+    "manual_review_required_for_promotion": true
+  }
+}
