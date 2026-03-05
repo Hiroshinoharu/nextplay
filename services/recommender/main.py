@@ -9,7 +9,7 @@ import requests
 
 from services.recommender.models.artifact_manifest import ArtifactManifest, load_artifact_manifest
 from services.recommender.models.inference import build_inference_service
-from services.recommender.models.model_loader import load_model
+from services.recommender.models.model_loader import load_model, load_candidate_index_map
 from services.recommender.routes.routes import register_routes
 
 logger = logging.getLogger(__name__)
@@ -114,8 +114,22 @@ async def lifespan(app: FastAPI):
     app.state.model_manifest = _load_model_manifest(app.state.model_config, app.state.model_path)
     app.state.model = load_model(app.state.model_path) if app.state.model_path else None
     
+    candidate_index_map_path = None
+    if app.state.model_manifest is not None:
+        candidate_index_map_path = app.state.model_manifest.candidate_index_map_path
+        candidate_map = Path(candidate_index_map_path)
+        if not candidate_map.is_absolute():
+            manifest_path = _resolve_manifest_path(app.state.model_config, validated_model_path)
+            if manifest_path is not None:
+                candidate_map = (Path(manifest_path).resolve().parent / candidate_map).resolve()
+        candidate_index_map_path = candidate_map.as_posix()
+
+    app.state.candidate_index_map = (
+        load_candidate_index_map(candidate_index_map_path) if candidate_index_map_path else None
+    )
+    
     # The inference service will be model-based if the model was loaded successfully, or rule-based if the model is not required or failed to load. This allows the application to continue functioning with a fallback recommendation strategy even if the ML model is not available.
-    app.state.inference_service = build_inference_service(app.state.model)
+    app.state.inference_service = build_inference_service(app.state.model, app.state.candidate_index_map)
     app.state.fallback_inference = build_inference_service(None)  # Always have a fallback inference service available, even if the model is not loaded or required.
     
     # Backward-compatible alias used by existing route tests/handlers.

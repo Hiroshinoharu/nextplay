@@ -53,8 +53,77 @@ def test_keras_inference_service_wraps_predict_call_and_ranks_results():
     assert result.strategy == "keras_inference_v1"
     assert [candidate.game_id for candidate in result.candidates[:3]] == [2, 3, 1]
 
+def test_keras_inference_service_maps_candidate_indices_to_game_ids() -> None:
+    """
+    Test that KerasInferenceService maps candidate indices to game_ids correctly.
 
-def test_golden_train_vs_runtime_fewature_parity_for_inference_payload() -> None:
+    Given a KerasInferenceService configured with a candidate index map, this test verifies
+    that the inference service correctly maps candidate indices to game IDs when returning
+    candidates. The test asserts that the correct game IDs are returned in the correct order
+    based on the model's predicted scores.
+
+    Example:
+        service = KerasInferenceService(
+            model=_FakePredictModel(),
+            candidate_index_map={1: 1001, 2: 1002, 3: 1003}
+        )
+        result = service.infer(
+            ModelInputSchema(
+                user_id=12,
+                liked_keyword_ids=[1, 2],
+                liked_platform_ids=[3],
+                disliked_keyword_ids=[],
+                disliked_platform_ids=[9],
+            )
+        )
+        assert [candidate.game_id for candidate in result.candidates[:3]] == [1002, 1003, 1001]
+    """
+    service = KerasInferenceService(
+        model=_FakePredictModel(),
+        candidate_index_map={1: 1001, 2: 1002, 3: 1003}
+    )
+    
+    result = service.infer(
+        ModelInputSchema(
+            user_id=12,
+            liked_keyword_ids=[1, 2],
+            liked_platform_ids=[3],
+            disliked_keyword_ids=[],
+            disliked_platform_ids=[9],
+        )
+    )
+
+    assert [candidate.game_id for candidate in result.candidates[:3]] == [1002, 1003, 1001]
+
+def test_keras_inference_service_skips_missing_candidate_map_key() -> None:
+    """
+    Test that KerasInferenceService correctly handles missing keys in the candidate index map.
+
+    Given a KerasInferenceService configured with a candidate index map, this test verifies
+    that the inference service correctly filters out any candidate indices that are not
+    present in the map when returning candidates. The test asserts that the correct game
+    IDs are returned in the correct order based on the model's predicted scores, and that
+    the rank of each candidate is correctly assigned.
+    """
+    service = KerasInferenceService(
+        model=_FakePredictModel(),
+        candidate_index_map={1: 201, 3: 203},
+    )
+
+    result = service.infer(
+        ModelInputSchema(
+            user_id=33,
+            liked_keyword_ids=[1],
+            liked_platform_ids=[],
+            disliked_keyword_ids=[],
+            disliked_platform_ids=[],
+        )
+    )
+
+    assert [candidate.game_id for candidate in result.candidates] == [203, 201]
+    assert [candidate.rank for candidate in result.candidates] == [1, 2]
+
+def test_golden_train_vs_runtime_feature_parity_for_inference_payload() -> None:
     """
     Test that feature vectors built from inference payload match those built during training.
     Verifies that the runtime feature extraction from a ModelInputSchema payload

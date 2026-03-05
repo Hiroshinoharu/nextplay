@@ -50,11 +50,21 @@ class KerasInferenceService:
     
     # Model can be any type depending on the ML framework used; we use Any for flexibility.
     model: Any
+    candidate_index_map: dict[int, int] | None = None  # Optional mapping from model output indices to game IDs
 
     def infer(self, payload: ModelInputSchema) -> ModelOutputSchema:
         feature_vector = build_feature_vector_from_payload(payload)
         scores = _predict_scores(self.model, feature_vector)
-        valid_scores = [(game_id, score) for game_id, score in enumerate(scores, start=1) if math.isfinite(score)]
+        valid_scores: list[tuple[int, float]] = []
+        for candidate_index, score in enumerate(scores, start = 1):
+            if not math.isfinite(score):
+                continue
+            
+            game_id = self._resolve_game_id(candidate_index)
+            if game_id is None:
+                continue
+            
+            valid_scores.append((game_id, score))
 
         ranked = sorted(
             valid_scores,
@@ -72,18 +82,30 @@ class KerasInferenceService:
             strategy="keras_inference_v1",
             candidates=candidates,
         )
+    
+    def _resolve_game_id(self, candidate_index: int) -> int | None:
+        """Resolve model candidate index to externally valid game_id.
 
-def build_inference_service(model: Any | None) -> InferenceService:
+        Failure behavior: if a candidate index map is configured and the index is missing,
+        the candidate is skipped to avoid returning invalid IDs to clients.
+        """
+        if self.candidate_index_map is None:
+            return candidate_index
+
+        return self.candidate_index_map.get(candidate_index)
+
+def build_inference_service(model: Any | None, candidate_index_map: dict[int, int] | None = None) -> InferenceService:
     """
     Factory function to build an inference service based on the loaded model.
 
     Args:
         model (Any | None): The loaded model object, or None if no model is available.
+        candidate_index_map (dict[int, int] | None): An optional mapping from model output indices to game IDs.
     Returns:
         InferenceService: An instance of an inference service implementation.
     """
     if model is not None:
-        return KerasInferenceService(model=model)
+        return KerasInferenceService(model=model, candidate_index_map=candidate_index_map)
     else:
         return RuleBasedInferenceService()
 
