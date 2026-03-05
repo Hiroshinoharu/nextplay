@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 import logging
 from pathlib import Path
 import os
+import time
+from uuid import uuid4
 
 from fastapi import FastAPI
 import uvicorn
@@ -13,6 +15,10 @@ from services.recommender.models.model_loader import load_model, load_candidate_
 from services.recommender.routes.routes import register_routes
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s service=recommender %(message)s",
+)
 
 
 def _service_url(env_key: str, default: str) -> str:
@@ -194,6 +200,26 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+@app.middleware("http")
+async def access_log_with_request_id(request, call_next):
+    request_id = request.headers.get("X-Request-ID", "").strip() or uuid4().hex
+    request.state.request_id = request_id
+    started = time.perf_counter()
+
+    response = await call_next(request)
+    latency_ms = (time.perf_counter() - started) * 1000
+
+    response.headers["X-Request-ID"] = request_id
+    logger.info(
+        "request_id=%s method=%s path=%s status=%s latency_ms=%.2f",
+        request_id,
+        request.method,
+        request.url.path,
+        response.status_code,
+        latency_ms,
+    )
+    return response
 
 register_routes(app)
 

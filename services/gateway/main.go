@@ -8,11 +8,11 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/maxceban/nextplay/services/gateway/clients"
 	"github.com/maxceban/nextplay/services/gateway/routes"
 	"github.com/maxceban/nextplay/services/shared/config"
+	"github.com/maxceban/nextplay/services/shared/observability"
 )
 
 func main() {
@@ -64,8 +64,8 @@ func main() {
 		AllowHeaders: "Content-Type, Authorization",
 	}))
 
-	// Logging middleware
-	app.Use(logger.New())
+	// Access log + request ID middleware
+	app.Use(observability.AccessLog("gateway"))
 
 	// Recovers from panics
 	app.Use(recover.New())

@@ -3,7 +3,7 @@ module github.com/maxceban/nextplay/services/user
 go 1.24.5
 
 require (
-	github.com/gofiber/fiber/v2 v2.52.9
+	github.com/gofiber/fiber/v2 v2.52.10
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/maxceban/nextplay/services/shared v0.0.0
 	golang.org/x/crypto v0.33.0

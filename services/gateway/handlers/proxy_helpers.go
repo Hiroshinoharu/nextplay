@@ -3,6 +3,7 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/maxceban/nextplay/services/gateway/clients"
+	"github.com/maxceban/nextplay/services/shared/observability"
 )
 
 // Helper to write error response for proxy handlers
@@ -34,5 +35,19 @@ func sendProxyJSON(c *fiber.Ctx, payload interface{}, err error) error {
 
 // Helper to create UserClient with Authorization header from request context
 func userClientFromCtx(c *fiber.Ctx) *clients.UserClient {
-	return clients.NewUserClientWithAuth(c.Get("Authorization"))
+	return clients.NewUserClientWithHeaders(c.Get("Authorization"), requestIDFromCtx(c))
+}
+
+func requestIDFromCtx(c *fiber.Ctx) string {
+	return observability.RequestID(c)
+}
+
+func forwardingHeaders(c *fiber.Ctx) map[string]string {
+	headers := map[string]string{
+		observability.HeaderRequestID: requestIDFromCtx(c),
+	}
+	if auth := c.Get("Authorization"); auth != "" {
+		headers["Authorization"] = auth
+	}
+	return headers
 }

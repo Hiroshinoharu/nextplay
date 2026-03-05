@@ -12,6 +12,7 @@ import (
 type GameClient struct {
 	baseURL string
 	client  *http.Client
+	headers map[string]string
 }
 
 func NewGameClient() *GameClient {
@@ -28,8 +29,18 @@ func NewGameClient() *GameClient {
 	}
 }
 
+func NewGameClientWithHeaders(headers map[string]string) *GameClient {
+	client := NewGameClient()
+	client.headers = headers
+	return client
+}
+
 // doRequest is a helper method to execute an HTTP request and return the status code, response body, and any error.
 func (gc *GameClient) doRequest(req *http.Request) (int, []byte, error) {
+	for key, value := range gc.headers {
+		req.Header.Set(key, value)
+	}
+
 	resp, err := gc.client.Do(req)
 	if err != nil {
 		return 0, nil, err

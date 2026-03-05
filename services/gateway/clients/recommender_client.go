@@ -27,13 +27,10 @@ func readResponse(resp *http.Response) ([]byte, error) {
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		// If the response body is empty, use the HTTP status text as the message
 		message := strings.TrimSpace(string(body))
 		if message == "" {
 			message = http.StatusText(resp.StatusCode)
 		}
-
-		// Log the error details for debugging purposes
 		fmt.Printf("Recommender service error: %d - %s\n", resp.StatusCode, message)
 		return nil, &UpstreamError{
 			StatusCode: resp.StatusCode,
@@ -42,6 +39,12 @@ func readResponse(resp *http.Response) ([]byte, error) {
 	}
 
 	return body, nil
+}
+
+func setHeaders(req *http.Request, headers map[string]string) {
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
 }
 
 // RecommenderClient is a client for interacting with the Recommender Service.
@@ -59,12 +62,18 @@ func NewRecommenderClient() *RecommenderClient {
 }
 
 // RecommendFromFeatures fetches recommendations based on provided item features.
-func (c *RecommenderClient) RecommendFromFeatures(req interface{}) ([]byte, error) {
-	// Construct the URL for the recommendation endpoint
+func (c *RecommenderClient) RecommendFromFeatures(req interface{}, headers map[string]string) ([]byte, error) {
 	url := fmt.Sprintf("%s/recommend", c.BaseURL)
-
 	body, _ := json.Marshal(req)
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
+
+	httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	setHeaders(httpReq, headers)
+
+	resp, err := HttpClient.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -74,10 +83,16 @@ func (c *RecommenderClient) RecommendFromFeatures(req interface{}) ([]byte, erro
 }
 
 // RecommendForUser fetches recommendations for a specific user ID.
-func (c *RecommenderClient) RecommendForUser(userID string) ([]byte, error) {
+func (c *RecommenderClient) RecommendForUser(userID string, headers map[string]string) ([]byte, error) {
 	url := fmt.Sprintf("%s/recommend/user/%s", c.BaseURL, userID)
 
-	resp, err := http.Get(url)
+	httpReq, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	setHeaders(httpReq, headers)
+
+	resp, err := HttpClient.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -87,10 +102,16 @@ func (c *RecommenderClient) RecommendForUser(userID string) ([]byte, error) {
 }
 
 // RecommendForItem fetches recommendations based on a specific item ID.
-func (c *RecommenderClient) RecommendForItem(itemID string) ([]byte, error) {
+func (c *RecommenderClient) RecommendForItem(itemID string, headers map[string]string) ([]byte, error) {
 	url := fmt.Sprintf("%s/recommend/item/%s", c.BaseURL, itemID)
 
-	resp, err := http.Get(url)
+	httpReq, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	setHeaders(httpReq, headers)
+
+	resp, err := HttpClient.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -100,10 +121,17 @@ func (c *RecommenderClient) RecommendForItem(itemID string) ([]byte, error) {
 }
 
 // RecommendSimilar fetches items similar to the provided item features.
-func (c *RecommenderClient) RecommendSimilar(body []byte) ([]byte, error) {
+func (c *RecommenderClient) RecommendSimilar(body []byte, headers map[string]string) ([]byte, error) {
 	url := fmt.Sprintf("%s/recommend/item", c.BaseURL)
 
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
+	httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	setHeaders(httpReq, headers)
+
+	resp, err := HttpClient.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}

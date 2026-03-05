@@ -42,6 +42,19 @@ def test_existing_recommend_item_and_recommend_routes_still_respond_as_expected(
         'filters': None,
     }
     
+    class _Inference:
+        def infer(self, payload):
+            return ModelOutputSchema(
+                user_id=payload.user_id,
+                strategy="keras_inference_v1",
+                candidates=[
+                    ModelCandidateScore(game_id=901, score=0.95, rank=1),
+                    ModelCandidateScore(game_id=902, score=0.90, rank=2),
+                    ModelCandidateScore(game_id=903, score=0.85, rank=3),
+                ],
+            )
+
+    app.state.inference_service = _Inference()
     recommend_response = client.post(
         '/recommend',
         json={
@@ -55,8 +68,8 @@ def test_existing_recommend_item_and_recommend_routes_still_respond_as_expected(
     assert recommend_response.status_code == 200
     assert recommend_response.json() == {
         'user_id': 1,
-        'recommended_games': [71, 72, 73, 74, 75],
-        'strategy': 'rule_based_fallback_v1',
+        'recommended_games': [901, 902, 903],
+        'strategy': 'keras_inference_v1',
     }
     
     similar_post_response = client.post('/recommend/item', json={'item_id': 11, 'top_k': 5})
@@ -67,6 +80,7 @@ def test_existing_recommend_item_and_recommend_routes_still_respond_as_expected(
         'top_k': 5,
         'filters': {}
     }
+    delattr(app.state, 'inference_service')
 
 # Test that POST /recommend calls the inference service when available
 def test_recommend_route_calls_inference_service_when_available():
@@ -146,6 +160,7 @@ def test_recommend_for_user_live_dependencies_and_ranks_candidates():
                     {"id": 101, "keywords": [4], "platforms": [10], "popularity": 1.0},
                     {"id": 102, "keywords": [4], "platforms": [], "popularity": 10.0},
                     {"id": 103, "keywords": [], "platforms": [10], "popularity": 20.0},
+                    {"id": 104, "keywords": [4], "platforms": [], "popularity": 10.0},
                 ],
             ),
         }
@@ -156,7 +171,7 @@ def test_recommend_for_user_live_dependencies_and_ranks_candidates():
     assert response.status_code == 200
     assert response.json() == {
         'user_id': 9,
-        'recommended_games': [200, 101, 102, 103],
+        'recommended_games': [200, 101, 102, 104, 103],
         'strategy': 'keyword_platform_overlap_v1',
     }
     
@@ -244,8 +259,11 @@ def test_recommend_route_falls_back_when_inference_raises_and_records_metrics():
     assert len(fallback.calls) == 1
     assert app.state.metrics["recommend_requests_total"] == 1
     assert app.state.metrics["recommend_fallback_total"] == 1
+    assert app.state.metrics["recommend_fallbacks_total"] == 1
     assert app.state.metrics["recommend_errors_total"] == 1
+    assert app.state.metrics["recommend_error_total"] == 1
     assert app.state.metrics["recommend_latency_ms_total"] >= 0.0
+    assert app.state.metrics["recommend_latency_ms"] >= 0.0
     assert app.state.metrics["recommend_latency_ms_max"] >= 0.0
     
     delattr(app.state, 'inference_service')
@@ -291,8 +309,11 @@ def test_reccomend_route_records_metrics_without_fallback():
     assert response.status_code == 200
     assert app.state.metrics["recommend_requests_total"] == 1
     assert app.state.metrics["recommend_fallback_total"] == 0
+    assert app.state.metrics.get("recommend_fallbacks_total", 0) == 0
     assert app.state.metrics["recommend_errors_total"] == 0
+    assert app.state.metrics.get("recommend_error_total", 0) == 0
     assert app.state.metrics["recommend_latency_ms_total"] >= 0.0
+    assert app.state.metrics["recommend_latency_ms"] >= 0.0
     assert app.state.metrics["recommend_latency_ms_max"] >= 0.0
     
     delattr(app.state, 'inference_service')

@@ -8,8 +8,9 @@ import (
 
 // UserClient struct to interact with User Service
 type UserClient struct {
-	BaseURL string
+	BaseURL    string
 	AuthHeader string
+	RequestID  string
 }
 
 // Constructor for UserClient
@@ -24,22 +25,28 @@ func NewUserClient() *UserClient {
 	return &UserClient{BaseURL: baseURL}
 }
 
-// Constructor for UserClient with Authorization header
-func NewUserClientWithAuth(authHeader string) *UserClient {
+// Constructor for UserClient with forwarding headers.
+func NewUserClientWithHeaders(authHeader string, requestID string) *UserClient {
 	// Create a new UserClient instance
 	client := NewUserClient()
 	client.AuthHeader = strings.TrimSpace(authHeader)
+	client.RequestID = strings.TrimSpace(requestID)
 	return client
 }
 
 // Helper to prepare headers
 func (c *UserClient) headers() map[string]string {
-	if c.AuthHeader == "" {
+	headers := map[string]string{}
+	if c.AuthHeader != "" {
+		headers["Authorization"] = c.AuthHeader
+	}
+	if c.RequestID != "" {
+		headers["X-Request-ID"] = c.RequestID
+	}
+	if len(headers) == 0 {
 		return nil
 	}
-	return map[string]string{
-		"Authorization": c.AuthHeader,
-	}
+	return headers
 }
 
 // GET /users/:id

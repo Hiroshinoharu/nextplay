@@ -8,7 +8,7 @@ ENV MODEL_VERSION="dev"
 ENV MODEL_REQUIRED="false"
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY services/recommender/requirements.txt /tmp/requirements.txt

@@ -50,12 +50,18 @@ async def recommend(payload: RecommendRequest, request: Request) -> UserRecommen
     fallback_used = False
     error_occurred = False
     model_version = getattr(request.app.state, "model_version", "unknown")
+    request_id = getattr(request.state, "request_id", "unknown")
     
     if payload.user_id is None:
         raise HTTPException(status_code=400, detail="user_id is required for /recommend")
     
     model_input = ModelInputSchema.from_recommend_request(payload)
-    logger.info(f"Received recommendation request for user_id={model_input.user_id} with model_version={model_version}")
+    logger.info(
+        "request_id=%s recommender.request user_id=%s model_version=%s",
+        request_id,
+        model_input.user_id,
+        model_version,
+    )
     
     inference = getattr(request.app.state, "inference_service", None)
     if inference is None:
@@ -71,7 +77,11 @@ async def recommend(payload: RecommendRequest, request: Request) -> UserRecommen
         logger.info(f"Inference output: {inference_output}")
     except Exception as e:
         logger.exception(
-            f"recommender.inference_error user_id={model_input.user_id} model_version={model_version} error={str(e)}"
+            "request_id=%s recommender.inference_error user_id=%s model_version=%s error=%s",
+            request_id,
+            model_input.user_id,
+            model_version,
+            str(e),
         )
         fallback_used = True
         error_occurred = True
@@ -89,7 +99,8 @@ async def recommend(payload: RecommendRequest, request: Request) -> UserRecommen
     strategy = getattr(inference_output, "strategy", "unknown")
 
     logger.info(
-        "recommender.recommend_completed user_id=%s model_version=%s strategy=%s latency_ms=%.2f fallback=%s",
+        "request_id=%s recommender.recommend_completed user_id=%s model_version=%s strategy=%s latency_ms=%.2f fallback=%s",
+        request_id,
         model_input.user_id,
         model_version,
         strategy,

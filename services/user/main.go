@@ -4,14 +4,15 @@ import (
 	"log"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/maxceban/nextplay/services/shared/config"
+	"github.com/maxceban/nextplay/services/shared/observability"
 	"github.com/maxceban/nextplay/services/user/db"
 	"github.com/maxceban/nextplay/services/user/routes"
-	"github.com/maxceban/nextplay/services/shared/config"
 )
 
 func main() {
 	cfg, err := config.Load(config.Defaults{
-		Port: "8082",
+		Port:        "8082",
 		DatabaseURL: "postgres://nextplay:nextplay@localhost:5432/nextplay?sslmode=disable",
 	})
 	if err != nil {
@@ -24,6 +25,7 @@ func main() {
 	}
 
 	app := fiber.New()
+	app.Use(observability.AccessLog("user"))
 
 	// Health Endpoint
 	app.Get("/health", func(c *fiber.Ctx) error {

@@ -11,6 +11,7 @@ import (
 	"github.com/maxceban/nextplay/services/game/db"
 	"github.com/maxceban/nextplay/services/game/routes"
 	"github.com/maxceban/nextplay/services/shared/config"
+	"github.com/maxceban/nextplay/services/shared/observability"
 )
 
 func main() {
@@ -33,6 +34,7 @@ func main() {
 	}
 
 	app := fiber.New()
+	app.Use(observability.AccessLog("game"))
 
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*",
