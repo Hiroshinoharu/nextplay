@@ -6,7 +6,7 @@ from fastapi import HTTPException, Request
 from ..models.inference import build_inference_service
 from ..models.model_schema import ModelInputSchema
 from ..models.request import RecommendRequest, SimilarRequest
-from ..models.response import RecommendResponse, SimilarResponse, UserRecommendResponse
+from ..models.response import SimilarResponse, UserRecommendResponse
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ def _record_recommend_metrics(request: Request, *, latency_ms: float, fallback_u
         metrics["recommend_error_total"] = int(metrics.get("recommend_error_total", 0)) + 1
         
 # Placeholder POST /recommend route to handle recommendation requests
-async def recommend(payload: RecommendRequest, request: Request) -> RecommendResponse:
+async def recommend(payload: RecommendRequest, request: Request) -> UserRecommendResponse:
     """
     Placeholder recommendation engine.
     ML logic will be added later.
@@ -50,6 +50,9 @@ async def recommend(payload: RecommendRequest, request: Request) -> RecommendRes
     fallback_used = False
     error_occurred = False
     model_version = getattr(request.app.state, "model_version", "unknown")
+    
+    if payload.user_id is None:
+        raise HTTPException(status_code=400, detail="user_id is required for /recommend")
     
     model_input = ModelInputSchema.from_recommend_request(payload)
     logger.info(f"Received recommendation request for user_id={model_input.user_id} with model_version={model_version}")
@@ -87,17 +90,14 @@ async def recommend(payload: RecommendRequest, request: Request) -> RecommendRes
 
     logger.info(
         "recommender.recommend_completed user_id=%s model_version=%s strategy=%s latency_ms=%.2f fallback=%s",
-        payload.user_id,
+        model_input.user_id,
         model_version,
         strategy,
         latency_ms,
         fallback_used,
     )
 
-    return RecommendResponse(
-        message="Recommendation placeholder response",
-        received=payload
-    )
+    return inference_output.to_user_recommend_response(fallback_user_id=model_input.user_id)
 
 # New GET /recommend/item/{item_id} route to return similar items based on item ID
 async def recommend_similar(item_id: int) -> SimilarResponse:

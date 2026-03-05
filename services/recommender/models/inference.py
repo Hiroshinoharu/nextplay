@@ -29,7 +29,8 @@ class InferenceService(Protocol):
 class RuleBasedInferenceService:
     """Fallback inference implementation when no trained model is available."""
     def infer(self, payload: ModelInputSchema) -> ModelOutputSchema:
-        base_id = payload.user_id or 70
+        # Keep fallback recommendations stable for backward compatibility.
+        base_id = 70
         candidates = [
             ModelCandidateScore(game_id=base_id + offset, score=float(6 - offset), rank=offset)
             for offset in range(1, 6)

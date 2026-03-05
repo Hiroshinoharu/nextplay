@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from services.recommender.main import app
+from services.recommender.models.model_schema import ModelCandidateScore, ModelOutputSchema
 
 client = TestClient(app)
 
@@ -53,15 +54,9 @@ def test_existing_recommend_item_and_recommend_routes_still_respond_as_expected(
     )
     assert recommend_response.status_code == 200
     assert recommend_response.json() == {
-        'message': 'Recommendation placeholder response',
-        'received': {
-            'user_id': 1,
-            'liked_keywords': [1, 2],
-            'liked_platforms': [3],
-            'disliked_keywords': [],
-            'disliked_platforms': [4],
-            'questionnaire': {'genre': 'strategy'}
-        },
+        'user_id': 1,
+        'recommended_games': [71, 72, 73, 74, 75],
+        'strategy': 'rule_based_fallback_v1',
     }
     
     similar_post_response = client.post('/recommend/item', json={'item_id': 11, 'top_k': 5})
@@ -88,7 +83,11 @@ def test_recommend_route_calls_inference_service_when_available():
 
         def infer(self, payload):
             self.calls.append(payload)
-            return None
+            return ModelOutputSchema(
+                user_id=payload.user_id,
+                strategy="test_inference_v1",
+                candidates=[ModelCandidateScore(game_id=99, score=1.0, rank=1)],
+            )
 
     stub = _StubInference()
     app.state.inference = stub
@@ -213,10 +212,12 @@ def test_recommend_route_falls_back_when_inference_raises_and_records_metrics():
         
         def infer(self, payload):
             self.calls.append(payload)
-            class _Output:
-                strategy = "rule_based_fallback_v1"
-            return _Output()
-    
+            return ModelOutputSchema(
+                user_id=payload.user_id,
+                strategy="rule_based_fallback_v1",
+                candidates=[ModelCandidateScore(game_id=77, score=1.0, rank=1)],
+            )
+
     fallback = _FallbackInference()
     app.state.inference_service = _FailingInference()
     app.state.fallback_inference = fallback
@@ -261,9 +262,11 @@ def test_reccomend_route_records_metrics_without_fallback():
         A stub inference service that simulates a successful inference call.
         """
         def infer(self, payload):
-            class _Output:
-                strategy = "keras_inference_v1"
-            return _Output()
+            return ModelOutputSchema(
+                user_id=payload.user_id,
+                strategy="keras_inference_v1",
+                candidates=[ModelCandidateScore(game_id=88, score=0.9, rank=1)]
+            )
     
     app.state.inference_service = _Inference()
     app.state.model_version = "vtest"
@@ -295,3 +298,15 @@ def test_reccomend_route_records_metrics_without_fallback():
     delattr(app.state, 'inference_service')
     delattr(app.state, 'model_version')
     delattr(app.state, 'metrics')
+
+def test_recommend_route_requires_user_id_in_payload():
+    response = client.post(
+        '/recommend',
+        json={
+            'liked_keywords': [1],
+            'liked_platforms': [2],
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {'detail': 'user_id is required for /recommend'}
