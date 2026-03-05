@@ -92,6 +92,47 @@ def _load_model_manifest(model_config: dict[str, str | bool], model_path: str | 
         expected_model_version=str(model_config["version"]),
     )
 
+def _initialise_optional_model_state(app: FastAPI, validated_model_path: Path | None) -> None:
+    """
+    Initialise the app's model state based on the validated model path.
+
+    If the model is required but cannot be loaded, raise a RuntimeError.
+    If the model is not required and cannot be loaded, log a warning and continue without the model.
+
+    Sets app.state.model_path, app.state.model_manifest, app.state.model, and app.state.candidate_index_map accordingly.
+    """
+    model_required = bool(app.state.model_config["required"])
+    app.state.model_path = validated_model_path.as_posix() if validated_model_path else None
+    app.state.model_manifest = None
+    app.state.model = None
+    app.state.candidate_index_map = None
+    
+    try:
+        app.state.model_manifest = _load_model_manifest(app.state.model_config, app.state.model_path)
+        app.state.model = load_model(app.state.model_path) if app.state.model_path else None
+        
+        candidate_index_map_path = None
+        if app.state.model_manifest is not None:
+            candidate_index_map_path = app.state.model_manifest.candidate_index_map_path
+            candidate_map = Path(candidate_index_map_path)
+            if not candidate_map.is_absolute():
+                manifest_path = _resolve_manifest_path(app.state.model_config, validated_model_path)
+                if manifest_path is not None:
+                    candidate_map = (Path(manifest_path).resolve().parent / candidate_map).resolve()
+            candidate_index_map_path = candidate_map.as_posix()
+
+        app.state.candidate_index_map = (
+            load_candidate_index_map(candidate_index_map_path) if candidate_index_map_path else None
+        )
+    except Exception as exc:
+        if model_required:
+            raise RuntimeError(f"Model startup validation failed: {exc}") from exc
+        logger.warning(f"Failed to load model or manifest, but MODEL_REQUIRED=false so continuing without model. Error: {exc}")
+        app.state.model_path = None
+        app.state.model_manifest = None
+        app.state.model = None
+        app.state.candidate_index_map = None
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -110,23 +151,9 @@ async def lifespan(app: FastAPI):
     app.state.model_version = str(app.state.model_config["version"])
 
     validated_model_path = _validate_model_config(app.state.model_config)
-    app.state.model_path = (validated_model_path.as_posix() if validated_model_path else None)
-    app.state.model_manifest = _load_model_manifest(app.state.model_config, app.state.model_path)
-    app.state.model = load_model(app.state.model_path) if app.state.model_path else None
     
-    candidate_index_map_path = None
-    if app.state.model_manifest is not None:
-        candidate_index_map_path = app.state.model_manifest.candidate_index_map_path
-        candidate_map = Path(candidate_index_map_path)
-        if not candidate_map.is_absolute():
-            manifest_path = _resolve_manifest_path(app.state.model_config, validated_model_path)
-            if manifest_path is not None:
-                candidate_map = (Path(manifest_path).resolve().parent / candidate_map).resolve()
-        candidate_index_map_path = candidate_map.as_posix()
-
-    app.state.candidate_index_map = (
-        load_candidate_index_map(candidate_index_map_path) if candidate_index_map_path else None
-    )
+    _initialise_optional_model_state(app, validated_model_path)
+    
     
     # The inference service will be model-based if the model was loaded successfully, or rule-based if the model is not required or failed to load. This allows the application to continue functioning with a fallback recommendation strategy even if the ML model is not available.
     app.state.inference_service = build_inference_service(app.state.model, app.state.candidate_index_map)
