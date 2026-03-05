@@ -48,6 +48,22 @@ const INITIAL_ROW_ITEMS = 24;
 const ROW_STEP_ITEMS = 24;
 const INITIAL_GENRE_ROWS = 6;
 const GENRE_ROWS_STEP = 6;
+const MAX_RECENT_RELEASE_BACKFILL_PAGES = 1;
+const MIN_RECENT_RELEASE_WINDOW_MONTHS = 1;
+const MAX_RECENT_RELEASE_WINDOW_MONTHS = 12;
+
+const parseBoundedInt = (
+  raw: string | null | undefined,
+  min: number,
+  max: number,
+): number | null => {
+  if (!raw) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return null;
+  const normalized = Math.floor(parsed);
+  if (normalized < min || normalized > max) return null;
+  return normalized;
+};
 
 const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(
   /\/+$/,
@@ -56,6 +72,13 @@ const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(
 const API_ROOT = RAW_BASE_URL.endsWith("/api")
   ? RAW_BASE_URL.slice(0, -4)
   : RAW_BASE_URL;
+
+const DEFAULT_RECENT_RELEASE_WINDOW_MONTHS =
+  parseBoundedInt(
+    import.meta.env.VITE_DISCOVER_RECENT_RELEASE_WINDOW_MONTHS,
+    MIN_RECENT_RELEASE_WINDOW_MONTHS,
+    MAX_RECENT_RELEASE_WINDOW_MONTHS,
+  ) ?? 2;
 
 const collapseWhitespace = (value?: string) => {
   if (!value) return "";
@@ -232,9 +255,16 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   const avatarText = useMemo(() => getUserInitials(authUser), [authUser]);
   const authToken = authUser?.token?.trim() ?? "";
   const randomPoolFetchPromiseRef = useRef<Promise<unknown> | null>(null);
+  const recentBackfillAttemptsRef = useRef<number>(0);
   const searchGridSectionRef = useRef<HTMLElement | null>(null);
   const randomLanesSectionRef = useRef<HTMLDivElement | null>(null);
   const normalizedSearchQuery = collapseWhitespace(searchQuery);
+  const recentReleaseWindowMonths =
+    parseBoundedInt(
+      searchParams.get("recent_months"),
+      MIN_RECENT_RELEASE_WINDOW_MONTHS,
+      MAX_RECENT_RELEASE_WINDOW_MONTHS,
+    ) ?? DEFAULT_RECENT_RELEASE_WINDOW_MONTHS;
   const searchPageSize = 24;
   const searchOffset = (searchPage - 1) * searchPageSize;
 
@@ -243,6 +273,10 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     setSearchQuery(urlQuery);
     setSearchPage(1);
   }, [urlQuery]);
+
+  useEffect(() => {
+    recentBackfillAttemptsRef.current = 0;
+  }, [recentReleaseWindowMonths, normalizedSearchQuery]);
 
   const {
     data: searchData,
@@ -584,8 +618,8 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       .filter((section) => section.games.length > 0);
     
     const now = new Date();
-    const oneMonthAgo = new Date();
-    oneMonthAgo.setMonth(now.getMonth() - 1);
+    const recentWindowStart = new Date();
+    recentWindowStart.setMonth(now.getMonth() - recentReleaseWindowMonths);
     
     const scoreRecentRelease = (game: GameItem) =>
       getRating(game) * 0.9 + Math.log10((getVoteCount(game) || 1) + 1) * 10;
@@ -595,7 +629,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
         if (!isReleasedGame(game, now)) return false;
         if (!game.release_date) return false;
         const releaseDate = new Date(game.release_date);
-        return releaseDate >= oneMonthAgo && releaseDate <= now;
+        return releaseDate >= recentWindowStart && releaseDate <= now;
       })
       .sort((a, b) => {
         const scoreA = scoreRecentRelease(a);
@@ -608,34 +642,39 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
         return right - left;
       });
     const recentTarget = INITIAL_ROW_ITEMS;
-    const recentIds = new Set<number>(recentHits.map((game) => game.id));
-    const recentFallback = [...safePool]
-      .filter((game) => {
-        if (recentIds.has(game.id)) return false;
-        if (isNsfwGame(game) || isNonBaseContentGame(game)) return false;
-        if (!isReleasedGame(game, now)) return false;
-        return Boolean(game.release_date);
-      })
+    const seededRecentHits = recentHits.slice(0, recentTarget);
+
+    const scoreMomentum = (game: GameItem) => {
+      if (!game.release_date) return Number.NEGATIVE_INFINITY;
+      const releaseDate = new Date(game.release_date);
+      if (Number.isNaN(releaseDate.getTime())) return Number.NEGATIVE_INFINITY;
+      const dayMs = 24 * 60 * 60 * 1000;
+      const daysSinceRelease = Math.max(
+        0,
+        (now.getTime() - releaseDate.getTime()) / dayMs,
+      );
+      const recencyBoost = Math.max(0, (120 - daysSinceRelease) / 120) * 30;
+      const ratingComponent = getRating(game) * 0.7;
+      const engagementComponent = Math.log10((getVoteCount(game) || 1) + 1) * 12;
+      const popularityComponent = Math.log10((game.popularity ?? 0) + 1) * 8;
+      return (
+        ratingComponent +
+        engagementComponent +
+        popularityComponent +
+        recencyBoost
+      );
+    };
+
+    const momentumPicks = [...safePool]
+      .filter((game) => isReleasedGame(game, now) && Boolean(game.release_date))
       .sort((a, b) => {
+        const scoreA = scoreMomentum(a);
+        const scoreB = scoreMomentum(b);
+        if (scoreB !== scoreA) return scoreB - scoreA;
         const left = new Date(a.release_date!).getTime();
         const right = new Date(b.release_date!).getTime();
         if (right !== left) return right - left;
-        const scoreA = scoreRecentRelease(a);
-        const scoreB = scoreRecentRelease(b);
-        if (scoreB !== scoreA) return scoreB - scoreA;
         return a.id - b.id;
-      });
-    const seededRecentHits = [...recentHits];
-    if (seededRecentHits.length < recentTarget) {
-      seededRecentHits.push(...recentFallback.slice(0, recentTarget - seededRecentHits.length));
-    }
-
-    const alphabeticQueue = [...safePool]
-      .filter((game) => Boolean(game.release_date))
-      .sort((a, b) => {
-        a.name = a.name ?? "";
-        b.name = b.name ?? "";
-        return a.name.localeCompare(b.name);
       });
 
     const hiddenGemsRow: DiscoverCarousel | null = hiddenGems.length
@@ -653,9 +692,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
         games: seededRecentHits,
       },
       {
-        title: "A-Z Queue",
-        badge: "A-Z",
-        games: alphabeticQueue,
+        title: "Momentum Picks",
+        badge: "Rising",
+        games: momentumPicks,
       },
     ].filter((section) => section.games.length > 0);
 
@@ -669,7 +708,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       ...genreRows,
       ...specialRows,
     ];
-  }, [randomPool]);
+  }, [randomPool, recentReleaseWindowMonths]);
 
   const discoverCarouselsByTitle = useMemo(() => {
     const map = new Map<string, DiscoverCarousel>();
@@ -678,6 +717,35 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     });
     return map;
   }, [discoverCarousels]);
+  const recentReleasedCount = useMemo(
+    () => discoverCarouselsByTitle.get("Recently Released")?.games.length ?? 0,
+    [discoverCarouselsByTitle],
+  );
+
+  useEffect(() => {
+    if (normalizedSearchQuery) return;
+    if (recentReleasedCount >= INITIAL_ROW_ITEMS) return;
+    if (!hasMoreRandomPool || randomPoolLoadingMore) return;
+    if (recentBackfillAttemptsRef.current >= MAX_RECENT_RELEASE_BACKFILL_PAGES) {
+      return;
+    }
+    if (randomPoolFetchPromiseRef.current) return;
+
+    recentBackfillAttemptsRef.current += 1;
+    const fetchPromise = fetchNextRandomPoolPage();
+    randomPoolFetchPromiseRef.current = fetchPromise;
+    void fetchPromise.finally(() => {
+      if (randomPoolFetchPromiseRef.current === fetchPromise) {
+        randomPoolFetchPromiseRef.current = null;
+      }
+    });
+  }, [
+    fetchNextRandomPoolPage,
+    hasMoreRandomPool,
+    normalizedSearchQuery,
+    randomPoolLoadingMore,
+    recentReleasedCount,
+  ]);
 
   const displayedDiscoverCarousels = useMemo(() => {
     return discoverCarousels

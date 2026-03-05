@@ -73,11 +73,14 @@ def test_set_global_seed_reproducibly_controls_python_and_numpy() -> None:
     reproducible across different machines and runs.
     """
     set_global_seed(123)
-    first_python = random.random()
+    first_python_seed = random.getrandbits(32)
+    first_python = random.Random(first_python_seed).random()
 
     set_global_seed(123)
-    second_python = random.random()
+    second_python_seed = random.getrandbits(32)
+    second_python = random.Random(second_python_seed).random()
 
+    assert first_python_seed == second_python_seed
     assert first_python == second_python
 
 def test_run_experiment_logs_hashes_params_and_metrics_reproducibly(tmp_path: Path) -> None:

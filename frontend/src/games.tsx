@@ -216,6 +216,29 @@ const HERO_MIN_HEIGHT = 400;
 const HERO_MIN_ASPECT = 1.3;
 const HERO_MAX_ASPECT = 2.2;
 
+const hashStringToSeed = (value: string) => {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+
+const createPrng = (seed: number) => {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+};
+
+const pickPseudoRandomIndex = (length: number, seedKey: string) => {
+  if (length <= 1) return 0;
+  const nextRandom = createPrng(hashStringToSeed(seedKey));
+  return Math.floor(nextRandom() * length);
+};
+
 // Main Games component handling game list view
 function Games({ authUser }: GamesProps) {
   // Router and state hooks
@@ -600,6 +623,10 @@ function Games({ authUser }: GamesProps) {
     );
     return withReleaseDates.length ? withReleaseDates : safePool;
   }, [filteredGames]);
+  const featuredCandidatesKey = useMemo(
+    () => featuredCandidates.map((game) => String(game.id)).join("|"),
+    [featuredCandidates],
+  );
 
   // useEffect for selecting a featured game when the list of featured candidates changes, with logic to maintain the current featured game if it is still in the list of candidates or to randomly select a new featured game if the current one is no longer available, ensuring that the hero section of the page remains dynamic and engaging while also providing consistency for users as they explore the game library
   useEffect(() => {
@@ -615,10 +642,13 @@ function Games({ authUser }: GamesProps) {
       if (prevId && featuredCandidates.some((game) => game.id === prevId)) {
         return prevId;
       }
-      const randomIndex = Math.floor(Math.random() * featuredCandidates.length);
-      return featuredCandidates[randomIndex].id ?? null;
+      const nextIndex = pickPseudoRandomIndex(
+        featuredCandidates.length,
+        `featured:${featuredCandidatesKey}`,
+      );
+      return featuredCandidates[nextIndex].id ?? null;
     });
-  }, [featuredCandidates]);
+  }, [featuredCandidates, featuredCandidatesKey]);
 
   // useEffect for fetching detailed information about the featured game when the featuredGameId changes, with logic to handle API requests and responses, update the featuredDetail state, and manage potential errors gracefully, ensuring that users have access to comprehensive information about the featured game while also providing a responsive experience as they explore the hero section of the page
   useEffect(() => {
@@ -665,7 +695,10 @@ function Games({ authUser }: GamesProps) {
     ? (featuredCandidates.find((game) => game.id === featuredGameId) ?? null)
     : featuredCandidates.length
       ? featuredCandidates[
-          Math.floor(Math.random() * featuredCandidates.length)
+          pickPseudoRandomIndex(
+            featuredCandidates.length,
+            `featured-fallback:${featuredCandidatesKey}`,
+          )
         ]
       : null;
 
@@ -887,7 +920,10 @@ function Games({ authUser }: GamesProps) {
 
     // If the current pick is out of bounds for the new pool, reset to 0. Otherwise, randomly pick a new index that is different from the current one to ensure variety in the hero images while maintaining consistency when possible.
     setFeaturedMediaPick((current) => {
-      const next = Math.floor(Math.random() * heroPreferredPool.length);
+      const next = pickPseudoRandomIndex(
+        heroPreferredPool.length,
+        `hero-media:${heroGame?.id ?? "none"}:${heroPreferredPoolKey}`,
+      );
       if (heroPreferredPool.length === 1) return 0;
       if (next === current) {
         return (current + 1) % heroPreferredPool.length;

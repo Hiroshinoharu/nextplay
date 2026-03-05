@@ -58,11 +58,28 @@ const defaultCoverUrl = (game: GameCarouselItem) => {
 const defaultDescription = (game: GameCarouselItem) =>
   game.release_date ? `Release: ${game.release_date}` : 'Release: n/a'
 
+const hashStringToSeed = (value: string): number => {
+  let hash = 2166136261
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
+}
 
-const shuffleItems = <T,>(items: T[]): T[] => {
+const createPrng = (seed: number) => {
+  let state = seed >>> 0
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0
+    return state / 4294967296
+  }
+}
+
+const shuffleItems = <T,>(items: T[], seedKey: string): T[] => {
   const out = [...items]
+  const nextRandom = createPrng(hashStringToSeed(seedKey))
   for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1)) // 0 <= j <= i
+    const j = Math.floor(nextRandom() * (i + 1)) // 0 <= j <= i
     ;[out[i], out[j]] = [out[j], out[i]]
   }
   return out
@@ -122,8 +139,8 @@ const GameCarousel = ({
       if (showRank || safeGames.length <= 1 || !enableInfiniteScroll) return safeGames
       const extraCycles = loopState.sourceKey === sourceKey ? loopState.extraCycles : 0
       if (extraCycles <= 0) return safeGames
-      const cycles = Array.from({ length: 1 + extraCycles }, () =>
-        shuffleItems(safeGames),
+      const cycles = Array.from({ length: 1 + extraCycles }, (_, cycleIndex) =>
+        shuffleItems(safeGames, `${sourceKey}:${cycleIndex}`),
       )
       return cycles.flat()
     },

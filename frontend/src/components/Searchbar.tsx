@@ -21,7 +21,11 @@ const Input = ({ value, onValueChange, onSubmit }: SearchbarProps) => {
           onSubmit?.();
         }}
       >
-        <div className="iconContainer" aria-hidden="true">
+        <button
+          type="submit"
+          className="iconContainer"
+          aria-label="Search"
+        >
           <svg
             viewBox="0 0 512 512"
             height="1em"
@@ -30,7 +34,7 @@ const Input = ({ value, onValueChange, onSubmit }: SearchbarProps) => {
           >
             <path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z" />
           </svg>
-        </div>
+        </button>
         <input
           id={inputId}
           name="search_query"
@@ -40,11 +44,6 @@ const Input = ({ value, onValueChange, onSubmit }: SearchbarProps) => {
           aria-label="Search games"
           value={value}
           onChange={(e) => onValueChange?.(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              onSubmit?.();
-            }
-          }}
         />
       </form>
     </StyledWrapper>
@@ -104,22 +103,42 @@ const StyledWrapper = styled.div`
   }
 
   .iconContainer {
+    appearance: none;
     box-sizing: border-box;
-    width: 28px;
-    height: 28px;
-    border-radius: 9px;
-    border: 1px solid rgba(140, 243, 122, 0.35);
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    margin: 0;
+    border-radius: 8px;
+    border: none;
     display: grid;
     place-items: center;
-    background: rgba(10, 30, 48, 0.7);
+    background: transparent;
     flex: 0 0 auto;
     order: 2;
+    cursor: pointer;
+    transition: background-color 180ms ease;
+  }
+
+  .iconContainer:hover {
+    background: rgba(140, 243, 122, 0.12);
+  }
+
+  .iconContainer:active {
+    background: rgba(140, 243, 122, 0.18);
+  }
+
+  .iconContainer:focus-visible {
+    outline: 2px solid rgba(140, 243, 122, 0.65);
+    outline-offset: 2px;
   }
 
   .search_icon {
     box-sizing: border-box;
+    width: 16px;
+    height: 16px;
+    display: block;
     fill: var(--games-accent, #8cf37a);
-    font-size: 0.9em;
   }
 
   @media (max-width: 900px) {
@@ -141,8 +160,8 @@ const StyledWrapper = styled.div`
     }
 
     .iconContainer {
-      width: 24px;
-      height: 24px;
+      width: 28px;
+      height: 28px;
     }
   }
 `;
