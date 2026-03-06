@@ -53,11 +53,15 @@ This setup validates the overall architecture and deployment pipeline before add
 **Purpose:** Handles recommendation logic and interfaces with the ML service.
 
 **Endpoints Implemented:**
-`GET /health` - Health check endpoint
+- `GET /health` - Health check endpoint
+- `POST /recommend` - User recommendations with model-first inference and fallback support
+- `GET /recommend/user/{user_id}` - User-specific recommendations
+- `GET /recommend/item/{item_id}` - Similar-item recommendations
+- `POST /recommend/item` - Similar-item recommendations with request body controls
 
 **Docker setup:** Dockerfile included for containerization.
 
-**Status:** Basic structure in place, endpoints to be implemented.
+**Status:** Core recommendation endpoints, fallback behavior, and training-readiness controls are implemented; production rollout controls and integrations still need hardening.
 
 ### 🧑 User Service
 **Purpose:** Manages user data and authentication.
@@ -96,11 +100,12 @@ This setup validates the overall architecture and deployment pipeline before add
 
 ## Current Implementation Status
 - All microservices have basic health check endpoints implemented.
+- Recommender service includes recommendation endpoints, model artifact loading/validation, and rule-based fallback execution.
 - Dockerfiles are provided for containerization of each service.
 - Kubernetes manifests are set up for local deployment.
 - Frontend has a basic layout but lacks full functionality.
 - No database integration or IGDB API access yet.
-- Machine learning service is not yet implemented.
+- Current recommender limitations are operational rather than foundational: baseline threshold calibration, production data/monitoring integrations, and full launch operations still need to be finalized for sustained model rollouts.
 - Comprehensive testing and CI/CD pipelines are in place and can be viewed on github actions.
 - Monitoring, logging, and security features are not yet integrated.
 - Scalability and load balancing configurations are not yet optimized.
@@ -193,7 +198,7 @@ Kubernetes manifests are provided in the `/deploy` directory to deploy all servi
 - Endpoints for each microservice are not fully implemented.
 - No database integration; data persistence is not yet available.
 - No integration with IGDB API for game data.
-- Machine learning models for recommendations are not yet developed.
+- Recommender ML capabilities exist (offline evaluation gates, reproducible retraining entrypoint, artifact/serving compatibility checks), but production calibration and launch operations still need completion.
 - Frontend lacks full user interaction features.
 - Monitoring and logging solutions are not yet integrated.
 - Security features such as authentication and authorization are not implemented.

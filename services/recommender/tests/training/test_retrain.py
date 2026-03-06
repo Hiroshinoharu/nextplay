@@ -62,6 +62,21 @@ def _write_loose_thresholds(path: Path) -> None:
     }
     path.write_text(json.dumps(thresholds), encoding="utf-8")
 
+def _write_strict_thresholds(path: Path) -> None:
+    """Write a threshold file that intentionally fails offline promotion gates."""
+    thresholds = {
+        "min_recall_at_k": 1.1,
+        "min_ndcg_at_k": 1.1,
+        "min_map_at_k": 1.1,
+        "min_coverage_at_k": 1.1,
+        "min_list_diversity_at_k": 1.1,
+        "min_recall_lift_vs_popularity": 1.1,
+        "min_ndcg_lift_vs_popularity": 1.1,
+        "min_map_lift_vs_popularity": 1.1,
+        "min_recall_lift_vs_fallback": 1.1,
+    }
+    path.write_text(json.dumps(thresholds), encoding="utf-8")
+
 def test_set_global_seed_reproducibly_controls_python_and_numpy() -> None:
     """
     Verifies that the set_global_seed function reproducibly controls the Python and NumPy
@@ -137,3 +152,45 @@ def test_run_experiment_logs_hashes_params_and_metrics_reproducibly(tmp_path: Pa
     persisted = json.loads(log_path.read_text(encoding="utf-8"))
     assert persisted["hashes"]["test_csv_sha256"]
     assert persisted["metrics"]["model"]["recall_at_k"] >= 0.0
+    assert persisted["artifacts"]["artifact_version"] == "run_a"
+    assert persisted["artifacts"]["manifest_path"].endswith("artifact_manifest.json")
+    assert persisted["promotion"]["status"] == "promoted"
+    assert persisted["promotion"]["promoted"] is True
+    assert persisted["promotion"]["promoted_at"] is not None
+
+def test_run_experiment_blocks_promotion_when_offline_gates_fail(tmp_path: Path) -> None:
+    
+    """
+    Test that run_experiment blocks promotion when offline evaluation gates fail.
+    This test writes a fixture CSV file with some dummy data and a strict thresholds JSON file.
+    It then calls run_experiment with the fixture and strict thresholds, and verifies that the
+    returned result has metrics["passed"] set to False, and promotion["promoted"] set to False.
+    The test also verifies that the persisted run log has the correct promotion status and artifact
+    version.
+    """
+    input_csv = tmp_path / "input.csv"
+    thresholds_json = tmp_path / "strict_thresholds.json"
+    _write_fixture(input_csv)
+    _write_strict_thresholds(thresholds_json)
+
+    repo_root = Path(__file__).resolve().parents[4]
+    run_result = run_experiment(
+        input_csv=input_csv,
+        run_dir=tmp_path / "runs" / "run_fail",
+        train_ratio=0.8,
+        validation_ratio=0.1,
+        threshold_json=thresholds_json,
+        k=2,
+        seed=13,
+        repo_root=repo_root,
+    )
+
+    assert run_result["metrics"]["passed"] is False
+    assert run_result["promotion"]["promoted"] is False
+    assert run_result["promotion"]["status"] == "blocked_offline_thresholds"
+    assert run_result["promotion"]["promoted_at"] is None
+
+    persisted = json.loads((tmp_path / "runs" / "run_fail" / "run_log.json").read_text(encoding="utf-8"))
+    assert persisted["promotion"]["artifact_version"] == "run_fail"
+    assert persisted["promotion"]["manifest_path"].endswith("artifact_manifest.json")
+    assert persisted["promotion"]["candidate_index_map_path"].endswith("candidate_index_map.json")

@@ -55,6 +55,7 @@ def test_existing_recommend_item_and_recommend_routes_still_respond_as_expected(
             )
 
     app.state.inference_service = _Inference()
+    app.state.model = object()
     recommend_response = client.post(
         '/recommend',
         json={
@@ -81,6 +82,7 @@ def test_existing_recommend_item_and_recommend_routes_still_respond_as_expected(
         'filters': {}
     }
     delattr(app.state, 'inference_service')
+    delattr(app.state, 'model')
 
 # Test that POST /recommend calls the inference service when available
 def test_recommend_route_calls_inference_service_when_available():
@@ -105,6 +107,7 @@ def test_recommend_route_calls_inference_service_when_available():
 
     stub = _StubInference()
     app.state.inference = stub
+    app.state.model = object()
 
     response = client.post(
         '/recommend',
@@ -121,6 +124,7 @@ def test_recommend_route_calls_inference_service_when_available():
     assert stub.calls[0].user_id == 33
 
     delattr(app.state, 'inference')
+    delattr(app.state, 'model')
 
 def test_recommend_for_user_live_dependencies_and_ranks_candidates():
     """
@@ -236,7 +240,9 @@ def test_recommend_route_falls_back_when_inference_raises_and_records_metrics():
     fallback = _FallbackInference()
     app.state.inference_service = _FailingInference()
     app.state.fallback_inference = fallback
+    app.state.model = object()
     app.state.model_version = "vtest"
+    app.state.model_load_failed = False
     app.state.metrics = {
         "recommend_requests_total": 0,
         "recommend_fallback_total": 0,  # Start with 1 to verify it increments to 2
@@ -262,13 +268,17 @@ def test_recommend_route_falls_back_when_inference_raises_and_records_metrics():
     assert app.state.metrics["recommend_fallbacks_total"] == 1
     assert app.state.metrics["recommend_errors_total"] == 1
     assert app.state.metrics["recommend_error_total"] == 1
+    assert app.state.metrics["recommend_outcome_model_inference_failure_with_fallback_total"] == 1
+    assert app.state.metrics["recommend_fallback_reason_inference_exception_total"] == 1
     assert app.state.metrics["recommend_latency_ms_total"] >= 0.0
     assert app.state.metrics["recommend_latency_ms"] >= 0.0
     assert app.state.metrics["recommend_latency_ms_max"] >= 0.0
-    
+
+    delattr(app.state, 'model')
     delattr(app.state, 'inference_service')
     delattr(app.state, 'fallback_inference')
     delattr(app.state, 'model_version')
+    delattr(app.state, 'model_load_failed')
     delattr(app.state, 'metrics')
 
 def test_reccomend_route_records_metrics_without_fallback():
@@ -287,6 +297,7 @@ def test_reccomend_route_records_metrics_without_fallback():
             )
     
     app.state.inference_service = _Inference()
+    app.state.model = object()
     app.state.model_version = "vtest"
     app.state.metrics = {
         "recommend_requests_total": 0,
@@ -312,11 +323,123 @@ def test_reccomend_route_records_metrics_without_fallback():
     assert app.state.metrics.get("recommend_fallbacks_total", 0) == 0
     assert app.state.metrics["recommend_errors_total"] == 0
     assert app.state.metrics.get("recommend_error_total", 0) == 0
+    assert app.state.metrics["recommend_outcome_model_inference_success_total"] == 1
     assert app.state.metrics["recommend_latency_ms_total"] >= 0.0
     assert app.state.metrics["recommend_latency_ms"] >= 0.0
     assert app.state.metrics["recommend_latency_ms_max"] >= 0.0
-    
+
+    delattr(app.state, 'model')
     delattr(app.state, 'inference_service')
+    delattr(app.state, 'model_version')
+    delattr(app.state, 'metrics')
+
+
+def test_recommend_route_fallback_only_mode_records_load_failure_reason():
+    class _FallbackInference:
+        def __init__(self):
+            self.calls = []
+
+        def infer(self, payload):
+            self.calls.append(payload)
+            return ModelOutputSchema(
+                user_id=payload.user_id,
+                strategy="rule_based_fallback_v1",
+                candidates=[ModelCandidateScore(game_id=77, score=1.0, rank=1)],
+            )
+
+    fallback = _FallbackInference()
+    app.state.inference_service = fallback
+    app.state.fallback_inference = fallback
+    app.state.model = None
+    app.state.model_load_failed = True
+    app.state.model_version = "vtest"
+    app.state.metrics = {
+        "recommend_requests_total": 0,
+        "recommend_fallback_total": 0,
+        "recommend_errors_total": 0,
+        "recommend_latency_ms_total": 0.0,
+        "recommend_latency_ms_max": 0.0,
+    }
+
+    response = client.post(
+        '/recommend',
+        json={
+            'user_id': 66,
+            'liked_keywords': [1],
+            'liked_platforms': [2],
+            'disliked_platforms': [],
+        },
+    )
+
+    assert response.status_code == 200
+    assert len(fallback.calls) == 1
+    assert app.state.metrics["recommend_outcome_fallback_only_mode_total"] == 1
+    assert app.state.metrics["recommend_fallback_reason_load_failure_total"] == 1
+    assert app.state.metrics["recommend_fallback_total"] == 1
+
+    delattr(app.state, 'inference_service')
+    delattr(app.state, 'fallback_inference')
+    delattr(app.state, 'model')
+    delattr(app.state, 'model_load_failed')
+    delattr(app.state, 'model_version')
+    delattr(app.state, 'metrics')
+
+
+def test_recommend_route_falls_back_on_empty_candidates_and_records_reason():
+    class _EmptyInference:
+        def infer(self, payload):
+            return ModelOutputSchema(
+                user_id=payload.user_id,
+                strategy="keras_inference_v1",
+                candidates=[],
+            )
+
+    class _FallbackInference:
+        def __init__(self):
+            self.calls = []
+
+        def infer(self, payload):
+            self.calls.append(payload)
+            return ModelOutputSchema(
+                user_id=payload.user_id,
+                strategy="rule_based_fallback_v1",
+                candidates=[ModelCandidateScore(game_id=17, score=1.0, rank=1)],
+            )
+
+    fallback = _FallbackInference()
+    app.state.inference_service = _EmptyInference()
+    app.state.fallback_inference = fallback
+    app.state.model = object()
+    app.state.model_load_failed = False
+    app.state.model_version = "vtest"
+    app.state.metrics = {
+        "recommend_requests_total": 0,
+        "recommend_fallback_total": 0,
+        "recommend_errors_total": 0,
+        "recommend_latency_ms_total": 0.0,
+        "recommend_latency_ms_max": 0.0,
+    }
+
+    response = client.post(
+        '/recommend',
+        json={
+            'user_id': 77,
+            'liked_keywords': [1],
+            'liked_platforms': [2],
+            'disliked_platforms': [],
+        },
+    )
+
+    assert response.status_code == 200
+    assert len(fallback.calls) == 1
+    assert app.state.metrics["recommend_outcome_model_inference_failure_with_fallback_total"] == 1
+    assert app.state.metrics["recommend_fallback_reason_empty_candidates_total"] == 1
+    assert app.state.metrics["recommend_fallback_total"] == 1
+
+    delattr(app.state, 'inference_service')
+    delattr(app.state, 'fallback_inference')
+    delattr(app.state, 'model')
+    delattr(app.state, 'model_load_failed')
     delattr(app.state, 'model_version')
     delattr(app.state, 'metrics')
 

@@ -42,6 +42,15 @@ Use this before training a Keras model for the recommender service.
 - Add latency/error metrics and fallback-rate tracking for recommender endpoints.
 - Add model-version logging in request handling for observability.
 - Define rollback strategy to fallback/rule-based inference when model load or prediction fails.
+- Expected dashboard signals:
+  - `recommend_outcome_model_inference_success_total` should be the dominant outcome in healthy model-serving mode.
+  - `recommend_outcome_model_inference_failure_with_fallback_total` should remain low; spikes indicate model runtime regressions.
+  - `recommend_outcome_fallback_only_mode_total` should be near zero in production after model rollout; sustained non-zero values indicate no-model serving.
+  - `recommend_fallback_reason_load_failure_total` indicates startup/model artifact loading issues.
+  - `recommend_fallback_reason_inference_exception_total` indicates runtime inference failures.
+  - `recommend_fallback_reason_empty_candidates_total` indicates model returned no candidates and fallback compensated.
+  - `recommend_fallback_reason_no_model_loaded_total`/`recommend_fallback_reason_missing_inference_service_total` indicate configuration/startup drift.
+  - Completion logs for recommendations must include `request_id`, `model_version`, `strategy`, `outcome`, and `fallback_reason` for traceability.
 
 ## 7) Experiment tracking + reproducibility
 

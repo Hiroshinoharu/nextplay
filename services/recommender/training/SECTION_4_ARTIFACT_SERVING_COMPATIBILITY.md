@@ -8,6 +8,16 @@ This document defines the runtime compatibility contract between trained recomme
 - Sidecar metadata artifact: manifest JSON
 - Candidate mapping artifact: JSON file referenced by manifest
 
+Training promotion now writes a versioned artifact bundle per run at:
+
+- `services/recommender/training/runs/<run_id>/artifacts/<artifact_version>/`
+
+Bundle paths recorded in `run_log.json`:
+
+- `model_path`: `<bundle>/recommender_<artifact_version>.keras` (reserved path when trainer is stubbed)
+- `manifest_path`: `<bundle>/artifact_manifest.json`
+- `candidate_index_map_path`: `<bundle>/candidate_index_map.json`
+
 ## Manifest contract
 
 The serving manifest schema is defined by `ArtifactManifest` in:
@@ -47,6 +57,23 @@ Startup flow:
 4. Load model if path is present.
 5. Expose `app.state.model_manifest`, `app.state.model`, and inference services.
 
+## Promotion contract (post-offline-eval)
+
+Retraining promotion is gated entirely by `metrics.passed`:
+
+1. Retrain always writes the versioned artifact bundle directory and manifest/candidate map files.
+2. Promotion is **allowed only** when `metrics.passed == true`.
+3. Promotion metadata is persisted in `run_log.json` under `promotion` with:
+   - `artifact_version`
+   - `bundle_dir`
+   - `model_path`
+   - `manifest_path`
+   - `candidate_index_map_path`
+   - `promoted` (bool)
+   - `status` (`promoted` or `blocked_offline_thresholds`)
+   - `promoted_at` (UTC timestamp when promoted; `null` when blocked)
+4. CLI exit behavior remains aligned to this gate: retrain exits non-zero when offline eval fails.
+
 ## Validation and fail behavior
 
 Manifest loading/validation is implemented in:
@@ -81,6 +108,10 @@ Section 4 coverage is provided by:
 - `services/recommender/tests/test_lifespan_model_loading.py`
   - startup state when model is loaded
   - startup state when model path is not configured
+- `services/recommender/tests/training/test_retrain.py`
+  - writes artifact bundle contract paths into `run_log.json`
+  - records promotion metadata when offline gates pass
+  - blocks promotion and records blocked status/timestamp when offline gates fail
 
 ## Acceptance status
 

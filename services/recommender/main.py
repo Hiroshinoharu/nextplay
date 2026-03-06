@@ -112,6 +112,8 @@ def _initialise_optional_model_state(app: FastAPI, validated_model_path: Path | 
     app.state.model_manifest = None
     app.state.model = None
     app.state.candidate_index_map = None
+    app.state.model_load_failed = False
+    app.state.model_load_failure_reason = None
     
     try:
         app.state.model_manifest = _load_model_manifest(app.state.model_config, app.state.model_path)
@@ -134,6 +136,8 @@ def _initialise_optional_model_state(app: FastAPI, validated_model_path: Path | 
         if model_required:
             raise RuntimeError(f"Model startup validation failed: {exc}") from exc
         logger.warning(f"Failed to load model or manifest, but MODEL_REQUIRED=false so continuing without model. Error: {exc}")
+        app.state.model_load_failed = True
+        app.state.model_load_failure_reason = str(exc)
         app.state.model_path = None
         app.state.model_manifest = None
         app.state.model = None
@@ -174,6 +178,15 @@ async def lifespan(app: FastAPI):
         "recommend_errors_total": 0,
         "recommend_latency_ms_total": 0.0,
         "recommend_latency_ms_max": 0.0,
+        "recommend_outcome_model_inference_success_total": 0,
+        "recommend_outcome_model_inference_failure_with_fallback_total": 0,
+        "recommend_outcome_fallback_only_mode_total": 0,
+        "recommend_fallback_reason_load_failure_total": 0,
+        "recommend_fallback_reason_no_model_loaded_total": 0,
+        "recommend_fallback_reason_missing_inference_service_total": 0,
+        "recommend_fallback_reason_inference_exception_total": 0,
+        "recommend_fallback_reason_empty_candidates_total": 0,
+        "recommend_fallback_reason_fallback_inference_exception_total": 0,
     }
     
     session = requests.Session()
@@ -184,10 +197,12 @@ async def lifespan(app: FastAPI):
     app.state.request_timeout = (2.0, 5.0)
     
     logger.info(
-        "recommender.startup model_version=%s model_path=%s using_model=%s",
+        "recommender.startup model_version=%s model_path=%s using_model=%s model_load_failed=%s model_load_failure_reason=%s",
         app.state.model_version,
         app.state.model_path,
         app.state.model is not None,
+        app.state.model_load_failed,
+        app.state.model_load_failure_reason or "none",
     )
     try:
         yield

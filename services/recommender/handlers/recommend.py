@@ -10,7 +10,24 @@ from ..models.response import SimilarResponse, UserRecommendResponse
 
 logger = logging.getLogger(__name__)
 
-def _record_recommend_metrics(request: Request, *, latency_ms: float, fallback_used: bool, error_occurred: bool) -> None:
+
+def _increment_metric(metrics: dict[str, int | float], key: str, amount: int | float = 1) -> None:
+    existing = metrics.get(key, 0)
+    if isinstance(amount, float):
+        metrics[key] = float(existing) + amount
+    else:
+        metrics[key] = int(existing) + amount
+
+
+def _record_recommend_metrics(
+    request: Request,
+    *,
+    latency_ms: float,
+    fallback_used: bool,
+    error_occurred: bool,
+    outcome: str,
+    fallback_reason: str | None,
+) -> None:
     """
     Record metrics related to recommendation requests, such as total requests, latency, and fallback usage.
     
@@ -22,39 +39,45 @@ def _record_recommend_metrics(request: Request, *, latency_ms: float, fallback_u
     metrics = getattr(request.app.state, "metrics", None)
     if not isinstance(metrics, dict):
         return
-    
-    metrics["recommend_requests_total"] = int(metrics.get("recommend_requests_total", 0)) + 1
+
+    _increment_metric(metrics, "recommend_requests_total")
 
     # Keep both key variants for backward compatibility across tests/services.
-    metrics["recommend_latency_ms_total"] = float(metrics.get("recommend_latency_ms_total", 0.0)) + latency_ms
-    metrics["recommend_latency_ms"] = float(metrics.get("recommend_latency_ms", 0.0)) + latency_ms
+    _increment_metric(metrics, "recommend_latency_ms_total", latency_ms)
+    _increment_metric(metrics, "recommend_latency_ms", latency_ms)
     metrics["recommend_latency_ms_max"] = max(float(metrics.get("recommend_latency_ms_max", 0.0)), latency_ms)
 
     if fallback_used:
-        metrics["recommend_fallback_total"] = int(metrics.get("recommend_fallback_total", 0)) + 1
-        metrics["recommend_fallbacks_total"] = int(metrics.get("recommend_fallbacks_total", 0)) + 1
+        _increment_metric(metrics, "recommend_fallback_total")
+        _increment_metric(metrics, "recommend_fallbacks_total")
 
     if error_occurred:
         # Keep both key variants for backward compatibility across tests/services.
-        metrics["recommend_errors_total"] = int(metrics.get("recommend_errors_total", 0)) + 1
-        metrics["recommend_error_total"] = int(metrics.get("recommend_error_total", 0)) + 1
-        
+        _increment_metric(metrics, "recommend_errors_total")
+        _increment_metric(metrics, "recommend_error_total")
+
+    _increment_metric(metrics, f"recommend_outcome_{outcome}_total")
+    if fallback_reason:
+        _increment_metric(metrics, f"recommend_fallback_reason_{fallback_reason}_total")
+
+
 # Placeholder POST /recommend route to handle recommendation requests
 async def recommend(payload: RecommendRequest, request: Request) -> UserRecommendResponse:
     """
     Placeholder recommendation engine.
     ML logic will be added later.
     """
-    
     start = time.perf_counter()
     fallback_used = False
     error_occurred = False
+    fallback_reason: str | None = None
+    outcome = "model_inference_success"
     model_version = getattr(request.app.state, "model_version", "unknown")
     request_id = getattr(request.state, "request_id", "unknown")
-    
+
     if payload.user_id is None:
         raise HTTPException(status_code=400, detail="user_id is required for /recommend")
-    
+
     model_input = ModelInputSchema.from_recommend_request(payload)
     logger.info(
         "request_id=%s recommender.request user_id=%s model_version=%s",
@@ -62,48 +85,112 @@ async def recommend(payload: RecommendRequest, request: Request) -> UserRecommen
         model_input.user_id,
         model_version,
     )
-    
+
     inference = getattr(request.app.state, "inference_service", None)
     if inference is None:
         inference = getattr(request.app.state, "inference", None)
-    
+
+    model_loaded = getattr(request.app.state, "model", None) is not None
+    model_load_failed = bool(getattr(request.app.state, "model_load_failed", False))
+    model_mode = "model" if model_loaded else "fallback_only"
+
+    fallback_inference = getattr(request.app.state, "fallback_inference", None) or build_inference_service(None)
+
+    if not model_loaded:
+        fallback_used = True
+        outcome = "fallback_only_mode"
+        fallback_reason = "load_failure" if model_load_failed else "no_model_loaded"
+        logger.info(
+            "request_id=%s recommender.fallback_only_mode user_id=%s model_version=%s reason=%s",
+            request_id,
+            model_input.user_id,
+            model_version,
+            fallback_reason,
+        )
+
     if inference is None:
         fallback_used = True
-        logger.warning("No inference service available, using fallback recommendation strategy")
-        inference = getattr(request.app.state, "fallback_inference", None) or build_inference_service(None)
-    
+        outcome = "fallback_only_mode"
+        fallback_reason = "missing_inference_service"
+        logger.warning(
+            "request_id=%s recommender.fallback_only_mode user_id=%s model_version=%s reason=%s",
+            request_id,
+            model_input.user_id,
+            model_version,
+            fallback_reason,
+        )
+        inference = fallback_inference
+
     try:
         inference_output = inference.infer(model_input)
-        logger.info(f"Inference output: {inference_output}")
-    except Exception as e:
+        if model_mode == "model" and not inference_output.candidates:
+            fallback_used = True
+            outcome = "model_inference_failure_with_fallback"
+            fallback_reason = "empty_candidates"
+            logger.warning(
+                "request_id=%s recommender.inference_failure_fallback user_id=%s model_version=%s reason=%s",
+                request_id,
+                model_input.user_id,
+                model_version,
+                fallback_reason,
+            )
+            inference_output = fallback_inference.infer(model_input)
+        elif model_mode == "model":
+            logger.info(
+                "request_id=%s recommender.inference_success user_id=%s model_version=%s strategy=%s candidates=%s",
+                request_id,
+                model_input.user_id,
+                model_version,
+                inference_output.strategy,
+                len(inference_output.candidates),
+            )
+    except Exception as exc:
         logger.exception(
             "request_id=%s recommender.inference_error user_id=%s model_version=%s error=%s",
             request_id,
             model_input.user_id,
             model_version,
-            str(e),
+            str(exc),
         )
-        fallback_used = True
-        error_occurred = True
-        fallback_inference = getattr(request.app.state, "fallback_inference", None) or build_inference_service(None)
-        inference_output = fallback_inference.infer(model_input)   
-    
+        if model_mode == "model":
+            fallback_used = True
+            error_occurred = True
+            outcome = "model_inference_failure_with_fallback"
+            fallback_reason = "inference_exception"
+            logger.warning(
+                "request_id=%s recommender.inference_failure_fallback user_id=%s model_version=%s reason=%s",
+                request_id,
+                model_input.user_id,
+                model_version,
+                fallback_reason,
+            )
+            inference_output = fallback_inference.infer(model_input)
+        else:
+            error_occurred = True
+            outcome = "fallback_only_mode"
+            fallback_reason = fallback_reason or "fallback_inference_exception"
+            raise
+
     latency_ms = (time.perf_counter() - start) * 1000
     _record_recommend_metrics(
         request,
         latency_ms=latency_ms,
         fallback_used=fallback_used,
         error_occurred=error_occurred,
+        outcome=outcome,
+        fallback_reason=fallback_reason,
     )
-    
+
     strategy = getattr(inference_output, "strategy", "unknown")
 
     logger.info(
-        "request_id=%s recommender.recommend_completed user_id=%s model_version=%s strategy=%s latency_ms=%.2f fallback=%s",
+        "request_id=%s recommender.recommend_completed user_id=%s model_version=%s strategy=%s outcome=%s fallback_reason=%s latency_ms=%.2f fallback=%s",
         request_id,
         model_input.user_id,
         model_version,
         strategy,
+        outcome,
+        fallback_reason or "none",
         latency_ms,
         fallback_used,
     )

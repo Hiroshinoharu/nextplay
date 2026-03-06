@@ -4,9 +4,9 @@
 
 Repo-only audit result for `services/recommender`:
 
-- Overall: **No-go for full training rollout yet**
-- Section score: **6 Pass / 0 Partial / 2 Missing**
-- Blocking gaps: experiment reproducibility
+- Overall: **Go for training readiness baseline; rollout discipline still required**
+- Section score: **8 Pass / 0 Partial / 0 Missing**
+- Blocking gaps: none in this repo-only checklist
 
 Current evidence was taken from:
 
@@ -15,6 +15,8 @@ Current evidence was taken from:
 - [inference.py](/Users/maxceban/Documents/nextplay/services/recommender/models/inference.py)
 - [recommend.py](/Users/maxceban/Documents/nextplay/services/recommender/handlers/recommend.py)
 - tests under [/Users/maxceban/Documents/nextplay/services/recommender/tests](/Users/maxceban/Documents/nextplay/services/recommender/tests)
+
+Readiness decision single source of truth: this file (`services/recommender/PLAN.md`) is authoritative for pass/partial/missing status and go/no-go summary.
 
 ### Scorecard (Checklist Sections)
 
@@ -26,7 +28,7 @@ Current evidence was taken from:
 | 4) Artifact + serving compatibility | Pass | Contract + acceptance doc in [SECTION_4_ARTIFACT_SERVING_COMPATIBILITY.md](/Users/maxceban/Documents/nextplay/services/recommender/training/SECTION_4_ARTIFACT_SERVING_COMPATIBILITY.md), startup/config validation in [main.py](/Users/maxceban/Documents/nextplay/services/recommender/main.py), manifest validator in [artifact_manifest.py](/Users/maxceban/Documents/nextplay/services/recommender/models/artifact_manifest.py), loader in [model_loader.py](/Users/maxceban/Documents/nextplay/services/recommender/models/model_loader.py), tests in [test_artifact_manifest.py](/Users/maxceban/Documents/nextplay/services/recommender/tests/test_artifact_manifest.py), [test_lifespan_model_loading.py](/Users/maxceban/Documents/nextplay/services/recommender/tests/test_lifespan_model_loading.py), [test_model_config.py](/Users/maxceban/Documents/nextplay/services/recommender/tests/test_model_config.py) | Maintain manifest compatibility checks in CI |
 | 5) Inference correctness checks | Pass | Contract + acceptance doc in [SECTION_5_INFERENCE_CORRECTNESS_CHECKS.md](/Users/maxceban/Documents/nextplay/services/recommender/training/SECTION_5_INFERENCE_CORRECTNESS_CHECKS.md), inference implementation in [inference.py](/Users/maxceban/Documents/nextplay/services/recommender/models/inference.py), tests in [test_inference_service.py](/Users/maxceban/Documents/nextplay/services/recommender/tests/test_inference_service.py) | Keep parity and canary tests required in CI |
 | 6) Operational readiness | Pass | Fallback + latency/fallback/error metrics + model-version logs in [recommend.py](/Users/maxceban/Documents/nextplay/services/recommender/handlers/recommend.py), metric initialization in [main.py](/Users/maxceban/Documents/nextplay/services/recommender/main.py), and route coverage in [test_recommend_routes.py](/Users/maxceban/Documents/nextplay/services/recommender/tests/test_recommend_routes.py) | Keep operational metrics required in CI |
-| 7) Experiment tracking + reproducibility | Missing | No experiment tracker config or retrain entrypoint found | Add run logging (params/metrics/hash), fixed seeds, one-command retrain script |
+| 7) Experiment tracking + reproducibility | Pass | Acceptance doc and implementation in [SECTION_7_EXPERIMENT_TRACKING_REPRODUCIBILITY.md](/Users/maxceban/Documents/nextplay/services/recommender/training/SECTION_7_EXPERIMENT_TRACKING_REPRODUCIBILITY.md), [retrain.py](/Users/maxceban/Documents/nextplay/services/recommender/training/retrain.py), [retrain.sh](/Users/maxceban/Documents/nextplay/services/recommender/training/retrain.sh), tests in [test_retrain.py](/Users/maxceban/Documents/nextplay/services/recommender/tests/training/test_retrain.py) | Keep retrain run logs retained and reviewed in CI/release checks |
 | 8) Launch + post-training validation | Pass | Policy + guardrail tests in [launch_validation_policy.json](/Users/maxceban/Documents/nextplay/services/recommender/training/launch_validation_policy.json) and [test_launch_validation_policy.py](/Users/maxceban/Documents/nextplay/services/recommender/tests/training/test_launch_validation_policy.py) covering shadow-run promotion/rollback gates, drift monitor coverage, and retrain cadence limits | Keep policy thresholds and rollback triggers aligned with production SLOs |
 
 ### Important Interface/Type Additions (Planned)
