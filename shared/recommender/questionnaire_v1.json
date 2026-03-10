@@ -1,0 +1,307 @@
+{
+  "version": "questionnaire_v1",
+  "feature_schema_version": "recommender_feature_schema_v1",
+  "id_catalog": "postgres_nextplay_catalog_2026_03_10",
+  "questions": [
+    {
+      "id": "preferred_pace",
+      "prompt": "What pace do you enjoy most?",
+      "type": "single_select",
+      "options": [
+        {
+          "id": "slow_thoughtful",
+          "label": "Slow and thoughtful",
+          "mapping": {
+            "liked_keywords": [3511, 322],
+            "disliked_keywords": [2835],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "fast_action",
+          "label": "Fast and action-packed",
+          "mapping": {
+            "liked_keywords": [2835, 6149],
+            "disliked_keywords": [322],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "session_length",
+      "prompt": "How long are your typical play sessions?",
+      "type": "single_select",
+      "options": [
+        {
+          "id": "under_30_min",
+          "label": "Under 30 minutes",
+          "mapping": {
+            "liked_keywords": [59],
+            "disliked_keywords": [3903],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "one_to_three_hours",
+          "label": "1 to 3 hours",
+          "mapping": {
+            "liked_keywords": [5420],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "play_mode",
+      "prompt": "How do you usually play?",
+      "type": "single_select",
+      "options": [
+        {
+          "id": "solo",
+          "label": "Solo",
+          "mapping": {
+            "liked_keywords": [5262],
+            "disliked_keywords": [981],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "multiplayer",
+          "label": "With friends / online",
+          "mapping": {
+            "liked_keywords": [981],
+            "disliked_keywords": [5262],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "challenge_preference",
+      "prompt": "What challenge level do you prefer?",
+      "type": "single_select",
+      "options": [
+        {
+          "id": "relaxed",
+          "label": "Relaxed",
+          "mapping": {
+            "liked_keywords": [5069],
+            "disliked_keywords": [1962],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "hardcore",
+          "label": "Hardcore",
+          "mapping": {
+            "liked_keywords": [1962],
+            "disliked_keywords": [5069],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "theme_preferences",
+      "prompt": "Which themes do you enjoy?",
+      "type": "multi_select",
+      "options": [
+        {
+          "id": "fantasy",
+          "label": "Fantasy",
+          "mapping": {
+            "liked_keywords": [5536],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "sci_fi",
+          "label": "Sci-fi",
+          "mapping": {
+            "liked_keywords": [3773],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "horror",
+          "label": "Horror",
+          "mapping": {
+            "liked_keywords": [5741],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "avoid_content",
+      "prompt": "Any content you'd rather avoid?",
+      "type": "multi_select",
+      "options": [
+        {
+          "id": "heavy_grind",
+          "label": "Heavy grind",
+          "mapping": {
+            "liked_keywords": [],
+            "disliked_keywords": [3903],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "jump_scares",
+          "label": "Jump scares",
+          "mapping": {
+            "liked_keywords": [],
+            "disliked_keywords": [3957],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "primary_platform",
+      "prompt": "What platform do you play on most?",
+      "type": "single_select",
+      "options": [
+        {
+          "id": "pc",
+          "label": "PC",
+          "mapping": {
+            "liked_keywords": [],
+            "disliked_keywords": [],
+            "liked_platforms": [204],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "playstation",
+          "label": "PlayStation",
+          "mapping": {
+            "liked_keywords": [],
+            "disliked_keywords": [],
+            "liked_platforms": [76],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "xbox",
+          "label": "Xbox",
+          "mapping": {
+            "liked_keywords": [],
+            "disliked_keywords": [],
+            "liked_platforms": [21],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "nintendo",
+          "label": "Nintendo",
+          "mapping": {
+            "liked_keywords": [],
+            "disliked_keywords": [],
+            "liked_platforms": [95],
+            "disliked_platforms": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "control_preference",
+      "prompt": "How do you prefer to play?",
+      "type": "single_select",
+      "options": [
+        {
+          "id": "controller",
+          "label": "Controller-first",
+          "mapping": {
+            "liked_keywords": [2132],
+            "disliked_keywords": [],
+            "liked_platforms": [76, 21, 95],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "mouse_keyboard",
+          "label": "Mouse and keyboard",
+          "mapping": {
+            "liked_keywords": [4383],
+            "disliked_keywords": [],
+            "liked_platforms": [204],
+            "disliked_platforms": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "story_vs_gameplay",
+      "prompt": "What matters more to you?",
+      "type": "single_select",
+      "options": [
+        {
+          "id": "story",
+          "label": "Story and characters",
+          "mapping": {
+            "liked_keywords": [1577],
+            "disliked_keywords": [277],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "gameplay",
+          "label": "Systems and gameplay depth",
+          "mapping": {
+            "liked_keywords": [277],
+            "disliked_keywords": [1577],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "price_sensitivity",
+      "prompt": "How price-sensitive are you?",
+      "type": "single_select",
+      "options": [
+        {
+          "id": "value_focus",
+          "label": "I prefer value and discounts",
+          "mapping": {
+            "liked_keywords": [2465],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "new_releases",
+          "label": "I don't mind paying full price",
+          "mapping": {
+            "liked_keywords": [2297],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        }
+      ]
+    }
+  ]
+}
