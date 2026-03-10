@@ -57,6 +57,16 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
             disliked_platforms: [],
           },
         },
+        {
+          id: "balanced_mix",
+          label: "A balanced mix",
+          mapping: {
+            liked_keywords: [322, 6149],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
       ],
     },
     {
@@ -80,6 +90,16 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
           mapping: {
             liked_keywords: [5420],
             disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "over_three_hours",
+          label: "3+ hours",
+          mapping: {
+            liked_keywords: [5420, 1577],
+            disliked_keywords: [59],
             liked_platforms: [],
             disliked_platforms: [],
           },
@@ -111,6 +131,16 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
             disliked_platforms: [],
           },
         },
+        {
+          id: "both_modes",
+          label: "Both solo and multiplayer",
+          mapping: {
+            liked_keywords: [5262, 981],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
       ],
     },
     {
@@ -134,6 +164,16 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
           mapping: {
             liked_keywords: [1962],
             disliked_keywords: [5069],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "moderate",
+          label: "Moderate / adaptive",
+          mapping: {
+            liked_keywords: [5069, 1962],
+            disliked_keywords: [],
             liked_platforms: [],
             disliked_platforms: [],
           },
@@ -175,6 +215,26 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
             disliked_platforms: [],
           },
         },
+        {
+          id: "mystery",
+          label: "Mystery / detective",
+          mapping: {
+            liked_keywords: [1577],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "competitive",
+          label: "Competitive",
+          mapping: {
+            liked_keywords: [981, 6149],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
       ],
     },
     {
@@ -198,6 +258,26 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
           mapping: {
             liked_keywords: [],
             disliked_keywords: [3957],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "always_online",
+          label: "Always-online requirements",
+          mapping: {
+            liked_keywords: [],
+            disliked_keywords: [981],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "complex_controls",
+          label: "Complex control schemes",
+          mapping: {
+            liked_keywords: [],
+            disliked_keywords: [4383],
             liked_platforms: [],
             disliked_platforms: [],
           },
@@ -249,6 +329,16 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
             disliked_platforms: [],
           },
         },
+        {
+          id: "handheld_pc",
+          label: "Handheld PC",
+          mapping: {
+            liked_keywords: [],
+            disliked_keywords: [],
+            liked_platforms: [204],
+            disliked_platforms: [],
+          },
+        },
       ],
     },
     {
@@ -273,6 +363,16 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
             liked_keywords: [4383],
             disliked_keywords: [],
             liked_platforms: [204],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "hybrid_input",
+          label: "I switch depending on the game",
+          mapping: {
+            liked_keywords: [2132, 4383],
+            disliked_keywords: [],
+            liked_platforms: [204, 76, 21, 95],
             disliked_platforms: [],
           },
         },
@@ -303,6 +403,16 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
             disliked_platforms: [],
           },
         },
+        {
+          id: "both_equal",
+          label: "Both equally",
+          mapping: {
+            liked_keywords: [1577, 277],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
       ],
     },
     {
@@ -326,6 +436,90 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
           mapping: {
             liked_keywords: [2297],
             disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "mix_price_and_new",
+          label: "Mix of discounts and new releases",
+          mapping: {
+            liked_keywords: [2465, 2297],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+      ],
+    },
+    {
+      id: "competitive_vs_chill",
+      prompt: "What vibe are you in the mood for right now?",
+      type: "single_select",
+      options: [
+        {
+          id: "chill",
+          label: "Chill and low pressure",
+          mapping: {
+            liked_keywords: [5069, 1577],
+            disliked_keywords: [1962, 981],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "competitive_vibe",
+          label: "Competitive and high intensity",
+          mapping: {
+            liked_keywords: [1962, 981, 6149],
+            disliked_keywords: [5069],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "adventurous_vibe",
+          label: "Adventurous and exploratory",
+          mapping: {
+            liked_keywords: [1577, 5536, 3773],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+      ],
+    },
+    {
+      id: "friction_tolerance",
+      prompt: "How much friction can you tolerate?",
+      type: "single_select",
+      options: [
+        {
+          id: "minimal_friction",
+          label: "Minimal setup, quick to start",
+          mapping: {
+            liked_keywords: [59, 5069],
+            disliked_keywords: [3903],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "some_friction",
+          label: "Some complexity is fine",
+          mapping: {
+            liked_keywords: [277, 4383],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "high_friction_ok",
+          label: "I enjoy deep systems",
+          mapping: {
+            liked_keywords: [3903, 277, 1962],
+            disliked_keywords: [59],
             liked_platforms: [],
             disliked_platforms: [],
           },
