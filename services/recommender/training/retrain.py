@@ -7,6 +7,7 @@ import importlib
 import json
 import os
 import random
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -277,6 +278,19 @@ def _collect_code_hash(repo_root: Path) -> str:
     blob = "\n".join(path.read_text(encoding="utf-8") for path in tracked_files)
     return _sha256_text(blob)
 
+def _resolve_repo_root(start_file: Path) -> Path:
+    """
+    Resolve repository root by walking parents until expected repo markers are found.
+    """
+    candidate = start_file.resolve().parent
+    for directory in [candidate, *candidate.parents]:
+        if (directory / "deploy" / "docker-compose.yml").exists() and (
+            directory / "services" / "recommender" / "training" / "retrain.py"
+        ).exists():
+            return directory
+    # Fallback to historical assumption if markers are unavailable.
+    return start_file.resolve().parents[4]
+
 def _write_artifact_bundle(
     *,
     run_dir: Path,
@@ -366,6 +380,162 @@ def _write_artifact_bundle(
         "candidate_index_map_path": str(candidate_map_path),
     }
 
+def _build_training_rows(
+    train_csv: Path,
+    candidate_to_index: dict[int, int],
+) -> tuple[list[list[float]], list[int]]:
+    """
+    Build simple user-history features and positive-class targets for multiclass training.
+
+    The feature order intentionally matches feature_contract.py:
+    [liked_keyword_count, liked_platform_count, disliked_keyword_count, disliked_platform_count]
+    """
+    features: list[list[float]] = []
+    targets: list[int] = []
+
+    positive_counts: dict[str, int] = {}
+    negative_counts: dict[str, int] = {}
+    seen_counts: dict[str, int] = {}
+
+    with train_csv.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            user_id = (row.get("user_id") or "").strip()
+            game_id_raw = (row.get("game_id") or "").strip()
+            label_raw = (row.get("label") or "").strip()
+            if not user_id or not game_id_raw or label_raw not in {"0", "1"}:
+                continue
+
+            try:
+                game_id = int(game_id_raw)
+            except ValueError:
+                continue
+
+            liked_so_far = positive_counts.get(user_id, 0)
+            disliked_so_far = negative_counts.get(user_id, 0)
+            seen_so_far = seen_counts.get(user_id, 0)
+
+            # Keep feature semantics stable with the runtime contract.
+            row_features = [
+                float(liked_so_far),
+                float(seen_so_far),
+                float(disliked_so_far),
+                float(disliked_so_far),
+            ]
+
+            if label_raw == "1":
+                candidate_index = candidate_to_index.get(game_id)
+                if candidate_index is not None:
+                    features.append(row_features)
+                    # Keras sparse categorical targets are zero-based class indices.
+                    targets.append(candidate_index - 1)
+                positive_counts[user_id] = liked_so_far + 1
+            else:
+                negative_counts[user_id] = disliked_so_far + 1
+
+            seen_counts[user_id] = seen_so_far + 1
+
+    return features, targets
+
+def _train_and_save_model(
+    *,
+    train_csv: Path,
+    candidate_index_map_path: Path,
+    model_path: Path,
+    seed: int,
+    epochs: int,
+    batch_size: int,
+) -> dict[str, Any]:
+    """
+    Train a minimal Keras multiclass model and save it as a .keras artifact.
+    """
+    with candidate_index_map_path.open("r", encoding="utf-8") as f:
+        raw_candidate_map = json.load(f)
+    candidate_index_map = {int(k): int(v) for k, v in raw_candidate_map.items()}
+    candidate_to_index = {game_id: candidate_index for candidate_index, game_id in candidate_index_map.items()}
+
+    features, targets = _build_training_rows(train_csv, candidate_to_index)
+    if not features or not targets:
+        raise RuntimeError("No positive training rows available to fit model.")
+
+    tf_module = importlib.import_module("tensorflow")
+    np_module = importlib.import_module("numpy")
+
+    tf_module.keras.utils.set_random_seed(seed)
+    if hasattr(tf_module.config, "experimental") and hasattr(
+        tf_module.config.experimental, "enable_op_determinism"
+    ):
+        tf_module.config.experimental.enable_op_determinism()
+
+    x_train = np_module.asarray(features, dtype="float32")
+    y_train = np_module.asarray(targets, dtype="int32")
+    num_classes = int(max(targets) + 1)
+
+    model = tf_module.keras.Sequential(
+        [
+            tf_module.keras.layers.Input(shape=(4,), name="features"),
+            tf_module.keras.layers.Dense(32, activation="relu"),
+            tf_module.keras.layers.Dense(16, activation="relu"),
+            tf_module.keras.layers.Dense(num_classes, activation="softmax", name="scores"),
+        ]
+    )
+    model.compile(
+        optimizer=tf_module.keras.optimizers.Adam(learning_rate=0.01),
+        loss="sparse_categorical_crossentropy",
+    )
+
+    history = model.fit(
+        x_train,
+        y_train,
+        epochs=max(1, epochs),
+        batch_size=max(1, min(batch_size, len(features))),
+        verbose=2,
+    )
+
+    model_path.parent.mkdir(parents=True, exist_ok=True)
+    model.save(model_path)
+
+    final_loss = float(history.history["loss"][-1]) if history.history.get("loss") else None
+    return {
+        "rows": len(features),
+        "num_classes": num_classes,
+        "epochs": max(1, epochs),
+        "batch_size": max(1, min(batch_size, len(features))),
+        "final_loss": final_loss,
+        "model_saved": model_path.exists(),
+    }
+
+def _promote_artifacts_to_current(*, run_log: dict[str, Any], repo_root: Path) -> dict[str, str]:
+    """
+    Copy model + manifest + candidate map from a run bundle into the serving-current folder.
+    """
+    artifacts = run_log["artifacts"]
+    source_model = Path(artifacts["model_path"])
+    source_manifest = Path(artifacts["manifest_path"])
+    source_candidate_map = Path(artifacts["candidate_index_map_path"])
+
+    current_dir = repo_root / "services/recommender/training/artifacts/current"
+    current_dir.mkdir(parents=True, exist_ok=True)
+
+    target_model = current_dir / "model.keras"
+    target_manifest = current_dir / "artifact_manifest.json"
+    target_candidate_map = current_dir / "candidate_index_map.json"
+
+    shutil.copy2(source_model, target_model)
+    shutil.copy2(source_manifest, target_manifest)
+    shutil.copy2(source_candidate_map, target_candidate_map)
+
+    manifest_payload = json.loads(target_manifest.read_text(encoding="utf-8"))
+    manifest_payload["candidate_index_map_path"] = target_candidate_map.name
+    target_manifest.write_text(json.dumps(manifest_payload, indent=4), encoding="utf-8")
+
+    return {
+        "current_dir": str(current_dir),
+        "model_path": str(target_model),
+        "manifest_path": str(target_manifest),
+        "candidate_index_map_path": str(target_candidate_map),
+    }
+
 def run_experiment(
     *,
     input_csv: Path,
@@ -376,6 +546,9 @@ def run_experiment(
     k: int,
     seed: int,
     repo_root: Path,
+    epochs: int = 12,
+    batch_size: int = 32,
+    promote_current: bool = False,
 ) -> dict[str, Any]:
     """
     Runs an experiment with the recommender model.
@@ -441,7 +614,21 @@ def run_experiment(
         k=k,
         dataset_hash=manifest["source_sha256"],
     )
-    
+
+    training = _train_and_save_model(
+        train_csv=train_csv,
+        candidate_index_map_path=Path(artifacts["candidate_index_map_path"]),
+        model_path=Path(artifacts["model_path"]),
+        seed=seed,
+        epochs=epochs,
+        batch_size=batch_size,
+    )
+    artifacts["model_exists"] = Path(artifacts["model_path"]).exists()
+    artifacts["model_stub_metadata"] = {
+        "status": "trained",
+        "note": "Model fit completed and .keras artifact was written.",
+    }
+
     evaluation_passed = bool(eval_result["passed"])
     promoted_at = datetime.now(timezone.utc).isoformat() if evaluation_passed else None
 
@@ -453,9 +640,12 @@ def run_experiment(
             "train_ratio": train_ratio,
             "validation_ratio": validation_ratio,
             "k": k,
+            "epochs": epochs,
+            "batch_size": batch_size,
             "thresholds_json": str(threshold_json),
         },
         "seeding": seeding,
+        "training": training,
         "metrics": eval_result,
         "artifacts": artifacts,
         "promotion": {
@@ -478,6 +668,11 @@ def run_experiment(
             "git_commit": _git_commit_hash(repo_root),
         },
     }
+    if promote_current:
+        run_log["current_artifacts"] = _promote_artifacts_to_current(
+            run_log=run_log,
+            repo_root=repo_root,
+        )
 
     run_log_path = run_dir / "run_log.json"
     run_log_path.write_text(json.dumps(run_log, indent=4), encoding="utf-8")
@@ -525,7 +720,14 @@ def _parse_args() -> argparse.Namespace:
         help="Offline eval thresholds JSON path.",
     )
     parser.add_argument("--k", type=int, default=10, help="Top-k for ranking metrics.")
+    parser.add_argument("--epochs", type=int, default=12, help="Number of Keras training epochs.")
+    parser.add_argument("--batch_size", type=int, default=32, help="Training batch size.")
     parser.add_argument("--seed", type=int, default=42, help="Global random seed.")
+    parser.add_argument(
+        "--promote_current",
+        action="store_true",
+        help="Copy trained model + manifest + candidate map into services/recommender/training/artifacts/current",
+    )
     return parser.parse_args()
 
 
@@ -543,7 +745,7 @@ def main():
     args = _parse_args()
     run_id = args.run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_dir = args.runs_dir / run_id
-    repo_root = Path(__file__).parent.parent.parent.parent.parent
+    repo_root = _resolve_repo_root(Path(__file__))
 
     result = run_experiment(
         input_csv=args.input_csv,
@@ -554,6 +756,9 @@ def main():
         k=args.k,
         seed=args.seed,
         repo_root=repo_root,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        promote_current=args.promote_current,
     )
 
     print(json.dumps(result, indent=4))

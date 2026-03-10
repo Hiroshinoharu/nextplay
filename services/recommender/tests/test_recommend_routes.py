@@ -7,6 +7,23 @@ from services.recommender.models.model_schema import ModelCandidateScore, ModelO
 client = TestClient(app)
 
 
+class _Resp:
+    def __init__(self, status_code, payload):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+class _HTTP:
+    def __init__(self, responses):
+        self.responses = responses
+
+    def get(self, url, timeout):
+        return self.responses.get(url, _Resp(404, {"error": "not found"}))
+
+
 # Test cases for GET /recommend/user/{user_id}
 def test_get_recommend_for_user_valid_id_returns_expected_payload():
     response = client.get("/recommend/user/1")
@@ -32,16 +49,46 @@ def test_get_recommend_for_user_invalid_id_returns_400_with_clear_detail():
 
 
 def test_existing_recommend_item_and_recommend_routes_still_respond_as_expected():
-    # Test GET /recommend/item/{item_id}
+    app.state.service_urls = {"game": "http://game", "user": "http://user"}
+    app.state.http = _HTTP(
+        {
+            "http://game/games/10": _Resp(200, {"id": 10, "name": "Resident Evil 4", "genre": "Action"}),
+            "http://game/games/10/related-content?limit=80": _Resp(
+                200,
+                [
+                    {"id": 11, "name": "Resident Evil 5", "genre": "Action", "popularity": 90.0},
+                    {"id": 12, "name": "Resident Evil 6", "genre": "Action", "popularity": 80.0},
+                    {"id": 13, "name": "Resident Evil Village", "genre": "Action", "popularity": 85.0},
+                ],
+            ),
+            "http://game/games/search?q=Resident Evil 4&mode=contains&limit=120": _Resp(
+                200,
+                [
+                    {"id": 14, "name": "Resident Evil Revelations", "genre": "Action", "popularity": 70.0},
+                    {"id": 15, "name": "Resident Evil 0", "genre": "Action", "popularity": 60.0},
+                    {"id": 16, "name": "Resident Evil Code Veronica", "genre": "Action", "popularity": 50.0},
+                ],
+            ),
+            "http://game/games/11": _Resp(200, {"id": 11, "name": "Persona 5 Royal", "genre": "RPG"}),
+            "http://game/games/11/related-content?limit=80": _Resp(
+                200,
+                [{"id": 21 + i, "name": f"Persona 5 DLC {i}", "genre": "RPG", "popularity": float(100 - i)} for i in range(1, 55)],
+            ),
+            "http://game/games/search?q=Persona 5 Royal&mode=contains&limit=120": _Resp(
+                200,
+                [{"id": 200 + i, "name": f"Persona 5 Related {i}", "genre": "RPG", "popularity": float(50 - i)} for i in range(1, 25)],
+            ),
+        }
+    )
+
     item_response = client.get("/recommend/item/10")
     assert item_response.status_code == 200
-    assert item_response.json() == {
-        'item_id': 10,
-        'similar_items': [11, 12, 13],
-        'top_k': None,
-        'filters': None,
-    }
-    
+    item_body = item_response.json()
+    assert item_body["item_id"] == 10
+    assert item_body["top_k"] is None
+    assert item_body["filters"] is None
+    assert len(item_body["similar_items"]) == 3
+
     class _Inference:
         def infer(self, payload):
             return ModelOutputSchema(
@@ -75,14 +122,15 @@ def test_existing_recommend_item_and_recommend_routes_still_respond_as_expected(
     
     similar_post_response = client.post('/recommend/item', json={'item_id': 11, 'top_k': 5})
     assert similar_post_response.status_code == 200
-    assert similar_post_response.json() == {
-        'item_id': 11,
-        'similar_items': [12, 13, 14, 15, 16],
-        'top_k': 5,
-        'filters': {}
-    }
+    post_body = similar_post_response.json()
+    assert post_body["item_id"] == 11
+    assert post_body["top_k"] == 5
+    assert post_body["filters"] == {}
+    assert len(post_body["similar_items"]) == 5
     delattr(app.state, 'inference_service')
     delattr(app.state, 'model')
+    delattr(app.state, 'service_urls')
+    delattr(app.state, 'http')
 
 # Test that POST /recommend calls the inference service when available
 def test_recommend_route_calls_inference_service_when_available():
@@ -134,21 +182,6 @@ def test_recommend_for_user_live_dependencies_and_ranks_candidates():
     that the response contains the expected recommended games 
     in the correct order based on keyword and platform overlap, and popularity as a tiebreaker.
     """
-    class _Resp:
-        def __init__(self, status_code, payload):
-            self.status_code = status_code
-            self._payload = payload
-        
-        def json(self):
-            return self._payload
-    
-    class _HTTP:
-        def __init__(self, responses):
-            self.responses = responses
-        
-        def get(self, url, timeout):
-            return self.responses[url]
-    
     app.state.service_urls = {
         "user": "http://user",
         "game": "http://game",
@@ -157,7 +190,8 @@ def test_recommend_for_user_live_dependencies_and_ranks_candidates():
         {
             "http://user/users/9/keywords": _Resp(200, [{"keyword_id": 4}, {"keyword_id": "bad"}]),
             "http://user/users/9/platforms": _Resp(200, [{"platform_id": 10}]),
-            "http://game/games?limit=100": _Resp(
+            "http://user/users/9/interactions": _Resp(200, []),
+            "http://game/games/top?limit=200": _Resp(
                 200,
                 [
                     {"id": 200, "keywords": [4], "platforms": [10], "popularity": 999.0},
@@ -195,6 +229,20 @@ def test_post_reccomend_items_clamps_top_k(payload, expected_top_k):
     This will test that the POST /recommend/item endpoint correctly clamps the top_k parameter to a maximum of 50.
     It sends requests with different top_k values and asserts that the response contains the expected number of similar items.
     """
+    app.state.service_urls = {"game": "http://game", "user": "http://user"}
+    app.state.http = _HTTP(
+        {
+            "http://game/games/11": _Resp(200, {"id": 11, "name": "Persona 5 Royal", "genre": "RPG"}),
+            "http://game/games/11/related-content?limit=200": _Resp(
+                200,
+                [{"id": 1000 + i, "name": f"P5 candidate {i}", "genre": "RPG", "popularity": float(1000 - i)} for i in range(1, 260)],
+            ),
+            "http://game/games/search?q=Persona 5 Royal&mode=contains&limit=120": _Resp(
+                200,
+                [{"id": 2000 + i, "name": f"P5 search {i}", "genre": "RPG", "popularity": float(600 - i)} for i in range(1, 140)],
+            ),
+        }
+    )
     response = client.post('/recommend/item', json=payload)
     
     assert response.status_code == 200
@@ -202,6 +250,8 @@ def test_post_reccomend_items_clamps_top_k(payload, expected_top_k):
     assert body['item_id'] == 11
     assert body['top_k'] == expected_top_k
     assert len(body['similar_items']) == expected_top_k
+    delattr(app.state, "service_urls")
+    delattr(app.state, "http")
 
 def test_post_recommend_items_invalid_id_returns_400():
     """

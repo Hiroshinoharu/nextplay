@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib
 import math
 from typing import Any, Protocol
 
@@ -121,10 +122,15 @@ def _predict_scores(model: Any, feature_vector: list[float]) -> list[float]:
     Returns:
         list[float]: A list of predicted scores for candidate games, which can be used to rank the recommendations.
     """
-    raw_predictions = model.predict([feature_vector])
+    numpy_module = importlib.import_module("numpy")
+    batch = numpy_module.asarray([feature_vector], dtype="float32")
+    raw_predictions = model.predict(batch, verbose=0)
 
-    first_row = raw_predictions[0] if raw_predictions else []
+    if hasattr(raw_predictions, "tolist"):
+        raw_predictions = raw_predictions.tolist()
+    if not raw_predictions:
+        return []
+    first_row = raw_predictions[0]
     if hasattr(first_row, "tolist"):
         first_row = first_row.tolist()
-
     return [float(score) for score in first_row]

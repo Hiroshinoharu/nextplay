@@ -155,6 +155,16 @@
   gap: 26px;
 }
 
+.discover-algorithm-verdict {
+  display: flex;
+  justify-content: stretch;
+}
+
+.discover-algorithm-verdict .games-result {
+  width: 100%;
+  max-width: none;
+}
+
 .search-quick-actions {
   display: flex;
   flex-wrap: wrap;

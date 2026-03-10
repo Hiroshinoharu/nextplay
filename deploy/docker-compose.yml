@@ -112,6 +112,7 @@ services:
       PORT: "8082"
     volumes:
       - ./config/config.yaml:/config/config.yaml:ro
+      - ../services/recommender/training/artifacts/current:/models/recommender/current:ro
     depends_on:
       postgres:
         condition: service_healthy

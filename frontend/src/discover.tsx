@@ -9,6 +9,7 @@ import SiteFooter from "./components/SiteFooter";
 import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
 import {
+  QUESTIONNAIRE_V1,
   buildRecommendRequestFromQuestionnaire,
   createEmptyQuestionnaireAnswers,
   isQuestionnaireComplete,
@@ -58,6 +59,7 @@ type RecommendResponse = {
 };
 
 const QUESTIONNAIRE_STORAGE_PREFIX = "nextplay_questionnaire_v1";
+const RESULT_PAGE_SIZE = 6;
 
 const INITIAL_ROW_ITEMS = 24;
 const ROW_STEP_ITEMS = 24;
@@ -140,6 +142,9 @@ const stableOrderBySeed = (items: GameItem[], seed: string) =>
     if (left !== right) return left - right;
     return a.id - b.id;
   });
+
+const recommendationScoreFromRank = (rank: number) =>
+  Math.max(50, Math.round(100 - (rank - 1) * 2.5));
 
 // This parseGenres the genre string from the API, which may be a comma-separated list, and returns the first genre for display in the carousel description.
 const parseGenres = (value?: string) => {
@@ -271,17 +276,21 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     () => createEmptyQuestionnaireAnswers(),
   );
   const [questionnaireComplete, setQuestionnaireComplete] = useState<boolean>(false);
+  const [questionnaireOpen, setQuestionnaireOpen] = useState<boolean>(false);
+  const [showQuestionnaireResult, setShowQuestionnaireResult] = useState<boolean>(false);
   const [dismissedQuestionnaireBanner, setDismissedQuestionnaireBanner] = useState<boolean>(false);
   const [recommendationLoading, setRecommendationLoading] = useState<boolean>(false);
   const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [recommendationStrategy, setRecommendationStrategy] = useState<string | null>(null);
   const [recommendedGames, setRecommendedGames] = useState<GameItem[]>([]);
+  const [resultPage, setResultPage] = useState<number>(1);
   const avatarText = useMemo(() => getUserInitials(authUser), [authUser]);
   const authToken = authUser?.token?.trim() ?? "";
   const randomPoolFetchPromiseRef = useRef<Promise<unknown> | null>(null);
   const recentBackfillAttemptsRef = useRef<number>(0);
   const searchGridSectionRef = useRef<HTMLElement | null>(null);
   const randomLanesSectionRef = useRef<HTMLDivElement | null>(null);
+  const recommendationSectionRef = useRef<HTMLDivElement | null>(null);
   const normalizedSearchQuery = collapseWhitespace(searchQuery);
   const recentReleaseWindowMonths =
     parseBoundedInt(
@@ -430,7 +439,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       setRecommendedGames([]);
       setRecommendationStrategy(null);
       setRecommendationError(null);
-      return;
+      return false;
     }
 
     setRecommendationLoading(true);
@@ -458,7 +467,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
 
       if (!candidateIds.length) {
         setRecommendedGames([]);
-        return;
+        return true;
       }
 
       const fetched = await Promise.all(
@@ -478,9 +487,11 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
           return !isNsfwGame(game) && !isNonBaseContentGame(game);
         }),
       );
+      return true;
     } catch (err) {
       setRecommendedGames([]);
       setRecommendationError(err instanceof Error ? err.message : String(err));
+      return false;
     } finally {
       setRecommendationLoading(false);
     }
@@ -489,6 +500,114 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   useEffect(() => {
     void runQuestionnaireRecommendation();
   }, [runQuestionnaireRecommendation]);
+
+  useEffect(() => {
+    const shouldOpenQuestionnaire =
+      searchParams.get("open_questionnaire") === "1" ||
+      searchParams.get("open_questionnaire") === "true";
+    if (!shouldOpenQuestionnaire) return;
+    setShowQuestionnaireResult(false);
+    setQuestionnaireOpen(true);
+  }, [searchParams]);
+
+  const updateQuestionnaireAnswer = useCallback(
+    (questionId: string, optionId: string, type: "single_select" | "multi_select") => {
+      setQuestionnaireAnswers((prev) => {
+        const existing = prev[questionId] ?? [];
+        let nextSelected: string[];
+        if (type === "single_select") {
+          nextSelected = [optionId];
+        } else {
+          const selectedSet = new Set(existing);
+          if (selectedSet.has(optionId)) {
+            selectedSet.delete(optionId);
+          } else {
+            selectedSet.add(optionId);
+          }
+          nextSelected = Array.from(selectedSet);
+        }
+        const nextAnswers = {
+          ...prev,
+          [questionId]: nextSelected,
+        };
+        setQuestionnaireComplete(isQuestionnaireComplete(nextAnswers));
+        return nextAnswers;
+      });
+    },
+    [],
+  );
+
+  const handleQuestionnaireSubmit = useCallback(async () => {
+    if (!questionnaireComplete) return;
+    if (questionnaireStorageKey) {
+      try {
+        localStorage.setItem(questionnaireStorageKey, JSON.stringify(questionnaireAnswers));
+      } catch {
+        // Ignore storage failures and continue.
+      }
+    }
+    setQuestionnaireOpen(false);
+    const success = await runQuestionnaireRecommendation();
+    setShowQuestionnaireResult(success);
+  }, [
+    questionnaireAnswers,
+    questionnaireComplete,
+    questionnaireStorageKey,
+    runQuestionnaireRecommendation,
+  ]);
+
+  const handleQuestionnaireRetake = useCallback(() => {
+    setShowQuestionnaireResult(false);
+    setQuestionnaireOpen(true);
+  }, []);
+
+  const rankedRecommendedGames = useMemo(() => {
+    if (recommendedGames.length <= 1) return recommendedGames;
+    const answerSignature = Object.entries(questionnaireAnswers)
+      .map(([questionId, selected]) => `${questionId}:${[...selected].sort().join(",")}`)
+      .sort()
+      .join("|");
+    const headWindow = Math.min(4, recommendedGames.length);
+    const offset = hashString(answerSignature) % headWindow;
+    if (offset === 0) return recommendedGames;
+    return [
+      recommendedGames[offset],
+      ...recommendedGames.filter((_, index) => index !== offset),
+    ];
+  }, [questionnaireAnswers, recommendedGames]);
+
+  const topRecommendedGame = useMemo(
+    () => rankedRecommendedGames[0] ?? null,
+    [rankedRecommendedGames],
+  );
+
+  const additionalRecommendedGames = useMemo(
+    () => rankedRecommendedGames.slice(1),
+    [rankedRecommendedGames],
+  );
+
+  const resultTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(additionalRecommendedGames.length / RESULT_PAGE_SIZE)),
+    [additionalRecommendedGames.length],
+  );
+
+  const currentResultPage = Math.min(resultPage, resultTotalPages);
+
+  const pagedAdditionalRecommendations = useMemo(() => {
+    const start = (currentResultPage - 1) * RESULT_PAGE_SIZE;
+    return additionalRecommendedGames.slice(start, start + RESULT_PAGE_SIZE);
+  }, [additionalRecommendedGames, currentResultPage]);
+
+  const topRecommendationSummary = useMemo(() => {
+    if (!topRecommendedGame) return "We couldn't load details for the top recommendation yet.";
+    const source = collapseWhitespace(topRecommendedGame.description ?? "");
+    if (!source) return "Open this title to view full details and see why it matches your answers.";
+    return source.length > 260 ? `${source.slice(0, 260).trimEnd()}...` : source;
+  }, [topRecommendedGame]);
+
+  useEffect(() => {
+    setResultPage(1);
+  }, [rankedRecommendedGames]);
 
   const randomPoolPageSize = 120;
   const {
@@ -1082,7 +1201,10 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                     <button
                       type="button"
                       className="search-quick-actions__button"
-                      onClick={() => navigate("/games?open_questionnaire=1")}
+                      onClick={() => {
+                        setShowQuestionnaireResult(false);
+                        setQuestionnaireOpen(true);
+                      }}
                     >
                       {questionnaireComplete ? "Retake questionnaire" : "Start questionnaire"}
                     </button>
@@ -1103,7 +1225,10 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                     <button
                       type="button"
                       className="games-questionnaire-banner__button games-questionnaire-banner__button--primary"
-                      onClick={() => navigate("/games?open_questionnaire=1")}
+                      onClick={() => {
+                        setShowQuestionnaireResult(false);
+                        setQuestionnaireOpen(true);
+                      }}
                     >
                       Start questionnaire
                     </button>
@@ -1181,23 +1306,173 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                 <div ref={randomLanesSectionRef} className="discover-random">
                   {questionnaireComplete ? (
                     recommendationLoading ? (
-                      <div className="games-recommendation-state">Refreshing personalized picks...</div>
+                      <div
+                        ref={recommendationSectionRef}
+                        className="games-recommendation-state"
+                      >
+                        Refreshing algorithm verdicts...
+                      </div>
                     ) : recommendationError ? (
-                      <div className="games-recommendation-state games-recommendation-state--error">
+                      <div
+                        ref={recommendationSectionRef}
+                        className="games-recommendation-state games-recommendation-state--error"
+                      >
                         {recommendationError}
                       </div>
-                    ) : recommendedGames.length > 0 ? (
-                      <GameCarousel
-                        title="Recommended For You"
-                        badge={recommendationStrategy ? "Personalized" : "Recommended"}
-                        games={recommendedGames}
-                        onSelect={openGameDetail}
-                        getDescription={(game) => {
-                          const release = formatReleaseDate(game.release_date);
-                          return release ? `Release: ${release}` : "Release: n/a";
-                        }}
-                        itemWidth={190}
-                      />
+                    ) : topRecommendedGame ? (
+                      <section
+                        ref={recommendationSectionRef}
+                        className="games-home-recommendation discover-algorithm-verdict"
+                        aria-label="Algorithm verdicts result"
+                      >
+                        <div className="games-result">
+                          <header className="games-result__header">
+                            <p className="games-result__eyebrow">Algorithm Verdicts Result</p>
+                            <h2 className="games-result__title">
+                              This ranking is generated for your profile.
+                            </h2>
+                          </header>
+
+                          <section className="games-result__card">
+                            <div className="games-result__poster">
+                              {normalizeMediaUrl(topRecommendedGame.cover_image) ? (
+                                <img
+                                  src={normalizeMediaUrl(topRecommendedGame.cover_image) ?? ""}
+                                  alt={topRecommendedGame.name || "Top recommendation cover"}
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="games-result__poster-fallback">No image</div>
+                              )}
+                            </div>
+
+                            <div className="games-result__content">
+                              <h3>{topRecommendedGame.name || "Top recommendation"}</h3>
+                              <p>{topRecommendationSummary}</p>
+                              <div className="games-result__meta">
+                                <span>
+                                  {formatReleaseDate(topRecommendedGame.release_date)
+                                    ? `Release: ${formatReleaseDate(topRecommendedGame.release_date)}`
+                                    : "Release: n/a"}
+                                </span>
+                                <span>{`Genre: ${topRecommendedGame.genre ?? "n/a"}`}</span>
+                                {recommendationStrategy ? (
+                                  <span>{`Strategy: ${recommendationStrategy}`}</span>
+                                ) : null}
+                              </div>
+                            </div>
+
+                            <aside className="games-result__score">
+                              <p>Score</p>
+                              <div className="games-result__score-pill">
+                                {`${recommendationScoreFromRank(1)}%`}
+                              </div>
+                            </aside>
+                          </section>
+
+                          {additionalRecommendedGames.length > 0 ? (
+                            <section className="games-result__list" aria-label="Additional recommendations">
+                              <div className="games-result__list-header">
+                                <h3>More ranked picks</h3>
+                                <p>{`Showing ${pagedAdditionalRecommendations.length} of ${additionalRecommendedGames.length}`}</p>
+                              </div>
+                              <div className="games-result__list-grid">
+                                {pagedAdditionalRecommendations.map((game, index) => {
+                                  const rank = 2 + ((currentResultPage - 1) * RESULT_PAGE_SIZE) + index;
+                                  const coverUrl = normalizeMediaUrl(game.cover_image);
+                                  return (
+                                    <button
+                                      key={`discover-result-${game.id}`}
+                                      type="button"
+                                      className="games-result__list-item"
+                                      onClick={() => openGameDetail(game.id)}
+                                    >
+                                      <span className="games-result__list-item-cover" aria-hidden="true">
+                                        {coverUrl ? (
+                                          <img
+                                            src={coverUrl}
+                                            alt=""
+                                            loading="lazy"
+                                          />
+                                        ) : (
+                                          <span className="games-result__list-item-cover-fallback">No image</span>
+                                        )}
+                                      </span>
+                                      <span className="games-result__list-item-body">
+                                      <span className="games-result__list-item-rank">{`#${rank}`}</span>
+                                      <span className="games-result__list-item-title">{game.name || "Untitled game"}</span>
+                                      <span className="games-result__list-item-meta">
+                                        {formatReleaseDate(game.release_date)
+                                          ? `Release: ${formatReleaseDate(game.release_date)}`
+                                          : "Release: n/a"}
+                                      </span>
+                                      <span className="games-result__list-item-meta">
+                                        {`Score: ${recommendationScoreFromRank(rank)}%`}
+                                      </span>
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {resultTotalPages > 1 ? (
+                                <div className="games-pagination games-result__pagination">
+                                  <button
+                                    type="button"
+                                    className="games-pagination__button"
+                                    onClick={() => setResultPage((page) => Math.max(1, page - 1))}
+                                    disabled={currentResultPage <= 1}
+                                  >
+                                    Previous
+                                  </button>
+                                  <span className="games-pagination__status">
+                                    Page {currentResultPage} of {resultTotalPages}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="games-pagination__button"
+                                    onClick={() =>
+                                      setResultPage((page) => Math.min(resultTotalPages, page + 1))
+                                    }
+                                    disabled={currentResultPage >= resultTotalPages}
+                                  >
+                                    Next
+                                  </button>
+                                </div>
+                              ) : null}
+                            </section>
+                          ) : null}
+
+                          <footer className="games-result__actions">
+                            <button
+                              type="button"
+                              className="games-result__button games-result__button--primary"
+                              onClick={() => {
+                                void runQuestionnaireRecommendation();
+                                recommendationSectionRef.current?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                });
+                              }}
+                            >
+                              Refresh ranking
+                            </button>
+                            <button
+                              type="button"
+                              className="games-result__button games-result__button--ghost"
+                              onClick={handleQuestionnaireRetake}
+                            >
+                              Retake questionnaire
+                            </button>
+                            <button
+                              type="button"
+                              className="games-result__button games-result__button--ghost"
+                              onClick={() => openGameDetail(topRecommendedGame.id)}
+                            >
+                              Open #1 pick
+                            </button>
+                          </footer>
+                        </div>
+                      </section>
                     ) : null
                   ) : null}
 
@@ -1251,6 +1526,147 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
         </main>
         <SiteFooter />
       </div>
+
+      {questionnaireOpen ? (
+        <div className="games-questionnaire-backdrop" role="dialog" aria-modal="true">
+          <div className="games-questionnaire">
+            <p className="games-questionnaire__eyebrow">Discover setup</p>
+            <h2 className="games-questionnaire__title">Tell us what you like</h2>
+            <p className="games-questionnaire__subtitle">
+              We use this to personalize your discover feed. You can retake anytime.
+            </p>
+            <div className="games-questionnaire__body">
+              {QUESTIONNAIRE_V1.questions.map((question) => {
+                const selected = new Set(questionnaireAnswers[question.id] ?? []);
+                return (
+                  <section key={question.id} className="games-questionnaire__question">
+                    <h3>{question.prompt}</h3>
+                    <div className="games-questionnaire__options">
+                      {question.options.map((option) => {
+                        const isActive = selected.has(option.id);
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            className={`games-questionnaire__option${isActive ? " is-active" : ""}`}
+                            onClick={() =>
+                              updateQuestionnaireAnswer(question.id, option.id, question.type)
+                            }
+                            aria-pressed={isActive}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+            <div className="games-questionnaire__actions">
+              <button
+                type="button"
+                className="games-questionnaire__button games-questionnaire__button--ghost"
+                onClick={() => setQuestionnaireOpen(false)}
+              >
+                Skip for now
+              </button>
+              <button
+                type="button"
+                className="games-questionnaire__button games-questionnaire__button--primary"
+                onClick={() => {
+                  void handleQuestionnaireSubmit();
+                }}
+                disabled={!questionnaireComplete || recommendationLoading}
+              >
+                {recommendationLoading ? "Saving..." : "Save and get recommendations"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showQuestionnaireResult ? (
+        <div className="games-result-backdrop" role="dialog" aria-modal="true">
+          <div className="games-result">
+            <header className="games-result__header">
+              <p className="games-result__eyebrow">Results Page</p>
+              <h2 className="games-result__title">
+                Algorithm verdicts are ready for you.
+              </h2>
+            </header>
+            {topRecommendedGame ? (
+              <section className="games-result__card">
+                <div className="games-result__poster">
+                  {normalizeMediaUrl(topRecommendedGame.cover_image) ? (
+                    <img
+                      src={normalizeMediaUrl(topRecommendedGame.cover_image) ?? ""}
+                      alt={topRecommendedGame.name || "Top recommendation cover"}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="games-result__poster-fallback">No image</div>
+                  )}
+                </div>
+                <div className="games-result__content">
+                  <h3>{topRecommendedGame.name || "Top recommendation"}</h3>
+                  <p>{topRecommendationSummary}</p>
+                  <div className="games-result__meta">
+                    <span>
+                      {formatReleaseDate(topRecommendedGame.release_date)
+                        ? `Release: ${formatReleaseDate(topRecommendedGame.release_date)}`
+                        : "Release: n/a"}
+                    </span>
+                    <span>{`Genre: ${topRecommendedGame.genre ?? "n/a"}`}</span>
+                  </div>
+                </div>
+                <aside className="games-result__score">
+                  <p>Score</p>
+                  <div className="games-result__score-pill">{`${recommendationScoreFromRank(1)}%`}</div>
+                </aside>
+              </section>
+            ) : (
+              <section className="games-result__empty">
+                <p>{recommendationError ?? "No recommendation returned yet. Try again."}</p>
+              </section>
+            )}
+            <footer className="games-result__actions">
+              <button
+                type="button"
+                className="games-result__button games-result__button--primary"
+                onClick={() => {
+                  setShowQuestionnaireResult(false);
+                  recommendationSectionRef.current?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+                }}
+              >
+                Continue to discover
+              </button>
+              <button
+                type="button"
+                className="games-result__button games-result__button--ghost"
+                onClick={handleQuestionnaireRetake}
+              >
+                Retake questionnaire
+              </button>
+              {topRecommendedGame ? (
+                <button
+                  type="button"
+                  className="games-result__button games-result__button--ghost"
+                  onClick={() => {
+                    setShowQuestionnaireResult(false);
+                    openGameDetail(topRecommendedGame.id);
+                  }}
+                >
+                  Open #1 pick
+                </button>
+              ) : null}
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
