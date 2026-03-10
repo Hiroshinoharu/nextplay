@@ -136,6 +136,40 @@ Frontend build was run repeatedly after major edits and completed successfully e
   - model-success counters should dominate
   - fallback-only counters should remain near zero after model artifact rollout.
 
+### Actual retrain run outcome (captured)
+- Command:
+  - `services\recommender\ml-env\Scripts\python.exe -m services.recommender.training.retrain --input_csv services/recommender/training/input_interactions.csv --run_id 2026-03-10 --epochs 8 --batch_size 8 --promote_current`
+- Result:
+  - Training completed successfully.
+  - Keras model artifact was written:
+    - `services\recommender\training\runs\2026-03-10\artifacts\2026-03-10\recommender_2026-03-10.keras`
+  - `git_commit` in run hashes is `null` (expected in this environment when `git` is unavailable on PATH).
+- Offline eval gate:
+  - `passed: false`
+  - `promotion.status: blocked_offline_thresholds`
+  - Gate failures:
+    - min_recall_at_k: observed 0.0000 (required >= 0.2000)
+    - min_ndcg_at_k: observed 0.0000 (required >= 0.1500)
+    - min_map_at_k: observed 0.0000 (required >= 0.1200)
+    - min_coverage_at_k: observed 0.0000 (required >= 0.0500)
+    - min_list_diversity_at_k: observed 0.0000 (required >= 0.9000)
+- Training stats from this run:
+  - rows: `2`
+  - num_classes: `4`
+  - epochs: `8`
+  - effective batch_size: `2`
+  - final_loss: `0.8511`
+- Baselines/metrics snapshot:
+  - model: all ranking metrics `0.0`
+  - popularity baseline: all ranking metrics `0.0`
+  - fallback baseline: recall/ndcg/map `0.0`, coverage/diversity `1.0`
+- Artifact promotion details:
+  - Although gate status is blocked, `current_artifacts` paths were emitted for:
+    - `services/recommender/training/artifacts/current/model.keras`
+    - `services/recommender/training/artifacts/current/artifact_manifest.json`
+    - `services/recommender/training/artifacts/current/candidate_index_map.json`
+  - This should be treated as non-production-ready until offline thresholds pass.
+
 ## Notes
 - Because questionnaire content/questions changed, previously stored questionnaire responses may reset and users may need to retake once.
 - Current filtering uses metadata text pattern matching for episodic/live-update content; this can be moved to backend/source flags later for stricter precision.

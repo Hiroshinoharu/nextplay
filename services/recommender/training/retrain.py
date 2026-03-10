@@ -66,13 +66,17 @@ def _git_commit_hash(repo_root: Path) -> str | None:
         The full commit hash (SHA-1) as a string if successful, or None if the
         repository is not a valid Git repository or the command fails.
     """
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo_root,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        # Git is not installed or not present in PATH for this runtime.
+        return None
     if result.returncode != 0:
         return None
     return result.stdout.strip() or None
