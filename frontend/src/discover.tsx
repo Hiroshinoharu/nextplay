@@ -234,6 +234,8 @@ const NORMALIZED_NSFW_TERMS = NSFW_TERMS.map((term) => normalizeFilterText(term)
 // A more comprehensive list of NSFW terms to check against game metadata for filtering out adult content from random carousels. This is still not perfect but should catch a wider range of explicit content based on common terminology.
 const NON_BASE_CONTENT_MATCHER =
   /\b(dlc|downloadable content|expansion(?: pack)?|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|character pass|battle pass|starter pack|founder'?s pack|cosmetic(?: pack)?|skin(?: pack| set)?|costume(?: pack)?|outfit(?: pack)?|upgrade pack|item pack|consumable pack|limited edition|deluxe edition upgrade|ultimate edition upgrade)\b/i;
+const EPISODIC_LIVE_CONTENT_MATCHER =
+  /\b(episode\s*\d+|season\s*\d+|chapter\s*\d+|title update|content update|live service|patch\s*v?\d+|hotfix)\b/i;
 
 const isNsfwGame = (game: GameItem) => {
   if (game.nsfw || game.is_nsfw || game.adult) return true;
@@ -254,6 +256,24 @@ const isNonBaseContentGame = (game: GameItem) => {
     .join(" ");
   return NON_BASE_CONTENT_MATCHER.test(metadataText);
 };
+
+const isEpisodicOrSeasonalContentGame = (game: GameItem) => {
+  const metadataText = [game.name, game.genre, game.description]
+    .filter(Boolean)
+    .join(" ");
+  return EPISODIC_LIVE_CONTENT_MATCHER.test(metadataText);
+};
+
+const hasValidReleaseDate = (game: GameItem) => {
+  if (!game.release_date) return false;
+  return !Number.isNaN(new Date(game.release_date).getTime());
+};
+
+const shouldHideFromDiscover = (game: GameItem) =>
+  isNsfwGame(game) ||
+  isNonBaseContentGame(game) ||
+  isEpisodicOrSeasonalContentGame(game) ||
+  !hasValidReleaseDate(game);
 
 type DiscoverCarousel = {
   title: string;
@@ -277,6 +297,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   );
   const [questionnaireComplete, setQuestionnaireComplete] = useState<boolean>(false);
   const [questionnaireOpen, setQuestionnaireOpen] = useState<boolean>(false);
+  const [questionnaireStep, setQuestionnaireStep] = useState<number>(0);
+  const [questionnaireValidationMessage, setQuestionnaireValidationMessage] =
+    useState<string | null>(null);
   const [showQuestionnaireResult, setShowQuestionnaireResult] = useState<boolean>(false);
   const [dismissedQuestionnaireBanner, setDismissedQuestionnaireBanner] = useState<boolean>(false);
   const [recommendationLoading, setRecommendationLoading] = useState<boolean>(false);
@@ -307,6 +330,24 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   }, [authUser?.email, authUser?.id, authUser?.username]);
   const showQuestionnaireBanner =
     !questionnaireComplete && !dismissedQuestionnaireBanner;
+  const questionnaireQuestions = QUESTIONNAIRE_V1.questions;
+  const questionnaireTotal = questionnaireQuestions.length;
+  const activeQuestion = questionnaireQuestions[questionnaireStep] ?? null;
+  const activeQuestionSelected = activeQuestion
+    ? questionnaireAnswers[activeQuestion.id] ?? []
+    : [];
+  const answeredQuestionCount = useMemo(
+    () =>
+      questionnaireQuestions.reduce((count, question) => {
+        const selected = questionnaireAnswers[question.id] ?? [];
+        return selected.length > 0 ? count + 1 : count;
+      }, 0),
+    [questionnaireAnswers, questionnaireQuestions],
+  );
+  const questionnaireProgressPercent = useMemo(() => {
+    if (!questionnaireTotal) return 0;
+    return Math.round((answeredQuestionCount / questionnaireTotal) * 100);
+  }, [answeredQuestionCount, questionnaireTotal]);
 
   useEffect(() => {
     setDismissedQuestionnaireBanner(false);
@@ -341,6 +382,15 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   }, [questionnaireStorageKey]);
 
   useEffect(() => {
+    if (!questionnaireStorageKey) return;
+    try {
+      localStorage.setItem(questionnaireStorageKey, JSON.stringify(questionnaireAnswers));
+    } catch {
+      // Ignore storage failures and continue.
+    }
+  }, [questionnaireAnswers, questionnaireStorageKey]);
+
+  useEffect(() => {
     setSearchInput(urlQuery);
     setSearchQuery(urlQuery);
     setSearchPage(1);
@@ -349,6 +399,17 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   useEffect(() => {
     recentBackfillAttemptsRef.current = 0;
   }, [recentReleaseWindowMonths, normalizedSearchQuery]);
+
+  const openQuestionnaireFlow = useCallback(() => {
+    const firstIncompleteIndex = questionnaireQuestions.findIndex((question) => {
+      const selected = questionnaireAnswers[question.id] ?? [];
+      return selected.length === 0;
+    });
+    setShowQuestionnaireResult(false);
+    setQuestionnaireValidationMessage(null);
+    setQuestionnaireStep(firstIncompleteIndex >= 0 ? firstIncompleteIndex : 0);
+    setQuestionnaireOpen(true);
+  }, [questionnaireAnswers, questionnaireQuestions]);
 
   const {
     data: searchData,
@@ -389,7 +450,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       if (!Array.isArray(payload)) {
         throw new Error("Unexpected search response shape");
       }
-      const items = payload as GameItem[];
+      const items = (payload as GameItem[]).filter(
+        (game) => !shouldHideFromDiscover(game),
+      );
       return {
         items,
         hasMore: items.length === searchPageSize,
@@ -484,7 +547,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       setRecommendedGames(
         fetched.filter((game): game is GameItem => {
           if (!game) return false;
-          return !isNsfwGame(game) && !isNonBaseContentGame(game);
+          return !shouldHideFromDiscover(game);
         }),
       );
       return true;
@@ -506,12 +569,12 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       searchParams.get("open_questionnaire") === "1" ||
       searchParams.get("open_questionnaire") === "true";
     if (!shouldOpenQuestionnaire) return;
-    setShowQuestionnaireResult(false);
-    setQuestionnaireOpen(true);
-  }, [searchParams]);
+    openQuestionnaireFlow();
+  }, [openQuestionnaireFlow, searchParams]);
 
   const updateQuestionnaireAnswer = useCallback(
     (questionId: string, optionId: string, type: "single_select" | "multi_select") => {
+      setQuestionnaireValidationMessage(null);
       setQuestionnaireAnswers((prev) => {
         const existing = prev[questionId] ?? [];
         let nextSelected: string[];
@@ -537,8 +600,36 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     [],
   );
 
+  const handleQuestionnairePrevious = useCallback(() => {
+    setQuestionnaireValidationMessage(null);
+    setQuestionnaireStep((current) => Math.max(0, current - 1));
+  }, []);
+
+  const handleQuestionnaireNext = useCallback(() => {
+    if (!activeQuestion) return;
+    if (activeQuestionSelected.length === 0) {
+      setQuestionnaireValidationMessage("Please select at least one option to continue.");
+      return;
+    }
+    setQuestionnaireValidationMessage(null);
+    setQuestionnaireStep((current) =>
+      Math.min(questionnaireTotal - 1, current + 1),
+    );
+  }, [activeQuestion, activeQuestionSelected.length, questionnaireTotal]);
+
   const handleQuestionnaireSubmit = useCallback(async () => {
-    if (!questionnaireComplete) return;
+    if (!questionnaireComplete) {
+      const firstIncompleteIndex = questionnaireQuestions.findIndex((question) => {
+        const selected = questionnaireAnswers[question.id] ?? [];
+        return selected.length === 0;
+      });
+      if (firstIncompleteIndex >= 0) {
+        setQuestionnaireStep(firstIncompleteIndex);
+      }
+      setQuestionnaireValidationMessage("Please complete all questions before saving.");
+      return;
+    }
+    setQuestionnaireValidationMessage(null);
     if (questionnaireStorageKey) {
       try {
         localStorage.setItem(questionnaireStorageKey, JSON.stringify(questionnaireAnswers));
@@ -550,6 +641,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     const success = await runQuestionnaireRecommendation();
     setShowQuestionnaireResult(success);
   }, [
+    questionnaireQuestions,
     questionnaireAnswers,
     questionnaireComplete,
     questionnaireStorageKey,
@@ -557,9 +649,8 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   ]);
 
   const handleQuestionnaireRetake = useCallback(() => {
-    setShowQuestionnaireResult(false);
-    setQuestionnaireOpen(true);
-  }, []);
+    openQuestionnaireFlow();
+  }, [openQuestionnaireFlow]);
 
   const rankedRecommendedGames = useMemo(() => {
     if (recommendedGames.length <= 1) return recommendedGames;
@@ -672,9 +763,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     return merged;
   }, [randomPoolData?.pages]);
   const discoverCarousels = useMemo(() => {
-    const safePool = randomPool.filter(
-      (game) => !isNsfwGame(game) && !isNonBaseContentGame(game),
-    );
+    const safePool = randomPool.filter((game) => !shouldHideFromDiscover(game));
     if (!safePool.length) return [] as DiscoverCarousel[];
 
     const getVoteCount = (game: GameItem) =>
@@ -768,7 +857,6 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     // Identify hidden gems as games that have a solid rating (70 or above) but relatively low visibility (fewer votes and lower popularity).
     const strictHiddenGems = [...safePool]
       .filter((game) =>
-        !isNonBaseContentGame(game) &&
         isReleasedGame(game) &&
         getRating(game) >= 70 &&
         getVoteCount(game) < 50 &&
@@ -786,7 +874,6 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     const fallbackHiddenGems = [...safePool]
       .filter((game) =>
         !strictIds.has(game.id) &&
-        !isNonBaseContentGame(game) &&
         isReleasedGame(game) &&
         getRating(game) >= 65 &&
         getVoteCount(game) < 200 &&
@@ -873,7 +960,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       getRating(game) * 0.9 + Math.log10((getVoteCount(game) || 1) + 1) * 10;
     const recentHits = [...safePool]
       .filter((game) => {
-        if (isNsfwGame(game) || isNonBaseContentGame(game)) return false;
+        if (shouldHideFromDiscover(game)) return false;
         if (!isReleasedGame(game, now)) return false;
         if (!game.release_date) return false;
         const releaseDate = new Date(game.release_date);
@@ -1201,10 +1288,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                     <button
                       type="button"
                       className="search-quick-actions__button"
-                      onClick={() => {
-                        setShowQuestionnaireResult(false);
-                        setQuestionnaireOpen(true);
-                      }}
+                      onClick={openQuestionnaireFlow}
                     >
                       {questionnaireComplete ? "Retake questionnaire" : "Start questionnaire"}
                     </button>
@@ -1225,10 +1309,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                     <button
                       type="button"
                       className="games-questionnaire-banner__button games-questionnaire-banner__button--primary"
-                      onClick={() => {
-                        setShowQuestionnaireResult(false);
-                        setQuestionnaireOpen(true);
-                      }}
+                      onClick={openQuestionnaireFlow}
                     >
                       Start questionnaire
                     </button>
@@ -1327,9 +1408,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                       >
                         <div className="games-result">
                           <header className="games-result__header">
-                            <p className="games-result__eyebrow">Algorithm Verdicts Result</p>
+                            <p className="games-result__eyebrow">Discover Match Feed</p>
                             <h2 className="games-result__title">
-                              This ranking is generated for your profile.
+                              Queued for your next session.
                             </h2>
                           </header>
 
@@ -1347,6 +1428,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                             </div>
 
                             <div className="games-result__content">
+                              <span className="games-result__list-item-rank">#1</span>
                               <h3>{topRecommendedGame.name || "Top recommendation"}</h3>
                               <p>{topRecommendationSummary}</p>
                               <div className="games-result__meta">
@@ -1363,17 +1445,18 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                             </div>
 
                             <aside className="games-result__score">
-                              <p>Score</p>
-                              <div className="games-result__score-pill">
-                                {`${recommendationScoreFromRank(1)}%`}
-                              </div>
+                              <p>Rank</p>
+                              <div className="games-result__score-pill">#1</div>
+                              <p className="games-result__score-sub">
+                                {`Score: ${recommendationScoreFromRank(1)}%`}
+                              </p>
                             </aside>
                           </section>
 
                           {additionalRecommendedGames.length > 0 ? (
                             <section className="games-result__list" aria-label="Additional recommendations">
                               <div className="games-result__list-header">
-                                <h3>More ranked picks</h3>
+                                <h3>Up next</h3>
                                 <p>{`Showing ${pagedAdditionalRecommendations.length} of ${additionalRecommendedGames.length}`}</p>
                               </div>
                               <div className="games-result__list-grid">
@@ -1454,7 +1537,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                                 });
                               }}
                             >
-                              Refresh ranking
+                              Refresh picks
                             </button>
                             <button
                               type="button"
@@ -1535,52 +1618,106 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
             <p className="games-questionnaire__subtitle">
               We use this to personalize your discover feed. You can retake anytime.
             </p>
-            <div className="games-questionnaire__body">
-              {QUESTIONNAIRE_V1.questions.map((question) => {
-                const selected = new Set(questionnaireAnswers[question.id] ?? []);
-                return (
-                  <section key={question.id} className="games-questionnaire__question">
-                    <h3>{question.prompt}</h3>
-                    <div className="games-questionnaire__options">
-                      {question.options.map((option) => {
-                        const isActive = selected.has(option.id);
-                        return (
-                          <button
-                            key={option.id}
-                            type="button"
-                            className={`games-questionnaire__option${isActive ? " is-active" : ""}`}
-                            onClick={() =>
-                              updateQuestionnaireAnswer(question.id, option.id, question.type)
-                            }
-                            aria-pressed={isActive}
-                          >
-                            {option.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-                );
-              })}
+            <div className="games-questionnaire__progress" aria-live="polite">
+              <p className="games-questionnaire__progress-label">
+                {`Question ${Math.min(questionnaireStep + 1, questionnaireTotal)} of ${questionnaireTotal}`}
+              </p>
+              <p className="games-questionnaire__progress-count">
+                {`${answeredQuestionCount}/${questionnaireTotal} answered`}
+              </p>
             </div>
+            <div
+              className="games-questionnaire__progress-track"
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={questionnaireProgressPercent}
+              aria-label="Questionnaire completion"
+            >
+              <span
+                className="games-questionnaire__progress-fill"
+                style={{ width: `${questionnaireProgressPercent}%` }}
+              />
+            </div>
+            <div className="games-questionnaire__body">
+              {activeQuestion ? (
+                <section key={activeQuestion.id} className="games-questionnaire__question">
+                  <h3>{activeQuestion.prompt}</h3>
+                  <p className="games-questionnaire__hint">
+                    {activeQuestion.type === "multi_select"
+                      ? "Select one or more options."
+                      : "Select one option."}
+                  </p>
+                  <div className="games-questionnaire__options">
+                    {activeQuestion.options.map((option) => {
+                      const isActive = activeQuestionSelected.includes(option.id);
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          className={`games-questionnaire__option${isActive ? " is-active" : ""}`}
+                          onClick={() =>
+                            updateQuestionnaireAnswer(
+                              activeQuestion.id,
+                              option.id,
+                              activeQuestion.type,
+                            )
+                          }
+                          aria-pressed={isActive}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              ) : null}
+            </div>
+            {questionnaireValidationMessage ? (
+              <p className="games-questionnaire__validation">{questionnaireValidationMessage}</p>
+            ) : null}
             <div className="games-questionnaire__actions">
               <button
                 type="button"
                 className="games-questionnaire__button games-questionnaire__button--ghost"
-                onClick={() => setQuestionnaireOpen(false)}
+                onClick={() => {
+                  setQuestionnaireValidationMessage(null);
+                  setQuestionnaireOpen(false);
+                }}
               >
                 Skip for now
               </button>
-              <button
-                type="button"
-                className="games-questionnaire__button games-questionnaire__button--primary"
-                onClick={() => {
-                  void handleQuestionnaireSubmit();
-                }}
-                disabled={!questionnaireComplete || recommendationLoading}
-              >
-                {recommendationLoading ? "Saving..." : "Save and get recommendations"}
-              </button>
+              <div className="games-questionnaire__step-actions">
+                <button
+                  type="button"
+                  className="games-questionnaire__button games-questionnaire__button--ghost"
+                  onClick={handleQuestionnairePrevious}
+                  disabled={questionnaireStep <= 0}
+                >
+                  Previous
+                </button>
+                {questionnaireStep < questionnaireTotal - 1 ? (
+                  <button
+                    type="button"
+                    className="games-questionnaire__button games-questionnaire__button--primary"
+                    onClick={handleQuestionnaireNext}
+                    disabled={activeQuestionSelected.length === 0}
+                  >
+                    Next question
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="games-questionnaire__button games-questionnaire__button--primary"
+                    onClick={() => {
+                      void handleQuestionnaireSubmit();
+                    }}
+                    disabled={activeQuestionSelected.length === 0 || recommendationLoading}
+                  >
+                    {recommendationLoading ? "Saving..." : "Save and get recommendations"}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1590,9 +1727,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
         <div className="games-result-backdrop" role="dialog" aria-modal="true">
           <div className="games-result">
             <header className="games-result__header">
-              <p className="games-result__eyebrow">Results Page</p>
+              <p className="games-result__eyebrow">Discover Match Feed</p>
               <h2 className="games-result__title">
-                Algorithm verdicts are ready for you.
+                Your Discover picks are ready.
               </h2>
             </header>
             {topRecommendedGame ? (
@@ -1609,6 +1746,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                   )}
                 </div>
                 <div className="games-result__content">
+                  <span className="games-result__list-item-rank">#1</span>
                   <h3>{topRecommendedGame.name || "Top recommendation"}</h3>
                   <p>{topRecommendationSummary}</p>
                   <div className="games-result__meta">
@@ -1621,8 +1759,11 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                   </div>
                 </div>
                 <aside className="games-result__score">
-                  <p>Score</p>
-                  <div className="games-result__score-pill">{`${recommendationScoreFromRank(1)}%`}</div>
+                  <p>Rank</p>
+                  <div className="games-result__score-pill">#1</div>
+                  <p className="games-result__score-sub">
+                    {`Score: ${recommendationScoreFromRank(1)}%`}
+                  </p>
                 </aside>
               </section>
             ) : (
@@ -1642,7 +1783,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                   });
                 }}
               >
-                Continue to discover
+                Open Discover feed
               </button>
               <button
                 type="button"

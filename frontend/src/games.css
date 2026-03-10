@@ -672,6 +672,43 @@
   font-size: 13px;
 }
 
+.games-questionnaire__progress {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.games-questionnaire__progress-label,
+.games-questionnaire__progress-count {
+  margin: 0;
+  font-size: 12px;
+  color: var(--games-subtle);
+}
+
+.games-questionnaire__progress-label {
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.games-questionnaire__progress-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(140, 243, 122, 0.24);
+  background: rgba(7, 20, 32, 0.55);
+  overflow: hidden;
+}
+
+.games-questionnaire__progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(120deg, rgba(140, 243, 122, 0.78), rgba(14, 165, 233, 0.72));
+  transition: width 0.24s ease;
+}
+
 .games-questionnaire__body {
   display: flex;
   flex-direction: column;
@@ -689,6 +726,12 @@
   margin: 0 0 8px;
   font-size: 14px;
   color: var(--games-text);
+}
+
+.games-questionnaire__hint {
+  margin: 0 0 10px;
+  color: var(--games-subtle);
+  font-size: 12px;
 }
 
 .games-questionnaire__options {
@@ -714,10 +757,19 @@
 
 .games-questionnaire__actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
   padding-top: 4px;
+}
+
+.games-questionnaire__step-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .games-questionnaire__button {
@@ -745,6 +797,16 @@
 .games-questionnaire__button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.games-questionnaire__validation {
+  margin: 0;
+  border: 1px solid rgba(255, 183, 112, 0.45);
+  border-radius: 10px;
+  background: rgba(96, 54, 14, 0.35);
+  color: #ffdcb1;
+  font-size: 12px;
+  padding: 8px 10px;
 }
 
 .games-result-backdrop {
@@ -868,6 +930,14 @@
   font-size: 24px;
   font-weight: 800;
   letter-spacing: 0.03em;
+}
+
+.games-result__score-sub {
+  margin: 0;
+  color: var(--games-subtle);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
 .games-result__score-pill {
@@ -1718,6 +1788,16 @@
 
   .games-questionnaire__actions {
     justify-content: stretch;
+  }
+
+  .games-questionnaire__step-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .games-questionnaire__step-actions .games-questionnaire__button {
+    flex: 1 1 calc(50% - 8px);
+    text-align: center;
   }
 
   .games-questionnaire__button {

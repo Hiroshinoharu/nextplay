@@ -163,6 +163,196 @@
 .discover-algorithm-verdict .games-result {
   width: 100%;
   max-width: none;
+  border-radius: 16px;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.28);
+  background:
+    radial-gradient(circle at 12% 14%, rgba(140, 243, 122, 0.09), transparent 44%),
+    radial-gradient(circle at 86% 10%, rgba(14, 165, 233, 0.14), transparent 46%),
+    linear-gradient(160deg, rgba(6, 18, 29, 0.98), rgba(9, 26, 40, 0.96));
+}
+
+.discover-algorithm-verdict .games-result__header {
+  padding: 14px 16px 12px;
+  border-bottom-color: rgba(140, 243, 122, 0.2);
+  background: linear-gradient(140deg, rgba(9, 30, 47, 0.74), rgba(6, 20, 32, 0.46));
+}
+
+.discover-algorithm-verdict .games-result__eyebrow {
+  margin-bottom: 8px;
+  letter-spacing: 0.22em;
+  color: var(--games-subtle);
+}
+
+.discover-algorithm-verdict .games-result__title {
+  max-width: 24ch;
+  font-size: clamp(24px, 2.8vw, 36px);
+  line-height: 1.12;
+  letter-spacing: 0;
+  color: var(--games-accent-strong);
+  text-wrap: balance;
+}
+
+.discover-algorithm-verdict .games-result__card {
+  grid-template-columns: 160px 1fr 180px;
+  border-top-color: rgba(140, 243, 122, 0.16);
+  border-bottom-color: rgba(140, 243, 122, 0.16);
+  background: linear-gradient(145deg, rgba(11, 40, 63, 0.84), rgba(10, 30, 48, 0.86));
+}
+
+.discover-algorithm-verdict .games-result__poster {
+  min-height: 220px;
+}
+
+.discover-algorithm-verdict .games-result__content {
+  padding: 14px 16px;
+  gap: 10px;
+}
+
+.discover-algorithm-verdict .games-result__content h3 {
+  font-size: clamp(28px, 3.2vw, 44px);
+  line-height: 1.06;
+  letter-spacing: 0;
+}
+
+.discover-algorithm-verdict .games-result__content p {
+  color: rgba(226, 242, 255, 0.82);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.discover-algorithm-verdict .games-result__meta {
+  gap: 8px;
+  font-size: 11px;
+}
+
+.discover-algorithm-verdict .games-result__score {
+  gap: 8px;
+  justify-items: center;
+  border-left-color: rgba(140, 243, 122, 0.16);
+  background: linear-gradient(170deg, rgba(8, 26, 40, 0.28), rgba(8, 26, 40, 0.1));
+}
+
+.discover-algorithm-verdict .games-result__score p {
+  font-size: 20px;
+  line-height: 1;
+  color: var(--games-accent-strong);
+}
+
+.discover-algorithm-verdict .games-result__score-pill {
+  min-width: 100px;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-color: rgba(140, 243, 122, 0.58);
+  background: linear-gradient(135deg, rgba(140, 243, 122, 0.28), rgba(14, 165, 233, 0.24));
+  color: var(--games-accent-strong);
+}
+
+.discover-algorithm-verdict .games-result__score-sub {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--games-subtle);
+  letter-spacing: 0;
+}
+
+.discover-algorithm-verdict .games-result__list {
+  padding: 14px 16px;
+}
+
+.discover-algorithm-verdict .games-result__list-grid {
+  grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
+  gap: 10px;
+}
+
+.discover-algorithm-verdict .games-result__list-item {
+  padding: 10px;
+}
+
+.discover-algorithm-verdict .games-result__actions {
+  padding: 12px 16px 14px;
+}
+
+.discover-algorithm-verdict .games-result__list-item-rank {
+  margin-bottom: 2px;
+  border-color: rgba(140, 243, 122, 0.4);
+  background: rgba(140, 243, 122, 0.12);
+  color: var(--games-accent-strong);
+}
+
+.discover-algorithm-verdict .games-result__eyebrow,
+.discover-algorithm-verdict .games-result__title,
+.discover-algorithm-verdict .games-result__content h3,
+.discover-algorithm-verdict .games-result__content p,
+.discover-algorithm-verdict .games-result__meta,
+.discover-algorithm-verdict .games-result__score p,
+.discover-algorithm-verdict .games-result__score-sub,
+.discover-algorithm-verdict .games-result__score-pill,
+.discover-algorithm-verdict .games-result__list-header h3,
+.discover-algorithm-verdict .games-result__list-header p,
+.discover-algorithm-verdict .games-result__list-item-title,
+.discover-algorithm-verdict .games-result__list-item-meta,
+.discover-algorithm-verdict .games-result__list-item-rank,
+.discover-algorithm-verdict .games-pagination__status,
+.discover-algorithm-verdict .games-result__button {
+  color: var(--games-accent-strong);
+}
+
+@media (max-width: 900px) {
+  .discover-algorithm-verdict .games-result__card {
+    grid-template-columns: 160px 1fr;
+  }
+
+  .discover-algorithm-verdict .games-result__score {
+    grid-column: 1 / -1;
+    border-left: none;
+    border-top: 1px solid rgba(140, 243, 122, 0.16);
+    justify-content: flex-start;
+    justify-items: flex-start;
+    grid-auto-flow: column;
+    align-items: center;
+    padding: 12px 16px;
+  }
+
+  .discover-algorithm-verdict .games-result__score p {
+    font-size: 17px;
+  }
+
+  .discover-algorithm-verdict .games-result__score-sub {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .discover-algorithm-verdict .games-result__title {
+    font-size: clamp(22px, 7vw, 30px);
+    max-width: 20ch;
+  }
+
+  .discover-algorithm-verdict .games-result__card {
+    grid-template-columns: 1fr;
+  }
+
+  .discover-algorithm-verdict .games-result__poster {
+    min-height: 216px;
+  }
+
+  .discover-algorithm-verdict .games-result__content h3 {
+    font-size: clamp(24px, 8.4vw, 34px);
+  }
+
+  .discover-algorithm-verdict .games-result__score {
+    grid-auto-flow: row;
+    justify-items: start;
+    align-items: start;
+  }
+
+  .discover-algorithm-verdict .games-result__score p {
+    font-size: 16px;
+  }
+
+  .discover-algorithm-verdict .games-result__score-sub {
+    font-size: 15px;
+  }
 }
 
 .search-quick-actions {

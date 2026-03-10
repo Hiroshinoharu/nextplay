@@ -212,6 +212,8 @@ const isNsfwGame = (game: GameItem) => {
 
 const NON_BASE_CONTENT_MATCHER =
   /\b(dlc|downloadable content|expansion(?: pack)?|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|character pass|battle pass|starter pack|founder'?s pack|cosmetic(?: pack)?|skin(?: pack| set)?|costume(?: pack)?|outfit(?: pack)?|upgrade pack|item pack|consumable(?: pack)?|bundle|edition upgrade|currency pack|booster pack|mission pack)\b/i;
+const EPISODIC_LIVE_CONTENT_MATCHER =
+  /\b(episode\s*\d+|season\s*\d+|chapter\s*\d+|title update|content update|live service|patch\s*v?\d+|hotfix)\b/i;
 
 const isNonBaseContentGame = (game: GameItem) => {
   const metadataText = [game.name, game.genre, game.description, game.story]
@@ -219,6 +221,22 @@ const isNonBaseContentGame = (game: GameItem) => {
     .join(" ");
   return NON_BASE_CONTENT_MATCHER.test(metadataText);
 };
+
+const isEpisodicOrSeasonalContentGame = (game: GameItem) => {
+  const metadataText = [game.name, game.genre, game.description, game.story]
+    .filter(Boolean)
+    .join(" ");
+  return EPISODIC_LIVE_CONTENT_MATCHER.test(metadataText);
+};
+
+const hasValidReleaseDate = (game: GameItem) =>
+  Boolean(parseReleaseDate(game.release_date));
+
+const shouldHideFromSearch = (game: GameItem) =>
+  isNsfwGame(game) ||
+  isNonBaseContentGame(game) ||
+  isEpisodicOrSeasonalContentGame(game) ||
+  !hasValidReleaseDate(game);
 
 type HeroMediaSource = "artwork" | "screenshot" | "cover";
 
@@ -555,10 +573,11 @@ function Games({ authUser }: GamesProps) {
       if (!Array.isArray(payload)) {
         throw new Error("Invalid API response: expected an array of games");
       }
-      const items = dedupeGames(payload as GameItem[]);
+      const rawItems = dedupeGames(payload as GameItem[]);
+      const items = rawItems.filter((game) => !shouldHideFromSearch(game));
       return {
         items,
-        hasMore: items.length === searchPageSize,
+        hasMore: rawItems.length === searchPageSize,
       };
     },
     staleTime: 60_000,
