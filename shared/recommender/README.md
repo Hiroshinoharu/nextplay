@@ -17,6 +17,11 @@ Each option maps to the currently supported recommender request fields:
 
 The frontend should aggregate mappings from selected options and send them to `POST /api/recommend`.
 
+Recommended payload contract (Stage 2):
+- required mapped lists: `liked_keywords`, `disliked_keywords`, `liked_platforms`, `disliked_platforms`
+- raw questionnaire blob: `questionnaire_raw` (preferred)
+- legacy compatibility: `questionnaire` is still accepted
+
 ## Notes
 
 - Keep question count between 8 and 12 for completion rate.

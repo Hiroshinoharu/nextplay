@@ -60,6 +60,41 @@ def test_model_input_schema_uses_explicit_feature_schema_version() -> None:
     model_input = ModelInputSchema.from_recommend_request(payload)
 
     assert model_input.feature_schema_version == "recommender_feature_schema_v2"
+# Test Stage 2 field questionnaire_raw is used as the primary raw blob.
+def test_model_input_schema_prefers_questionnaire_raw() -> None:
+    payload = RecommendRequest(
+        user_id=3,
+        liked_keywords=[],
+        liked_platforms=[],
+        disliked_keywords=[],
+        disliked_platforms=[],
+        questionnaire={"feature_schema_version": "recommender_feature_schema_v1", "legacy": True},
+        questionnaire_raw={"feature_schema_version": "recommender_feature_schema_v2", "session_length": "short"},
+    )
+
+    model_input = ModelInputSchema.from_recommend_request(payload)
+
+    assert model_input.questionnaire == {
+        "feature_schema_version": "recommender_feature_schema_v2",
+        "session_length": "short",
+    }
+    assert model_input.feature_schema_version == "recommender_feature_schema_v2"
+
+
+# Test backward compatibility when only legacy questionnaire is provided.
+def test_model_input_schema_uses_legacy_questionnaire_when_raw_missing() -> None:
+    payload = RecommendRequest(
+        user_id=3,
+        liked_keywords=[],
+        liked_platforms=[],
+        disliked_keywords=[],
+        disliked_platforms=[],
+        questionnaire={"session_length": "short"},
+    )
+
+    model_input = ModelInputSchema.from_recommend_request(payload)
+
+    assert model_input.questionnaire == {"session_length": "short"}
 
 # Additional tests for ModelOutputSchema to validate conversion to API response format.
 def test_model_output_schema_maps_to_user_recommend_response() -> None:

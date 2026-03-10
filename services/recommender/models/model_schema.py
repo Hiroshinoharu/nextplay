@@ -24,32 +24,33 @@ class ModelInputSchema(BaseModel):
     def from_recommend_request(cls, payload: RecommendRequest) -> "ModelInputSchema":
         """
         Create a ModelInputSchema instance from a RecommendRequest payload.
-        
+
         Converts a RecommendRequest object into a ModelInputSchema by extracting and
         formatting user preferences, keywords, platforms, and questionnaire data.
-        
+
         Args:
             cls: The class being instantiated.
             payload (RecommendRequest): The recommendation request containing user preferences
                 and questionnaire information.
-        
+
         Returns:
             ModelInputSchema: An instance populated with user preferences, liked/disliked
                 keywords and platforms, questionnaire data, and schema version information.
-        
+
         Notes:
-            - If questionnaire is not provided, defaults to an empty dictionary.
-            - feature_schema_version is extracted from the questionnaire if available,
+            - Uses questionnaire_raw when present, then falls back to questionnaire for backward compatibility.
+            - feature_schema_version is extracted from that raw questionnaire blob when available,
               otherwise defaults to FEATURE_SCHEMA_VERSION constant.
         """
-        schema_version = payload.questionnaire.get("feature_schema_version") if payload.questionnaire else None
+        raw_questionnaire = payload.questionnaire_raw or payload.questionnaire or {}
+        schema_version = raw_questionnaire.get("feature_schema_version")
         return cls(
             user_id=payload.user_id,
             liked_keyword_ids=list(payload.liked_keywords),
             liked_platform_ids=list(payload.liked_platforms),
             disliked_keyword_ids=list(payload.disliked_keywords),
             disliked_platform_ids=list(payload.disliked_platforms),
-            questionnaire=dict(payload.questionnaire or {}),
+            questionnaire=dict(raw_questionnaire),
             feature_schema_version=schema_version or FEATURE_SCHEMA_VERSION,
         )
 
