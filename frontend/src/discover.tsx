@@ -8,6 +8,13 @@ import Searchbar from "./components/Searchbar";
 import SiteFooter from "./components/SiteFooter";
 import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
+import {
+  buildRecommendRequestFromQuestionnaire,
+  createEmptyQuestionnaireAnswers,
+  isQuestionnaireComplete,
+  normalizeStoredQuestionnaireAnswers,
+  type QuestionnaireAnswers,
+} from "./recommender/questionnaire";
 import "./discover.css";
 import "./games.css";
 
@@ -43,6 +50,14 @@ type RandomPoolPage = {
 type DiscoverPageProps = {
   authUser: AuthUser | null;
 };
+
+type RecommendResponse = {
+  user_id: number;
+  recommended_games: number[];
+  strategy?: string;
+};
+
+const QUESTIONNAIRE_STORAGE_PREFIX = "nextplay_questionnaire_v1";
 
 const INITIAL_ROW_ITEMS = 24;
 const ROW_STEP_ITEMS = 24;
@@ -252,6 +267,15 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   const [rowSnapshots, setRowSnapshots] = useState<Record<string, number[]>>({});
   const [loadingRowTitle, setLoadingRowTitle] = useState<string | null>(null);
   const [visibleGenreRows, setVisibleGenreRows] = useState<number>(INITIAL_GENRE_ROWS);
+  const [questionnaireAnswers, setQuestionnaireAnswers] = useState<QuestionnaireAnswers>(
+    () => createEmptyQuestionnaireAnswers(),
+  );
+  const [questionnaireComplete, setQuestionnaireComplete] = useState<boolean>(false);
+  const [dismissedQuestionnaireBanner, setDismissedQuestionnaireBanner] = useState<boolean>(false);
+  const [recommendationLoading, setRecommendationLoading] = useState<boolean>(false);
+  const [recommendationError, setRecommendationError] = useState<string | null>(null);
+  const [recommendationStrategy, setRecommendationStrategy] = useState<string | null>(null);
+  const [recommendedGames, setRecommendedGames] = useState<GameItem[]>([]);
   const avatarText = useMemo(() => getUserInitials(authUser), [authUser]);
   const authToken = authUser?.token?.trim() ?? "";
   const randomPoolFetchPromiseRef = useRef<Promise<unknown> | null>(null);
@@ -267,6 +291,45 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     ) ?? DEFAULT_RECENT_RELEASE_WINDOW_MONTHS;
   const searchPageSize = 24;
   const searchOffset = (searchPage - 1) * searchPageSize;
+  const questionnaireStorageKey = useMemo(() => {
+    const identity = authUser?.id ?? authUser?.email ?? authUser?.username;
+    if (!identity) return null;
+    return `${QUESTIONNAIRE_STORAGE_PREFIX}:${identity}`;
+  }, [authUser?.email, authUser?.id, authUser?.username]);
+  const showQuestionnaireBanner =
+    !questionnaireComplete && !dismissedQuestionnaireBanner;
+
+  useEffect(() => {
+    setDismissedQuestionnaireBanner(false);
+  }, [questionnaireStorageKey]);
+
+  useEffect(() => {
+    if (!questionnaireStorageKey) {
+      setQuestionnaireComplete(false);
+      setQuestionnaireAnswers(createEmptyQuestionnaireAnswers());
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(questionnaireStorageKey);
+      if (!raw) {
+        setQuestionnaireComplete(false);
+        setQuestionnaireAnswers(createEmptyQuestionnaireAnswers());
+        return;
+      }
+      const parsed = normalizeStoredQuestionnaireAnswers(JSON.parse(raw));
+      if (!parsed) {
+        setQuestionnaireComplete(false);
+        setQuestionnaireAnswers(createEmptyQuestionnaireAnswers());
+        return;
+      }
+      setQuestionnaireAnswers(parsed);
+      setQuestionnaireComplete(isQuestionnaireComplete(parsed));
+    } catch {
+      setQuestionnaireComplete(false);
+      setQuestionnaireAnswers(createEmptyQuestionnaireAnswers());
+    }
+  }, [questionnaireStorageKey]);
 
   useEffect(() => {
     setSearchInput(urlQuery);
@@ -298,6 +361,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
         limit: String(searchPageSize),
         offset: String(searchOffset),
         include_media: "1",
+        exclude_non_base: "1",
       });
       const response = await fetch(
         `${API_ROOT}/api/games/search?${query.toString()}`,
@@ -360,6 +424,71 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     },
     [navigate],
   );
+
+  const runQuestionnaireRecommendation = useCallback(async () => {
+    if (!authUser?.id || !questionnaireComplete) {
+      setRecommendedGames([]);
+      setRecommendationStrategy(null);
+      setRecommendationError(null);
+      return;
+    }
+
+    setRecommendationLoading(true);
+    setRecommendationError(null);
+    try {
+      const payload = buildRecommendRequestFromQuestionnaire(authUser.id, questionnaireAnswers);
+      const response = await fetch(`${API_ROOT}/api/recommend`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Failed to fetch recommendations (${response.status}): ${detail}`);
+      }
+
+      const body = (await response.json()) as RecommendResponse;
+      const candidateIds = Array.isArray(body.recommended_games)
+        ? body.recommended_games.filter((id): id is number => Number.isFinite(id))
+        : [];
+      setRecommendationStrategy(typeof body.strategy === "string" ? body.strategy : null);
+
+      if (!candidateIds.length) {
+        setRecommendedGames([]);
+        return;
+      }
+
+      const fetched = await Promise.all(
+        candidateIds.map(async (gameId) => {
+          const gameResponse = await fetch(`${API_ROOT}/api/games/${gameId}`, {
+            ...(authToken ? { headers: { Authorization: `Bearer ${authToken}` } } : {}),
+          });
+          if (!gameResponse.ok) return null;
+          const game = (await gameResponse.json()) as GameItem;
+          return game && typeof game.id === "number" ? game : null;
+        }),
+      );
+
+      setRecommendedGames(
+        fetched.filter((game): game is GameItem => {
+          if (!game) return false;
+          return !isNsfwGame(game) && !isNonBaseContentGame(game);
+        }),
+      );
+    } catch (err) {
+      setRecommendedGames([]);
+      setRecommendationError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRecommendationLoading(false);
+    }
+  }, [authToken, authUser?.id, questionnaireAnswers, questionnaireComplete]);
+
+  useEffect(() => {
+    void runQuestionnaireRecommendation();
+  }, [runQuestionnaireRecommendation]);
 
   const randomPoolPageSize = 120;
   const {
@@ -950,9 +1079,44 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                     >
                       Load genre rows
                     </button>
+                    <button
+                      type="button"
+                      className="search-quick-actions__button"
+                      onClick={() => navigate("/games?open_questionnaire=1")}
+                    >
+                      {questionnaireComplete ? "Retake questionnaire" : "Start questionnaire"}
+                    </button>
                   </>
                 )}
               </div>
+
+              {showQuestionnaireBanner ? (
+                <section className="games-questionnaire-banner" aria-label="Personalization prompt">
+                  <p className="games-questionnaire-banner__eyebrow">Personalized Picks</p>
+                  <h2 className="games-questionnaire-banner__title">
+                    Out of ideas? We&apos;ll find your next favorite.
+                  </h2>
+                  <p className="games-questionnaire-banner__subtitle">
+                    Answer a short questionnaire to tune recommendations. You can retake anytime.
+                  </p>
+                  <div className="games-questionnaire-banner__actions">
+                    <button
+                      type="button"
+                      className="games-questionnaire-banner__button games-questionnaire-banner__button--primary"
+                      onClick={() => navigate("/games?open_questionnaire=1")}
+                    >
+                      Start questionnaire
+                    </button>
+                    <button
+                      type="button"
+                      className="games-questionnaire-banner__button games-questionnaire-banner__button--ghost"
+                      onClick={() => setDismissedQuestionnaireBanner(true)}
+                    >
+                      Maybe later
+                    </button>
+                  </div>
+                </section>
+              ) : null}
 
               {normalizedSearchQuery ? (
                 <section
@@ -1015,6 +1179,28 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
               ) : null}
               {!normalizedSearchQuery ? (
                 <div ref={randomLanesSectionRef} className="discover-random">
+                  {questionnaireComplete ? (
+                    recommendationLoading ? (
+                      <div className="games-recommendation-state">Refreshing personalized picks...</div>
+                    ) : recommendationError ? (
+                      <div className="games-recommendation-state games-recommendation-state--error">
+                        {recommendationError}
+                      </div>
+                    ) : recommendedGames.length > 0 ? (
+                      <GameCarousel
+                        title="Recommended For You"
+                        badge={recommendationStrategy ? "Personalized" : "Recommended"}
+                        games={recommendedGames}
+                        onSelect={openGameDetail}
+                        getDescription={(game) => {
+                          const release = formatReleaseDate(game.release_date);
+                          return release ? `Release: ${release}` : "Release: n/a";
+                        }}
+                        itemWidth={190}
+                      />
+                    ) : null
+                  ) : null}
+
                   {visibleDisplayedDiscoverCarousels.map((section) => {
                     const sourceSection = discoverCarouselsByTitle.get(section.title);
                     const localHasMore = (sourceSection?.games.length ?? 0) > section.games.length;

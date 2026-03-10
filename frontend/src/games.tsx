@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Card from "./components/card";
 import GameCarousel from "./components/GameCarousel";
 import Lightbox from "./components/Lightbox";
@@ -9,6 +9,14 @@ import Searchbar from "./components/Searchbar";
 import SiteFooter from "./components/SiteFooter";
 import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
+import {
+  QUESTIONNAIRE_V1,
+  buildRecommendRequestFromQuestionnaire,
+  createEmptyQuestionnaireAnswers,
+  isQuestionnaireComplete,
+  normalizeStoredQuestionnaireAnswers,
+  type QuestionnaireAnswers,
+} from "./recommender/questionnaire";
 import "./games.css";
 
 // Define the structure of a game item based on expected API response fields
@@ -52,9 +60,17 @@ type SearchPageResult = {
   hasMore: boolean;
 };
 
+type RecommendResponse = {
+  user_id: number;
+  recommended_games: number[];
+  strategy?: string;
+};
+
 type GamesProps = {
   authUser: AuthUser | null;
 };
+
+const QUESTIONNAIRE_STORAGE_PREFIX = "nextplay_questionnaire_v1";
 
 // Utility function to remove duplicate games from a list based on their unique IDs
 const dedupeGames = (items: GameItem[]) => {
@@ -195,7 +211,7 @@ const isNsfwGame = (game: GameItem) => {
 };
 
 const NON_BASE_CONTENT_MATCHER =
-  /\b(dlc|downloadable content|expansion|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|starter pack|founder'?s pack|cosmetic pack)\b/i;
+  /\b(dlc|downloadable content|expansion(?: pack)?|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|character pass|battle pass|starter pack|founder'?s pack|cosmetic(?: pack)?|skin(?: pack| set)?|costume(?: pack)?|outfit(?: pack)?|upgrade pack|item pack|consumable(?: pack)?|bundle|edition upgrade|currency pack|booster pack|mission pack)\b/i;
 
 const isNonBaseContentGame = (game: GameItem) => {
   const metadataText = [game.name, game.genre, game.description, game.story]
@@ -257,8 +273,18 @@ function Games({ authUser }: GamesProps) {
   const [searchInput, setSearchInput] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>(""); // Separate state for the actual search query to trigger searches on submit rather than on every keystroke
   const [searchPage, setSearchPage] = useState<number>(1);
+  const [questionnaireAnswers, setQuestionnaireAnswers] = useState<QuestionnaireAnswers>(
+    () => createEmptyQuestionnaireAnswers(),
+  );
+  const [questionnaireOpen, setQuestionnaireOpen] = useState<boolean>(false);
+  const [showQuestionnaireResult, setShowQuestionnaireResult] = useState<boolean>(false);
+  const [recommendationLoading, setRecommendationLoading] = useState<boolean>(false);
+  const [recommendationError, setRecommendationError] = useState<string | null>(null);
+  const [recommendationStrategy, setRecommendationStrategy] = useState<string | null>(null);
+  const [recommendedGames, setRecommendedGames] = useState<GameItem[]>([]);
   const avatarText = useMemo(() => getUserInitials(authUser), [authUser]);
   const authToken = authUser?.token?.trim() ?? "";
+  const [searchParams] = useSearchParams();
   const searchGridSectionRef = useRef<HTMLElement | null>(null);
   const upcomingSectionRef = useRef<HTMLElement | null>(null);
   const topRatedSectionRef = useRef<HTMLElement | null>(null);
@@ -290,6 +316,11 @@ function Games({ authUser }: GamesProps) {
     if (!Number.isFinite(parsed) || parsed < 0) return 0;
     return parsed;
   }, []);
+  const questionnaireStorageKey = useMemo(() => {
+    const identity = authUser?.id ?? authUser?.email ?? authUser?.username;
+    if (!identity) return null;
+    return `${QUESTIONNAIRE_STORAGE_PREFIX}:${identity}`;
+  }, [authUser?.email, authUser?.id, authUser?.username]);
 
   const fetchGamesPage = useCallback(
     async ({
@@ -321,6 +352,7 @@ function Games({ authUser }: GamesProps) {
       if (searchQuery) {
         query.set("q", searchQuery);
       }
+      query.set("exclude_non_base", "1");
       console.debug(
         `Fetching games from: ${root}/api/games?include_media=1&${query.toString()}`,
       );
@@ -510,6 +542,7 @@ function Games({ authUser }: GamesProps) {
         limit: String(searchPageSize),
         offset: String(searchOffset),
         include_media: "1",
+        exclude_non_base: "1",
       });
       const response = await fetch(`${root}/api/games/search?${params.toString()}`, {
         signal,
@@ -1096,6 +1129,197 @@ function Games({ authUser }: GamesProps) {
         : releasedGames,
     [safeRecentPopularGames, releasedGames],
   );
+  const questionnaireComplete = useMemo(
+    () => isQuestionnaireComplete(questionnaireAnswers),
+    [questionnaireAnswers],
+  );
+  const runQuestionnaireRecommendation = useCallback(
+    async (answers: QuestionnaireAnswers) => {
+      if (!authUser?.id) {
+        setRecommendationError("User id is required to request recommendations.");
+        return false;
+      }
+      setRecommendationLoading(true);
+      setRecommendationError(null);
+      try {
+        const payload = buildRecommendRequestFromQuestionnaire(authUser.id, answers);
+        const response = await fetch(`${API_ROOT}/api/recommend`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          const detail = await response.text();
+          throw new Error(`Failed to fetch recommendations (${response.status}): ${detail}`);
+        }
+
+        const body = (await response.json()) as RecommendResponse;
+        const candidateIds = Array.isArray(body.recommended_games)
+          ? body.recommended_games.filter((id): id is number => Number.isFinite(id))
+          : [];
+
+        setRecommendationStrategy(typeof body.strategy === "string" ? body.strategy : null);
+
+        if (!candidateIds.length) {
+          setRecommendedGames([]);
+          return true;
+        }
+
+        const fetched = await Promise.all(
+          candidateIds.map(async (gameId) => {
+            const gameResponse = await fetch(`${API_ROOT}/api/games/${gameId}`, {
+              ...(authToken ? { headers: { Authorization: `Bearer ${authToken}` } } : {}),
+            });
+            if (!gameResponse.ok) return null;
+            const game = (await gameResponse.json()) as GameItem;
+            return game && typeof game.id === "number" ? game : null;
+          }),
+        );
+
+        setRecommendedGames(
+          fetched.filter(
+            (game): game is GameItem => {
+              if (!game) return false;
+              return !isNsfwGame(game) && !isNonBaseContentGame(game);
+            },
+          ),
+        );
+        return true;
+      } catch (err) {
+        setRecommendedGames([]);
+        setRecommendationError(err instanceof Error ? err.message : String(err));
+        return false;
+      } finally {
+        setRecommendationLoading(false);
+      }
+    },
+    [authToken, authUser?.id],
+  );
+
+  useEffect(() => {
+    const empty = createEmptyQuestionnaireAnswers();
+    if (!questionnaireStorageKey) {
+      setQuestionnaireAnswers(empty);
+      setQuestionnaireOpen(false);
+      setRecommendationStrategy(null);
+      setRecommendedGames([]);
+      setRecommendationError(null);
+      setShowQuestionnaireResult(false);
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(questionnaireStorageKey);
+      if (!raw) {
+        setQuestionnaireAnswers(empty);
+        setQuestionnaireOpen(false);
+        setRecommendationStrategy(null);
+        setRecommendedGames([]);
+        setRecommendationError(null);
+        setShowQuestionnaireResult(false);
+        return;
+      }
+      const parsed = normalizeStoredQuestionnaireAnswers(JSON.parse(raw));
+      if (!parsed) {
+        setQuestionnaireAnswers(empty);
+        setQuestionnaireOpen(false);
+        setShowQuestionnaireResult(false);
+        return;
+      }
+      setQuestionnaireAnswers(parsed);
+      setQuestionnaireOpen(false);
+      setShowQuestionnaireResult(false);
+      if (isQuestionnaireComplete(parsed)) {
+        void runQuestionnaireRecommendation(parsed);
+      } else {
+        setRecommendationStrategy(null);
+        setRecommendedGames([]);
+        setRecommendationError(null);
+      }
+    } catch {
+      setQuestionnaireAnswers(empty);
+      setQuestionnaireOpen(false);
+      setRecommendationStrategy(null);
+      setRecommendedGames([]);
+      setRecommendationError(null);
+      setShowQuestionnaireResult(false);
+    }
+  }, [questionnaireStorageKey, runQuestionnaireRecommendation]);
+
+  useEffect(() => {
+    const shouldOpenQuestionnaire =
+      searchParams.get("open_questionnaire") === "1" ||
+      searchParams.get("open_questionnaire") === "true";
+    if (!shouldOpenQuestionnaire) return;
+    setShowQuestionnaireResult(false);
+    setQuestionnaireOpen(true);
+  }, [searchParams]);
+
+  const updateQuestionnaireAnswer = useCallback(
+    (questionId: string, optionId: string, type: "single_select" | "multi_select") => {
+      setQuestionnaireAnswers((prev) => {
+        const existing = prev[questionId] ?? [];
+        if (type === "single_select") {
+          return {
+            ...prev,
+            [questionId]: [optionId],
+          };
+        }
+        const set = new Set(existing);
+        if (set.has(optionId)) {
+          set.delete(optionId);
+        } else {
+          set.add(optionId);
+        }
+        return {
+          ...prev,
+          [questionId]: Array.from(set),
+        };
+      });
+    },
+    [],
+  );
+
+  const handleQuestionnaireSubmit = useCallback(async () => {
+    if (!questionnaireComplete) return;
+    if (questionnaireStorageKey) {
+      try {
+        localStorage.setItem(questionnaireStorageKey, JSON.stringify(questionnaireAnswers));
+      } catch {
+        // Ignore storage failures and continue with in-memory answers.
+      }
+    }
+    setQuestionnaireOpen(false);
+    const success = await runQuestionnaireRecommendation(questionnaireAnswers);
+    setShowQuestionnaireResult(success);
+  }, [
+    questionnaireAnswers,
+    questionnaireComplete,
+    questionnaireStorageKey,
+    runQuestionnaireRecommendation,
+  ]);
+
+  const handleQuestionnaireRetake = useCallback(() => {
+    setShowQuestionnaireResult(false);
+    setQuestionnaireOpen(true);
+  }, []);
+
+  const topRecommendedGame = useMemo(
+    () => recommendedGames[0] ?? null,
+    [recommendedGames],
+  );
+
+  const topRecommendationSummary = useMemo(() => {
+    if (!topRecommendedGame) return "We couldn't load details for the top recommendation yet.";
+    const source = collapseWhitespace(
+      topRecommendedGame.description || topRecommendedGame.story || "",
+    );
+    if (!source) return "Open this title to view full details and see why it matches your answers.";
+    return truncateText(source, 260);
+  }, [topRecommendedGame]);
 
   const closeLightbox = useCallback(() => {
     setLightboxIndex(null);
@@ -1437,6 +1661,149 @@ function Games({ authUser }: GamesProps) {
         </main>
         <SiteFooter />
       </div>
+
+      {questionnaireOpen ? (
+        <div className="games-questionnaire-backdrop" role="dialog" aria-modal="true">
+          <div className="games-questionnaire">
+            <p className="games-questionnaire__eyebrow">First-run setup</p>
+            <h2 className="games-questionnaire__title">Tell us what you like</h2>
+            <p className="games-questionnaire__subtitle">
+              We use this once to personalize recommendations. You can retake it any time.
+            </p>
+            <div className="games-questionnaire__body">
+              {QUESTIONNAIRE_V1.questions.map((question) => {
+                const selected = new Set(questionnaireAnswers[question.id] ?? []);
+                return (
+                  <section key={question.id} className="games-questionnaire__question">
+                    <h3>{question.prompt}</h3>
+                    <div className="games-questionnaire__options">
+                      {question.options.map((option) => {
+                        const isActive = selected.has(option.id);
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            className={`games-questionnaire__option${isActive ? " is-active" : ""}`}
+                            onClick={() =>
+                              updateQuestionnaireAnswer(question.id, option.id, question.type)
+                            }
+                            aria-pressed={isActive}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+            <div className="games-questionnaire__actions">
+              <button
+                type="button"
+                className="games-questionnaire__button games-questionnaire__button--ghost"
+                onClick={() => {
+                  setQuestionnaireOpen(false);
+                }}
+              >
+                Skip for now
+              </button>
+              <button
+                type="button"
+                className="games-questionnaire__button games-questionnaire__button--primary"
+                onClick={() => {
+                  void handleQuestionnaireSubmit();
+                }}
+                disabled={!questionnaireComplete || recommendationLoading}
+              >
+                {recommendationLoading ? "Saving..." : "Save and get recommendations"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showQuestionnaireResult ? (
+        <div className="games-result-backdrop" role="dialog" aria-modal="true">
+          <div className="games-result">
+            <header className="games-result__header">
+              <p className="games-result__eyebrow">Results Page</p>
+              <h2 className="games-result__title">
+                The algorithm&apos;s verdict: this one&apos;s made for you.
+              </h2>
+            </header>
+
+            {topRecommendedGame ? (
+              <section className="games-result__card">
+                <div className="games-result__poster">
+                  {normalizeMediaUrl(topRecommendedGame.cover_image) ? (
+                    <img
+                      src={normalizeMediaUrl(topRecommendedGame.cover_image) ?? ""}
+                      alt={topRecommendedGame.name || "Top recommendation cover"}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="games-result__poster-fallback">No image</div>
+                  )}
+                </div>
+
+                <div className="games-result__content">
+                  <h3>{topRecommendedGame.name || "Top recommendation"}</h3>
+                  <p>{topRecommendationSummary}</p>
+                  <div className="games-result__meta">
+                    <span>
+                      {formatReleaseDate(topRecommendedGame.release_date)
+                        ? `Release: ${formatReleaseDate(topRecommendedGame.release_date)}`
+                        : "Release: n/a"}
+                    </span>
+                    <span>{`Genre: ${topRecommendedGame.genre ?? "n/a"}`}</span>
+                  </div>
+                </div>
+
+                <aside className="games-result__score">
+                  <p>Score</p>
+                  <div className="games-result__score-pill">
+                    {recommendationStrategy ? "Top Pick" : "Rank #1"}
+                  </div>
+                </aside>
+              </section>
+            ) : (
+              <section className="games-result__empty">
+                <p>{recommendationError ?? "No recommendation returned yet. Try retaking the questionnaire."}</p>
+              </section>
+            )}
+
+            <footer className="games-result__actions">
+              <button
+                type="button"
+                className="games-result__button games-result__button--primary"
+                onClick={() => setShowQuestionnaireResult(false)}
+              >
+                Continue to home feed
+              </button>
+              <button
+                type="button"
+                className="games-result__button games-result__button--ghost"
+                onClick={handleQuestionnaireRetake}
+              >
+                Retake questionnaire
+              </button>
+              {topRecommendedGame ? (
+                <button
+                  type="button"
+                  className="games-result__button games-result__button--ghost"
+                  onClick={() => {
+                    setShowQuestionnaireResult(false);
+                    openGameDetail(topRecommendedGame.id);
+                  }}
+                >
+                  Open top pick
+                </button>
+              ) : null}
+            </footer>
+          </div>
+        </div>
+      ) : null}
 
       {toastMessage && <div className="games-toast">{toastMessage}</div>}
       <Lightbox

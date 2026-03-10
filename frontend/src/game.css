@@ -410,6 +410,19 @@
   gap: 12px;
 }
 
+.game-bottom-actions {
+  width: 100%;
+  justify-content: center;
+  padding-top: 4px;
+}
+
+.game-related {
+  border: 1px solid var(--game-border);
+  border-radius: 18px;
+  background: rgba(10, 30, 48, 0.38);
+  padding: 14px;
+}
+
 .game-panel--interaction {
   display: flex;
   flex-direction: column;

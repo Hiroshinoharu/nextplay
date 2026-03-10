@@ -57,8 +57,9 @@ func SearchGamesByName(c *fiber.Ctx) error {
 	}
 	includeMedia := c.Query("include_media") == "true" || c.Query("include_media") == "1"
 	mode := strings.TrimSpace(c.Query("mode"))
+	excludeNonBaseContent := c.Query("exclude_non_base") == "true" || c.Query("exclude_non_base") == "1"
 
-	games, err := db.SearchGamesByName(query, mode, limit, offset, includeMedia)
+	games, err := db.SearchGamesByName(query, mode, limit, offset, includeMedia, excludeNonBaseContent)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -166,6 +167,30 @@ func GetGameByID(c *fiber.Ctx) error {
 
 	// Return the game details as JSON
 	return c.JSON(game)
+}
+
+// GET /api/games/:id/related-content - retrieves related DLC/add-on content by franchise/series
+func GetRelatedAddOnContent(c *fiber.Ctx) error {
+	idParam := c.Params("id")
+	id, err := strconv.Atoi(idParam)
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "Invalid game ID"})
+	}
+
+	limit := c.QueryInt("limit", 24)
+	if limit <= 0 {
+		limit = 24
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	includeMedia := c.Query("include_media") == "true" || c.Query("include_media") == "1"
+
+	games, err := db.GetRelatedAddOnContent(id, limit, includeMedia)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(games)
 }
 
 func CreateGame(c *fiber.Ctx) error {

@@ -5,12 +5,14 @@ import LikeButton from "./components/Like_Button";
 import Lightbox from "./components/Lightbox";
 import Navbar from "./components/Navbar";
 import RateRadio from "./components/rateRadio";
+import GameCarousel from "./components/GameCarousel";
 import ScreenshotGallery from "./components/ScreenshotGallery";
 import Searchbar from "./components/Searchbar";
 import TrailerGallery from "./components/TrailerGallery";
 import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
 import "./game.css";
+import "./games.css";
 import SiteFooter from "./components/SiteFooter";
 
 // Define the structure of a game item based on expected API response fields
@@ -29,6 +31,7 @@ type GameItem = {
   trailer_url?: string;
   media?: GameMedia[];
   platform_names?: string[];
+  popularity?: number;
 };
 
 // Define the structure of game media items based on expected API response fields
@@ -129,6 +132,38 @@ const formatCommaSeparatedText = (value?: string) => {
   return normalized;
 };
 
+const NON_BASE_CONTENT_MATCHER =
+  /\b(dlc|downloadable content|expansion(?: pack)?|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|character pass|battle pass|starter pack|founder'?s pack|cosmetic(?: pack)?|skin(?: pack| set)?|costume(?: pack)?|outfit(?: pack)?|upgrade pack|item pack|consumable(?: pack)?|bundle|edition upgrade|currency pack|booster pack|mission pack)\b/i;
+
+const isNonBaseContentGame = (game: GameItem) => {
+  const metadataText = [game.name, game.genre, game.description, game.story]
+    .filter(Boolean)
+    .join(" ");
+  return NON_BASE_CONTENT_MATCHER.test(metadataText);
+};
+
+const buildAssociationTokens = (gameName: string): string[] => {
+  const stopWords = new Set([
+    "the",
+    "and",
+    "for",
+    "with",
+    "edition",
+    "ultimate",
+    "complete",
+    "deluxe",
+    "royal",
+    "game",
+  ]);
+  const normalized = gameName
+    .toLowerCase()
+    .replace(/[^a-z0-9\s:]+/g, " ")
+    .split(/[\s:]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3 && !stopWords.has(token));
+  return Array.from(new Set(normalized)).slice(0, 6);
+};
+
 // Main Game component handling individual game detail view
 function Game({ authUser }: GameProps) {
   // Sets a navigation hook and state variables
@@ -145,6 +180,12 @@ function Game({ authUser }: GameProps) {
   const [interactionLoading, setInteractionLoading] = useState<boolean>(false);
   const [interactionSaving, setInteractionSaving] = useState<boolean>(false);
   const [reviewDraft, setReviewDraft] = useState<string>("");
+  const [relatedContent, setRelatedContent] = useState<GameItem[]>([]);
+  const [relatedLoading, setRelatedLoading] = useState<boolean>(false);
+  const [relatedError, setRelatedError] = useState<string | null>(null);
+  const [additionalContent, setAdditionalContent] = useState<GameItem[]>([]);
+  const [additionalLoading, setAdditionalLoading] = useState<boolean>(false);
+  const [additionalError, setAdditionalError] = useState<string | null>(null);
   const avatarText = useMemo(() => getUserInitials(authUser), [authUser]);
   const authToken = authUser?.token?.trim() ?? "";
   const toastTimeoutRef = useRef<number | null>(null);
@@ -524,6 +565,131 @@ function Game({ authUser }: GameProps) {
     .join(", ");
   const platformsText = platformsTextFull || "n/a";
 
+  useEffect(() => {
+    if (!game?.id) {
+      setRelatedContent([]);
+      setRelatedError(null);
+      setRelatedLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const loadRelated = async () => {
+      setRelatedLoading(true);
+      setRelatedError(null);
+      try {
+        const query = new URLSearchParams({
+          limit: "60",
+          include_media: "1",
+        });
+        const response = await fetch(`${API_ROOT}/api/games/${game.id}/related-content?${query.toString()}`, {
+          signal: controller.signal,
+          ...(authToken
+            ? { headers: { Authorization: `Bearer ${authToken}` } }
+            : {}),
+        });
+        if (!response.ok) {
+          setRelatedError(`Could not load franchise games (${response.status}).`);
+          setRelatedContent([]);
+          return;
+        }
+        const payload = await response.json();
+        if (!Array.isArray(payload)) {
+          setRelatedError("Unexpected franchise response shape.");
+          setRelatedContent([]);
+          return;
+        }
+        setRelatedContent(payload as GameItem[]);
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setRelatedError("Could not load related franchise games.");
+        setRelatedContent([]);
+      } finally {
+        if (!controller.signal.aborted) {
+          setRelatedLoading(false);
+        }
+      }
+    };
+
+    void loadRelated();
+    return () => controller.abort();
+  }, [authToken, game?.id]);
+
+  useEffect(() => {
+    if (!game?.id || !game.name?.trim()) {
+      setAdditionalContent([]);
+      setAdditionalError(null);
+      setAdditionalLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const loadAdditional = async () => {
+      setAdditionalLoading(true);
+      setAdditionalError(null);
+      try {
+        const query = new URLSearchParams({
+          q: game.name,
+          mode: "contains",
+          limit: "120",
+          offset: "0",
+          include_media: "1",
+        });
+        const response = await fetch(`${API_ROOT}/api/games/search?${query.toString()}`, {
+          signal: controller.signal,
+          ...(authToken
+            ? { headers: { Authorization: `Bearer ${authToken}` } }
+            : {}),
+        });
+        if (!response.ok) {
+          setAdditionalError(`Could not load additional content (${response.status}).`);
+          setAdditionalContent([]);
+          return;
+        }
+        const payload = await response.json();
+        if (!Array.isArray(payload)) {
+          setAdditionalError("Unexpected additional content response shape.");
+          setAdditionalContent([]);
+          return;
+        }
+
+        const tokens = buildAssociationTokens(game.name);
+        const ranked = (payload as GameItem[])
+          .filter((candidate) => candidate.id !== game.id)
+          .filter((candidate) => isNonBaseContentGame(candidate))
+          .map((candidate) => {
+            const searchable =
+              `${candidate.name ?? ""} ${candidate.description ?? ""} ${candidate.story ?? ""}`.toLowerCase();
+            const tokenHits = tokens.reduce(
+              (sum, token) => sum + (searchable.includes(token) ? 1 : 0),
+              0,
+            );
+            return { candidate, tokenHits };
+          })
+          .filter((row) => row.tokenHits > 0)
+          .sort((a, b) => {
+            if (b.tokenHits !== a.tokenHits) return b.tokenHits - a.tokenHits;
+            return (b.candidate.popularity ?? 0) - (a.candidate.popularity ?? 0);
+          })
+          .map((row) => row.candidate)
+          .slice(0, 36);
+
+        setAdditionalContent(ranked);
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setAdditionalError("Could not load additional content.");
+        setAdditionalContent([]);
+      } finally {
+        if (!controller.signal.aborted) {
+          setAdditionalLoading(false);
+        }
+      }
+    };
+
+    void loadAdditional();
+    return () => controller.abort();
+  }, [authToken, game?.id, game?.name]);
+
   return (
     <div className="game-page">
       <div className="game-shell">
@@ -836,20 +1002,75 @@ function Game({ authUser }: GameProps) {
                   )}
                 </section>
               </div>
-              <div className="game-info__actions">
-                <Button
-                  label="Back to Discover"
-                  showIcon={false}
-                  onClick={closeGameDetail}
-                />
-                <Button
-                  label="Back to Games"
-                  showIcon={false}
-                  onClick={() => navigate("/games")}
-                />
-              </div>
             </div>
           )}
+
+          {game && !gameLoading ? (
+            <section className="game-related">
+              {relatedLoading ? (
+                <div className="game-gallery__empty">Loading games from the same franchise...</div>
+              ) : relatedError ? (
+                <div className="game-gallery__empty">{relatedError}</div>
+              ) : relatedContent.length ? (
+                <GameCarousel
+                  title="More from this Franchise"
+                  badge="Franchise"
+                  games={relatedContent}
+                  onSelect={(targetId) => navigate(`/games/${targetId}`)}
+                  getDescription={(item) => {
+                    const release = formatReleaseDate(item.release_date);
+                    return release ? `Release: ${release}` : "Release: n/a";
+                  }}
+                  itemWidth={190}
+                />
+              ) : (
+                <div className="game-gallery__empty">
+                  No franchise games found for this title yet.
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          {game && !gameLoading ? (
+            <section className="game-related">
+              {additionalLoading ? (
+                <div className="game-gallery__empty">Loading additional content...</div>
+              ) : additionalError ? (
+                <div className="game-gallery__empty">{additionalError}</div>
+              ) : additionalContent.length ? (
+                <GameCarousel
+                  title="Additional Content"
+                  badge="DLC / Packs"
+                  games={additionalContent}
+                  onSelect={(targetId) => navigate(`/games/${targetId}`)}
+                  getDescription={(item) => {
+                    const release = formatReleaseDate(item.release_date);
+                    return release ? `Release: ${release}` : "Release: n/a";
+                  }}
+                  itemWidth={190}
+                />
+              ) : (
+                <div className="game-gallery__empty">
+                  No additional content found for this title yet.
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          {game && !gameLoading ? (
+            <div className="game-info__actions game-bottom-actions">
+              <Button
+                label="Back to Discover"
+                showIcon={false}
+                onClick={closeGameDetail}
+              />
+              <Button
+                label="Back to Games"
+                showIcon={false}
+                onClick={() => navigate("/games")}
+              />
+            </div>
+          ) : null}
         </main>
         <SiteFooter />
       </div>

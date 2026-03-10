@@ -14,7 +14,7 @@ func SetUpRoutes(app *fiber.App) {
 	// HEALTH ROUTES
 	// --------------------------
 	health := api.Group("/health")
-	{	
+	{
 		// Public health endpoints
 		health.Get("/", handlers.GetAllHealth)
 		health.Get("/gateway", handlers.GetGatewayHealth)
@@ -32,7 +32,7 @@ func SetUpRoutes(app *fiber.App) {
 		users.Post("/login", handlers.LoginUser)
 
 		securedUsers := users.Group("/:id", middleware.RequireJWT, middleware.RequireSameUserParam("id"))
-		
+
 		securedUsers.Get("/", handlers.GetUserByID)
 		securedUsers.Put("/", handlers.UpdateUser)
 		securedUsers.Delete("/", handlers.DeleteUser)
@@ -59,13 +59,14 @@ func SetUpRoutes(app *fiber.App) {
 	{
 		// Popular endpoint remains public for landing-page usage.
 		games.Get("/popular", handlers.GetPopularGames)
-		
+
 		// User-facing read endpoints require JWT.
 		games.Get("/", middleware.RequireJWT, handlers.GetAllGames)
 		games.Get("/search", middleware.RequireJWT, handlers.SearchGamesByName)
 		games.Get("/top", middleware.RequireJWT, handlers.GetTopGames)
 		games.Get("/:id", middleware.RequireJWT, handlers.GetGameByID)
-		
+		games.Get("/:id/related-content", middleware.RequireJWT, handlers.GetRelatedAddOnContent)
+
 		// Internal operation routes
 		games.Post("/", middleware.RequireServiceAuth, handlers.CreateGame)
 		games.Put("/:id", middleware.RequireServiceAuth, handlers.UpdateGame)
@@ -78,13 +79,13 @@ func SetUpRoutes(app *fiber.App) {
 
 		// Keywords
 		games.Get("/:id/keywords", middleware.RequireJWT, handlers.GetGameKeywords)
-		
+
 		games.Post("/:id/keywords", middleware.RequireServiceAuth, handlers.AddGameKeyword)
 		games.Delete("/:id/keywords/:keywordId", middleware.RequireServiceAuth, handlers.RemoveGameKeyword)
 
 		// Companies
 		games.Get("/:id/companies", middleware.RequireJWT, handlers.GetGameCompanies)
-		
+
 		games.Post("/:id/companies", middleware.RequireServiceAuth, handlers.AddGameCompany)
 		games.Delete("/:id/companies/:companyId", middleware.RequireServiceAuth, handlers.RemoveGameCompany)
 

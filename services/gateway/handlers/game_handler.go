@@ -40,6 +40,14 @@ func GetGameByID(c *fiber.Ctx) error {
 	return sendProxyBytes(c, status, data, err)
 }
 
+func GetRelatedAddOnContent(c *fiber.Ctx) error {
+	id := c.Params("id")
+	query := c.Context().QueryArgs().String()
+	gameClient := clients.NewGameClientWithHeaders(forwardingHeaders(c))
+	status, data, err := gameClient.GetRelatedAddOnContent(id, query)
+	return sendProxyBytes(c, status, data, err)
+}
+
 func CreateGame(c *fiber.Ctx) error {
 	gameClient := clients.NewGameClientWithHeaders(forwardingHeaders(c))
 	status, data, err := gameClient.CreateGame(c.Body())

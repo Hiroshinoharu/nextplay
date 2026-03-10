@@ -9,6 +9,8 @@ import (
 	"github.com/maxceban/nextplay/services/game/models"
 )
 
+const nonBaseContentRegex = `(\m(dlc|downloadable content|expansion|expansion pack|add[- ]?on|bonus( content)?|soundtrack|artbook|season pass|character pass|battle pass|starter pack|founder.?s pack|cosmetic pack|skin( pack| set)?|costume( pack)?|outfit( pack)?|upgrade pack|item pack|consumable( pack)?|bundle|edition upgrade|currency pack|booster pack|mission pack)\M)`
+
 // GetGames retrieves a page of games from the database.
 // Use includeMedia for detail-heavy responses; it is off by default for speed.
 func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool, searchQuery string, randomOrder bool, excludeNonBaseContent bool) ([]models.Game, error) {
@@ -23,7 +25,7 @@ func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool, searchQue
 		whereParts = append(whereParts, "release_date IS NOT NULL AND release_date > CURRENT_DATE")
 	}
 	if excludeNonBaseContent {
-		whereParts = append(whereParts, `NOT (CONCAT_WS(' ', COALESCE(game_name, ''), COALESCE(genre, ''), COALESCE(game_description, '')) ~* '(\m(dlc|downloadable content|expansion|add[- ]?on|bonus( content)?|soundtrack|artbook|season pass|starter pack|founder.?s pack|cosmetic pack)\M)')`)
+		whereParts = append(whereParts, `NOT (CONCAT_WS(' ', COALESCE(game_name, ''), COALESCE(genre, ''), COALESCE(game_description, '')) ~* '`+nonBaseContentRegex+`')`)
 	}
 	if strings.TrimSpace(searchQuery) != "" {
 		args = append(args, "%"+strings.TrimSpace(searchQuery)+"%")
@@ -170,7 +172,7 @@ func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool, searchQue
 }
 
 // SearchGamesByName retrieves games by name ordered by game_id.
-func SearchGamesByName(query string, mode string, limit int, offset int, includeMedia bool) ([]models.Game, error) {
+func SearchGamesByName(query string, mode string, limit int, offset int, includeMedia bool, excludeNonBaseContent bool) ([]models.Game, error) {
 	trimmedQuery := strings.TrimSpace(query)
 	if trimmedQuery == "" {
 		return []models.Game{}, nil
@@ -203,9 +205,12 @@ func SearchGamesByName(query string, mode string, limit int, offset int, include
 		SELECT game_id, game_name, game_description, release_date, genre, publishers, story, cover_image_url, aggregated_rating, aggregated_rating_count, total_rating, total_rating_count, popularity
 		FROM games g
 		WHERE ` + whereClause + `
-		ORDER BY g.game_id
 	`
 	args := []interface{}{argValue}
+	if excludeNonBaseContent {
+		querySQL += "\n  AND NOT (CONCAT_WS(' ', COALESCE(g.game_name, ''), COALESCE(g.genre, ''), COALESCE(g.game_description, '')) ~* '" + nonBaseContentRegex + "')"
+	}
+	querySQL += "\nORDER BY g.game_id"
 	if limit > 0 {
 		args = append(args, limit, offset)
 		querySQL += " LIMIT $" + strconv.Itoa(len(args)-1) + " OFFSET $" + strconv.Itoa(len(args)) + ";"
@@ -716,6 +721,168 @@ func GetGameByID(id int) (*models.Game, error) {
 	g.Series = []int64{}
 
 	return &g, nil
+}
+
+// GetRelatedAddOnContent returns related games from the same franchise (with series overlap as a tiebreaker).
+func GetRelatedAddOnContent(gameID int, limit int, includeMedia bool) ([]models.Game, error) {
+	if limit <= 0 {
+		limit = 60
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	query := `
+		WITH target_franchises AS (
+			SELECT franchise_id
+			FROM game_franchise
+			WHERE game_id = $1
+		),
+		target_series AS (
+			SELECT series_id
+			FROM game_series
+			WHERE game_id = $1
+		),
+		franchise_games AS (
+			SELECT gf.game_id, COUNT(*) AS shared_franchise_count
+			FROM game_franchise gf
+			INNER JOIN target_franchises tf ON tf.franchise_id = gf.franchise_id
+			WHERE gf.game_id <> $1
+			GROUP BY gf.game_id
+		),
+		series_scores AS (
+			SELECT gs.game_id, COUNT(*) AS shared_series_count
+			FROM game_series gs
+			INNER JOIN target_series ts ON ts.series_id = gs.series_id
+			WHERE gs.game_id <> $1
+			GROUP BY gs.game_id
+		),
+		scored AS (
+			SELECT
+				fg.game_id,
+				fg.shared_franchise_count,
+				COALESCE(ss.shared_series_count, 0) AS shared_series_count
+			FROM franchise_games fg
+			LEFT JOIN series_scores ss ON ss.game_id = fg.game_id
+		)
+		SELECT
+			g.game_id,
+			g.game_name,
+			g.game_description,
+			g.release_date,
+			g.genre,
+			g.publishers,
+			g.story,
+			g.cover_image_url,
+			g.aggregated_rating,
+			g.aggregated_rating_count,
+			g.total_rating,
+			g.total_rating_count,
+			g.popularity
+		FROM scored s
+		INNER JOIN games g ON g.game_id = s.game_id
+		ORDER BY
+			s.shared_franchise_count DESC,
+			s.shared_series_count DESC,
+			COALESCE(g.popularity, 0) DESC,
+			COALESCE(g.aggregated_rating_count, g.total_rating_count, 0) DESC,
+			g.game_id ASC
+		LIMIT $2;
+	`
+
+	rows, err := DB.Query(query, gameID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	games := make([]models.Game, 0, limit)
+	for rows.Next() {
+		var g models.Game
+		var description sql.NullString
+		var releaseDate sql.NullString
+		var genre sql.NullString
+		var publishers sql.NullString
+		var story sql.NullString
+		var coverImage sql.NullString
+		var aggregatedRating sql.NullFloat64
+		var aggregatedRatingCount sql.NullInt64
+		var totalRating sql.NullFloat64
+		var totalRatingCount sql.NullInt64
+		var popularity sql.NullFloat64
+		err := rows.Scan(
+			&g.ID,
+			&g.Name,
+			&description,
+			&releaseDate,
+			&genre,
+			&publishers,
+			&story,
+			&coverImage,
+			&aggregatedRating,
+			&aggregatedRatingCount,
+			&totalRating,
+			&totalRatingCount,
+			&popularity,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		if description.Valid {
+			g.Description = description.String
+		}
+		if releaseDate.Valid {
+			g.ReleaseDate = releaseDate.String
+		}
+		if genre.Valid {
+			g.Genre = genre.String
+		}
+		if publishers.Valid {
+			g.Publishers = publishers.String
+		}
+		if story.Valid {
+			g.Story = story.String
+		}
+		if coverImage.Valid {
+			g.CoverImageURL = coverImage.String
+		}
+		if aggregatedRating.Valid {
+			g.AggregatedRating = aggregatedRating.Float64
+		}
+		if aggregatedRatingCount.Valid {
+			g.AggregatedRatingCount = int(aggregatedRatingCount.Int64)
+		}
+		if totalRating.Valid {
+			g.TotalRating = totalRating.Float64
+		}
+		if totalRatingCount.Valid {
+			g.TotalRatingCount = int(totalRatingCount.Int64)
+		}
+		if popularity.Valid {
+			g.Popularity = popularity.Float64
+		}
+		if includeMedia {
+			media, err := GetGameMedia(int(g.ID))
+			if err != nil {
+				return nil, err
+			}
+			g.Media = media
+		} else {
+			g.Media = []models.GameMedia{}
+		}
+		g.Platforms = []int64{}
+		g.PlatformNames = []string{}
+		g.Keywords = []int64{}
+		g.Franchises = []int64{}
+		g.Companies = []int64{}
+		g.Series = []int64{}
+		games = append(games, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return games, nil
 }
 
 // CreateGame inserts a new game into the database

@@ -111,6 +111,18 @@ func (gc *GameClient) GetGameByID(id string) (int, []byte, error) {
 	return gc.doRequest(req)
 }
 
+func (gc *GameClient) GetRelatedAddOnContent(id, query string) (int, []byte, error) {
+	url := fmt.Sprintf("%s/games/%s/related-content", gc.baseURL, id)
+	if query != "" {
+		url += "?" + query
+	}
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return 0, nil, err
+	}
+	return gc.doRequest(req)
+}
+
 // ---------- POST ----------
 func (gc *GameClient) CreateGame(body []byte) (int, []byte, error) {
 	req, err := http.NewRequest(http.MethodPost, gc.baseURL+"/games", bytes.NewBuffer(body))
