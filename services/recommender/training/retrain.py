@@ -5,17 +5,35 @@ import csv
 import hashlib
 import importlib
 import json
+import logging
 import os
 import random
 import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 from services.recommender.models.feature_contract import FEATURE_SCHEMA_VERSION
 from services.recommender.training.data_prep import run_split
 from services.recommender.training.offline_eval import run_offline_evaluation
+
+logger = logging.getLogger(__name__)
+
+
+def _configure_logging() -> None:
+    """Configure structured training logs once per process."""
+    level_name = os.getenv("LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    root = logging.getLogger()
+    if not root.handlers:
+        logging.basicConfig(
+            level=level,
+            format="%(asctime)s %(levelname)s service=recommender component=training %(message)s",
+        )
+    else:
+        root.setLevel(level)
 
 
 def _sha256_file(path: Path) -> str:
@@ -576,16 +594,39 @@ def run_experiment(
     Returns:
         dict[str, Any]: A manifest dictionary containing metadata about the experiment, including the source file path, row counts for each split, and the SHA-256 hash of the source file.
     """
+    run_started = perf_counter()
     run_dir.mkdir(parents=True, exist_ok=True)
     prepared_dir = run_dir / "prepared"
     predictions_dir = run_dir / "predictions"
+    logger.info(
+        "retrain.run_started run_id=%s input_csv=%s run_dir=%s train_ratio=%.3f validation_ratio=%.3f epochs=%s batch_size=%s seed=%s k=%s",
+        run_dir.name,
+        input_csv.as_posix(),
+        run_dir.as_posix(),
+        train_ratio,
+        validation_ratio,
+        epochs,
+        batch_size,
+        seed,
+        k,
+    )
 
     seeding = set_global_seed(seed)
+    split_started = perf_counter()
     manifest = run_split(
         input_csv=input_csv,
         output_dir=prepared_dir,
         train_ratio=train_ratio,
         validation_ratio=validation_ratio,
+    )
+    logger.info(
+        "retrain.split_completed run_id=%s train_rows=%s validation_rows=%s test_rows=%s source_sha256=%s latency_ms=%.2f",
+        run_dir.name,
+        manifest.get("row_counts", {}).get("train"),
+        manifest.get("row_counts", {}).get("validation"),
+        manifest.get("row_counts", {}).get("test"),
+        manifest.get("source_sha256"),
+        (perf_counter() - split_started) * 1000,
     )
 
     train_csv = prepared_dir / "train.csv"
@@ -593,19 +634,37 @@ def run_experiment(
 
     predictions_csv = predictions_dir / "predictions.csv"
 
+    predict_started = perf_counter()
     _write_predictions_csv(
         train_csv=train_csv,
         test_csv=test_csv,
         output_path=predictions_csv,
         k=k,
     )
+    logger.info(
+        "retrain.predictions_completed run_id=%s predictions_csv=%s latency_ms=%.2f",
+        run_dir.name,
+        predictions_csv.as_posix(),
+        (perf_counter() - predict_started) * 1000,
+    )
 
+    eval_started = perf_counter()
     eval_result = run_offline_evaluation(
         train_csv=train_csv,
         test_csv=test_csv,
         predictions_csv=predictions_csv,
         thresholds_json=threshold_json,
         k=k,
+    )
+    model_metrics = eval_result.get("model", {})
+    logger.info(
+        "retrain.offline_eval_completed run_id=%s passed=%s precision_at_k=%.6f recall_at_k=%.6f map_at_k=%.6f latency_ms=%.2f",
+        run_dir.name,
+        bool(eval_result.get("passed")),
+        float(model_metrics.get("precision_at_k", 0.0)),
+        float(model_metrics.get("recall_at_k", 0.0)),
+        float(model_metrics.get("map_at_k", 0.0)),
+        (perf_counter() - eval_started) * 1000,
     )
     
     artifacts = _write_artifact_bundle(
@@ -619,6 +678,7 @@ def run_experiment(
         dataset_hash=manifest["source_sha256"],
     )
 
+    train_started = perf_counter()
     training = _train_and_save_model(
         train_csv=train_csv,
         candidate_index_map_path=Path(artifacts["candidate_index_map_path"]),
@@ -626,6 +686,12 @@ def run_experiment(
         seed=seed,
         epochs=epochs,
         batch_size=batch_size,
+    )
+    logger.info(
+        "retrain.training_completed run_id=%s model_path=%s latency_ms=%.2f",
+        run_dir.name,
+        artifacts["model_path"],
+        (perf_counter() - train_started) * 1000,
     )
     artifacts["model_exists"] = Path(artifacts["model_path"]).exists()
     artifacts["model_stub_metadata"] = {
@@ -680,6 +746,13 @@ def run_experiment(
 
     run_log_path = run_dir / "run_log.json"
     run_log_path.write_text(json.dumps(run_log, indent=4), encoding="utf-8")
+    logger.info(
+        "retrain.run_completed run_id=%s passed=%s run_log=%s total_latency_ms=%.2f",
+        run_dir.name,
+        evaluation_passed,
+        run_log_path.as_posix(),
+        (perf_counter() - run_started) * 1000,
+    )
 
     return run_log
 
@@ -746,6 +819,7 @@ def main():
     :return: None
     :rtype: None
     """
+    _configure_logging()
     args = _parse_args()
     run_id = args.run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_dir = args.runs_dir / run_id
@@ -767,6 +841,11 @@ def main():
 
     print(json.dumps(result, indent=4))
     if not result["metrics"]["passed"]:
+        logger.warning(
+            "retrain.offline_gate_failed run_id=%s status=%s",
+            run_dir.name,
+            result["promotion"]["status"],
+        )
         raise SystemExit(1)
 
 
