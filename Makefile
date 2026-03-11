@@ -4,8 +4,15 @@ RETRAIN_SCRIPT := services/recommender/training/retrain.sh
 TRAINING_DIR := services/recommender/training
 COMPOSE_FILE := deploy/docker-compose.yml
 
+ifeq ($(OS),Windows_NT)
+SHELL := C:/Progra~1/Git/usr/bin/sh.exe
+BASH := C:/Progra~1/Git/bin/bash.exe
+else
+BASH := bash
+endif
+
 retrain:
-	bash $(RETRAIN_SCRIPT) $(ARGS)
+	$(BASH) $(RETRAIN_SCRIPT) $(ARGS)
 
 retrain-export:
 	@set -eu; \
@@ -19,9 +26,9 @@ retrain-export:
 	echo "Exported $${out}"
 
 retrain-from-db: retrain-export
-	bash $(RETRAIN_SCRIPT) $(ARGS)
+	$(BASH) $(RETRAIN_SCRIPT) $(ARGS)
 
 retrain-from-db-local: retrain-export
-	@bash $(RETRAIN_SCRIPT) $(ARGS) || { \
+	@$(BASH) $(RETRAIN_SCRIPT) $(ARGS) || { \
 		echo "Retrain completed but offline gate thresholds failed (non-blocking local mode)."; \
 	}
