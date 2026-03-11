@@ -40,6 +40,7 @@ ml-env/
 nosetests.xml
 coverage.xml
 services/recommender/training/input_interactions.csv
+services/recommender/training/user_interactions_*.csv
 services/recommender/training/runs/
 services/recommender/training/artifacts/current/model.keras
 services/recommender/training/artifacts/current/artifact_manifest.json
