@@ -7,6 +7,7 @@ import Lightbox from "./components/Lightbox";
 import Navbar from "./components/Navbar";
 import Searchbar from "./components/Searchbar";
 import SiteFooter from "./components/SiteFooter";
+import Loader from "./components/Loader";
 import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
 import {
@@ -1429,10 +1430,14 @@ function Games({ authUser }: GamesProps) {
             ) : (
               <>
                 <p className="games-hero__eyebrow">Library loading</p>
-                <h1 className="games-hero__title">Loading games...</h1>
+                <h1 className="games-hero__title">Preparing your game feed</h1>
                 <p className="games-hero__desc">
                   We will surface a featured title as soon as your API responds.
                 </p>
+                <Loader
+                  title="Loading games"
+                  subtitle="Ranking recent, trending, and top-rated picks..."
+                />
                 <div className="games-hero__actions">
                   <button
                     type="button"
@@ -1500,6 +1505,12 @@ function Games({ authUser }: GamesProps) {
                     ? "Searching..."
                     : `Showing ${searchResults.length === 0 ? 0 : searchOffset + 1}-${searchOffset + searchResults.length} on page ${searchPage}.`}
                 </p>
+                {searchLoading || searchFetching ? (
+                  <Loader
+                    title="Searching library"
+                    subtitle="Matching titles and metadata..."
+                  />
+                ) : null}
               </>
             ) : (
                <p className="games-search-results__count">

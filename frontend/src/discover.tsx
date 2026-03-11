@@ -6,6 +6,7 @@ import GameCarousel from "./components/GameCarousel";
 import Navbar from "./components/Navbar";
 import Searchbar from "./components/Searchbar";
 import SiteFooter from "./components/SiteFooter";
+import Loader from "./components/Loader";
 import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
 import {
@@ -703,6 +704,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   const randomPoolPageSize = 120;
   const {
     data: randomPoolData,
+    isPending: randomPoolLoading,
     isFetchingNextPage: randomPoolLoadingMore,
     hasNextPage: hasMoreRandomPool,
     fetchNextPage: fetchNextRandomPoolPage,
@@ -1241,6 +1243,12 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                         ? "Searching..."
                         : `Showing ${cards.length === 0 ? 0 : searchOffset + 1}-${searchOffset + cards.length} on page ${searchPage}.`}
                     </p>
+                    {isLiveSearching ? (
+                      <Loader
+                        title="Searching discover"
+                        subtitle="Finding the best matches for your query..."
+                      />
+                    ) : null}
                   </>
                 ) : (
                   <p className="games-search-results__count">
@@ -1330,7 +1338,12 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                   className="games-search-grid-section"
                   aria-live="polite"
                 >
-                  {cards.length ? (
+                  {isLiveSearching && cards.length === 0 ? (
+                    <Loader
+                      title="Loading results"
+                      subtitle="Pulling in matching games..."
+                    />
+                  ) : cards.length ? (
                     <div className="games-search-grid">
                       {cards.map((game) => (
                         <Card
@@ -1385,13 +1398,23 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
               ) : null}
               {!normalizedSearchQuery ? (
                 <div ref={randomLanesSectionRef} className="discover-random">
+                  {randomPoolLoading && visibleDisplayedDiscoverCarousels.length === 0 ? (
+                    <Loader
+                      fullScreen
+                      title="Building discover lanes"
+                      subtitle="Mixing random, genre, and momentum picks..."
+                    />
+                  ) : null}
                   {questionnaireComplete ? (
                     recommendationLoading ? (
                       <div
                         ref={recommendationSectionRef}
                         className="games-recommendation-state"
                       >
-                        Refreshing algorithm verdicts...
+                        <Loader
+                          title="Refreshing algorithm verdicts"
+                          subtitle="Recomputing recommendations from your answers..."
+                        />
                       </div>
                     ) : recommendationError ? (
                       <div

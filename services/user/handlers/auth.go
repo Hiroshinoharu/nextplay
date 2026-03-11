@@ -29,6 +29,9 @@ func Register(c *fiber.Ctx) error {
 	if req.Username == "" || req.Email == "" || req.Password == "" || !strings.Contains(req.Email, "@") {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid input"})
 	}
+	if err := auth.ValidatePasswordPolicy(req.Password); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
 
 	// Check database connection
 	if db.DB == nil {

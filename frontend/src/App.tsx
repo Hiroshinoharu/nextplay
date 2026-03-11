@@ -11,6 +11,7 @@ import SearchPage from "./discover";
 import UserPage from "./user";
 import Login from "./login";
 import { type AuthUser } from "./utils/authUser";
+import Loader from "./components/Loader";
 
 // Types for health check statuses
 type HealthStatus = "idle" | "loading" | "ok" | "error";
@@ -76,6 +77,33 @@ const HEALTH_SERVICE_LABELS: Record<string, string> = {
   recommender: "Recommender Service",
 };
 
+type RouteTransitionLoaderProps = {
+  title: string;
+  subtitle: string;
+};
+
+const RouteTransitionLoader = ({ title, subtitle }: RouteTransitionLoaderProps) => {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const timeoutMs = prefersReducedMotion ? 140 : 460;
+    const timeout = window.setTimeout(() => {
+      setVisible(false);
+    }, timeoutMs);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, []);
+
+  if (!visible) return null;
+
+  return <Loader fullScreen title={title} subtitle={subtitle} />;
+};
+
 // Coerce unknown payload into AuthUser or null
 const coerceAuthUser = (payload: unknown): AuthUser | null => {
   // We check for common ID fields (id, user_id, userId) and accept both number and string formats. For username and email, we only accept string values. For steam_linked, we check both possible keys and accept boolean values.
@@ -132,7 +160,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
   const pageCountTarget = 4;
   const totalLimit = pageCountTarget * 4;
   const [popularGames, setPopularGames] = useState<PopularGame[]>([]);
-  const popularYear = 2025;
+  const popularYear = 2026;
   const [popularLoading, setPopularLoading] = useState(false);
   const [popularError, setPopularError] = useState<string | null>(null);
 
@@ -271,7 +299,10 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
               Unable to load popular games: {popularError}
             </p>
           ) : popularLoading ? (
-            <p className="popular__status">Loading popular games...</p>
+            <Loader
+              title="Loading popular games"
+              subtitle="Curating what players are into right now..."
+            />
           ) : popularGames.length === 0 ? (
             <p className="popular__status">No popular games found yet.</p>
           ) : (
@@ -491,6 +522,7 @@ const HealthPage = () => {
 
 function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const unauthorizedRedirectingRef = useRef(false);
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
     if (typeof window === "undefined") return null;
@@ -546,54 +578,72 @@ function App() {
     };
   }, [authUser, handleSignOut, navigate]);
 
+  const loaderTitle =
+    location.pathname === "/"
+      ? "Booting NextPlay"
+      : location.pathname === "/discover"
+        ? "Scanning game worlds"
+        : location.pathname === "/games"
+          ? "Loading your library"
+          : location.pathname === "/login"
+            ? "Preparing secure sign-in"
+            : "Loading your next screen";
+
   return (
-    <Routes>
-      <Route
-        path="/"
-        element={
-          authUser ? (
-            <Navigate to="/games" replace />
-          ) : (
-            <Home authUser={authUser} onSignOut={handleSignOut} />
-          )
-        }
+    <>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            authUser ? (
+              <Navigate to="/games" replace />
+            ) : (
+              <Home authUser={authUser} onSignOut={handleSignOut} />
+            )
+          }
+        />
+        <Route
+          path="/games"
+          element={authUser ? <Games authUser={authUser} /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/discover"
+          element={authUser ? <SearchPage authUser={authUser} /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/games/:gameId"
+          element={authUser ? <Game authUser={authUser} /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/login"
+          element={
+            <Login apiBaseUrl={API_ROOT} authUser={authUser} onAuthSuccess={handleAuthSuccess} />
+          }
+        />
+        <Route
+          path="/user"
+          element={
+            <UserPage authUser={authUser} onSignOut={handleSignOut} />
+          }
+        />
+        <Route path="/health" element={<HealthPage />} />
+        <Route
+          path="*"
+          element={
+            authUser ? (
+              <Navigate to="/games" replace />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+      </Routes>
+      <RouteTransitionLoader
+        key={location.pathname}
+        title={loaderTitle}
+        subtitle="Polishing data, visuals, and recommendations..."
       />
-      <Route
-        path="/games"
-        element={authUser ? <Games authUser={authUser} /> : <Navigate to="/login" replace />}
-      />
-      <Route
-        path="/discover"
-        element={authUser ? <SearchPage authUser={authUser} /> : <Navigate to="/login" replace />}
-      />
-      <Route
-        path="/games/:gameId"
-        element={authUser ? <Game authUser={authUser} /> : <Navigate to="/login" replace />}
-      />
-      <Route
-        path="/login"
-        element={
-          <Login apiBaseUrl={API_ROOT} authUser={authUser} onAuthSuccess={handleAuthSuccess} />
-        }
-      />
-      <Route
-        path="/user"
-        element={
-          <UserPage authUser={authUser} onSignOut={handleSignOut} />
-        }
-      />
-      <Route path="/health" element={<HealthPage />} />
-      <Route
-        path="*"
-        element={
-          authUser ? (
-            <Navigate to="/games" replace />
-          ) : (
-            <Navigate to="/" replace />
-          )
-        }
-      />
-    </Routes>
+    </>
   );
 }
 

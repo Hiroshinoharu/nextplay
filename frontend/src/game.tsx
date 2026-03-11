@@ -9,6 +9,7 @@ import GameCarousel from "./components/GameCarousel";
 import ScreenshotGallery from "./components/ScreenshotGallery";
 import Searchbar from "./components/Searchbar";
 import TrailerGallery from "./components/TrailerGallery";
+import Loader from "./components/Loader";
 import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
 import "./game.css";
@@ -728,7 +729,10 @@ function Game({ authUser }: GameProps) {
         <main className="game-content">
           {gameLoading && (
             <div className="game-panel game-panel--loading">
-              Loading game details...
+              <Loader
+                title="Loading game details"
+                subtitle="Fetching media, metadata, and related content..."
+              />
             </div>
           )}
 
@@ -764,7 +768,12 @@ function Game({ authUser }: GameProps) {
                   {!authUser?.id ? (
                     <div className="game-gallery__empty">Sign in to rate, review, like, and favorite this game.</div>
                   ) : interactionLoading ? (
-                    <div className="game-gallery__empty">Loading your interaction...</div>
+                    <div className="game-gallery__empty">
+                      <Loader
+                        title="Loading your interaction"
+                        subtitle="Checking saved ratings and notes..."
+                      />
+                    </div>
                   ) : (
                     <div className="game-interaction">
                       <div className="game-interaction__row">
@@ -1008,7 +1017,12 @@ function Game({ authUser }: GameProps) {
           {game && !gameLoading ? (
             <section className="game-related">
               {relatedLoading ? (
-                <div className="game-gallery__empty">Loading games from the same franchise...</div>
+                <div className="game-gallery__empty">
+                  <Loader
+                    title="Loading franchise games"
+                    subtitle="Finding connected titles..."
+                  />
+                </div>
               ) : relatedError ? (
                 <div className="game-gallery__empty">{relatedError}</div>
               ) : relatedContent.length ? (
@@ -1034,7 +1048,12 @@ function Game({ authUser }: GameProps) {
           {game && !gameLoading ? (
             <section className="game-related">
               {additionalLoading ? (
-                <div className="game-gallery__empty">Loading additional content...</div>
+                <div className="game-gallery__empty">
+                  <Loader
+                    title="Loading additional content"
+                    subtitle="Gathering expansions and packs..."
+                  />
+                </div>
               ) : additionalError ? (
                 <div className="game-gallery__empty">{additionalError}</div>
               ) : additionalContent.length ? (
