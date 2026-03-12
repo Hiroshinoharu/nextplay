@@ -1,4 +1,4 @@
-.PHONY: retrain retrain-export retrain-from-db retrain-from-db-local
+.PHONY: retrain retrain-export retrain-from-db retrain-from-db-local recommender-balanced recommender-favorites-strong
 
 RETRAIN_SCRIPT := services/recommender/training/retrain.sh
 TRAINING_DIR := services/recommender/training
@@ -32,3 +32,14 @@ retrain-from-db-local: retrain-export
 	@$(BASH) $(RETRAIN_SCRIPT) $(ARGS) || { \
 		echo "Retrain completed but offline gate thresholds failed (non-blocking local mode)."; \
 	}
+
+recommender-balanced:
+	@docker compose -f $(COMPOSE_FILE) up -d --build recommender gateway
+	@echo "Recommender profile: balanced"
+
+recommender-balanced: SHELL := powershell.exe
+recommender-favorites-strong:
+	@$$env:RANK_WEIGHT_FAVORITE_KEYWORD="4.2"; $$env:RANK_WEIGHT_FAVORITE_PLATFORM="2.5"; $$env:RANK_WEIGHT_FAVORITE_GENRE="3.0"; $$env:RANK_WEIGHT_FAVORITE_TEXT_SIM="8.5"; $$env:RANK_WEIGHT_FAVORITE_SEED_BOOST="12.0"; docker compose -f $(COMPOSE_FILE) up -d --build recommender gateway
+	@echo "Recommender profile: favorites-strong"
+
+recommender-favorites-strong: SHELL := powershell.exe

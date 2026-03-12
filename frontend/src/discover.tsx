@@ -36,6 +36,10 @@ type GameItem = {
   total_rating?: number;
   total_rating_count?: number;
   popularity?: number;
+  media?: Array<{
+    media_type?: string;
+    url?: string;
+  }>;
 };
 
 type SearchPageResult = {
@@ -60,7 +64,13 @@ type RecommendResponse = {
 };
 
 const QUESTIONNAIRE_STORAGE_PREFIX = "nextplay_questionnaire_v1";
-const RESULT_PAGE_SIZE = 6;
+const RESULT_PAGE_SIZE = 10;
+const RECOMMENDATION_TARGET_SIZE = 100;
+const FAVORITE_GAMES_TARGET = 3;
+const FAVORITE_SEARCH_MIN_RATING = 65;
+const FAVORITE_SEARCH_MIN_VOTES = 100;
+const RECOMMENDATION_INITIAL_DETAIL_COUNT = 12;
+const RECOMMENDATION_DETAIL_BATCH_SIZE = 12;
 
 const INITIAL_ROW_ITEMS = 24;
 const ROW_STEP_ITEMS = 24;
@@ -121,10 +131,32 @@ const isReleasedGame = (game: GameItem, now: Date = new Date()) => {
   return parsed <= now;
 };
 
+const getGameVoteCount = (game: GameItem) =>
+  Math.max(
+    game.aggregated_rating_count ?? 0,
+    game.total_rating_count ?? 0,
+    game.popularity ?? 0,
+  );
+
+const getGameRating = (game: GameItem) =>
+  Math.max(game.aggregated_rating ?? 0, game.total_rating ?? 0);
+
 const normalizeMediaUrl = (url?: string) => {
   if (!url) return null;
   if (url.startsWith("//")) return `https:${url}`;
   return url;
+};
+
+const getPreferredCoverImage = (game: GameItem) => {
+  const primaryCover = normalizeMediaUrl(game.cover_image);
+  if (primaryCover) return primaryCover;
+  const media = Array.isArray(game.media) ? game.media : [];
+  const preferred = media.find((item) =>
+    ["cover", "screenshot", "artwork"].includes(
+      collapseWhitespace(item.media_type).toLowerCase(),
+    ),
+  );
+  return normalizeMediaUrl(preferred?.url);
 };
 
 const hashString = (value: string) => {
@@ -276,6 +308,81 @@ const shouldHideFromDiscover = (game: GameItem) =>
   isEpisodicOrSeasonalContentGame(game) ||
   !hasValidReleaseDate(game);
 
+const isEligibleFavoriteSearchGame = (game: GameItem) =>
+  !shouldHideFromDiscover(game) &&
+  isReleasedGame(game) &&
+  getGameRating(game) >= FAVORITE_SEARCH_MIN_RATING &&
+  getGameVoteCount(game) >= FAVORITE_SEARCH_MIN_VOTES;
+
+const fetchTopUpRecommendationGames = async (
+  needed: number,
+  existingIds: Set<number>,
+  authToken: string,
+): Promise<GameItem[]> => {
+  if (needed <= 0) return [];
+
+  const headers = authToken
+    ? { Authorization: `Bearer ${authToken}` }
+    : undefined;
+  const topUp: GameItem[] = [];
+  const pushCandidate = (game: GameItem) => {
+    if (topUp.length >= needed) return;
+    if (existingIds.has(game.id)) return;
+    if (shouldHideFromDiscover(game)) return;
+    existingIds.add(game.id);
+    topUp.push(game);
+  };
+
+  const candidateUrls = [
+    `${API_ROOT}/api/games/top?limit=300&min_rating_count=1&include_media=1`,
+    `${API_ROOT}/api/games?limit=300&offset=0&include_media=1&exclude_non_base=1`,
+  ];
+
+  for (const url of candidateUrls) {
+    if (topUp.length >= needed) break;
+    try {
+      const response = await fetch(url, { headers });
+      if (!response.ok) continue;
+      const payload = await response.json();
+      if (!Array.isArray(payload)) continue;
+      for (const raw of payload) {
+        if (!raw || typeof raw !== "object") continue;
+        const game = raw as GameItem;
+        if (typeof game.id !== "number") continue;
+        pushCandidate(game);
+        if (topUp.length >= needed) break;
+      }
+    } catch {
+      // Ignore top-up source errors and keep current recommendation list.
+    }
+  }
+
+  return topUp;
+};
+
+const fetchRecommendationDetailsByIds = async (
+  gameIds: number[],
+  authToken: string,
+): Promise<Array<GameItem | null>> => {
+  if (!gameIds.length) return [];
+  const results: Array<GameItem | null> = [];
+  for (let index = 0; index < gameIds.length; index += RECOMMENDATION_DETAIL_BATCH_SIZE) {
+    const batch = gameIds.slice(index, index + RECOMMENDATION_DETAIL_BATCH_SIZE);
+    const fetchedBatch = await Promise.all(
+      batch.map(async (gameId) => {
+        const response = await fetch(`${API_ROOT}/api/games/${gameId}`, {
+          ...(authToken ? { headers: { Authorization: `Bearer ${authToken}` } } : {}),
+        });
+        if (!response.ok) return null;
+        const game = (await response.json()) as GameItem;
+        return game && typeof game.id === "number" ? game : null;
+      }),
+    );
+    results.push(...fetchedBatch);
+  }
+  return results;
+};
+
 type DiscoverCarousel = {
   title: string;
   badge: string;
@@ -307,10 +414,13 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [recommendationStrategy, setRecommendationStrategy] = useState<string | null>(null);
   const [recommendedGames, setRecommendedGames] = useState<GameItem[]>([]);
+  const [favoriteGameIds, setFavoriteGameIds] = useState<number[]>([]);
+  const [favoriteSearchInput, setFavoriteSearchInput] = useState<string>("");
   const [resultPage, setResultPage] = useState<number>(1);
   const avatarText = useMemo(() => getUserInitials(authUser), [authUser]);
   const authToken = authUser?.token?.trim() ?? "";
   const randomPoolFetchPromiseRef = useRef<Promise<unknown> | null>(null);
+  const recommendationRunIdRef = useRef<number>(0);
   const recentBackfillAttemptsRef = useRef<number>(0);
   const searchGridSectionRef = useRef<HTMLElement | null>(null);
   const randomLanesSectionRef = useRef<HTMLDivElement | null>(null);
@@ -329,14 +439,21 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     if (!identity) return null;
     return `${QUESTIONNAIRE_STORAGE_PREFIX}:${identity}`;
   }, [authUser?.email, authUser?.id, authUser?.username]);
+  const questionnaireFavoritesStorageKey = useMemo(() => {
+    if (!questionnaireStorageKey) return null;
+    return `${questionnaireStorageKey}:favorite_games`;
+  }, [questionnaireStorageKey]);
   const showQuestionnaireBanner =
     !questionnaireComplete && !dismissedQuestionnaireBanner;
   const questionnaireQuestions = QUESTIONNAIRE_V1.questions;
-  const questionnaireTotal = questionnaireQuestions.length;
+  const questionnaireQuestionCount = questionnaireQuestions.length;
+  const questionnaireTotal = questionnaireQuestionCount + 1;
+  const isFavoriteQuestionStep = questionnaireStep === questionnaireQuestionCount;
   const activeQuestion = questionnaireQuestions[questionnaireStep] ?? null;
   const activeQuestionSelected = activeQuestion
     ? questionnaireAnswers[activeQuestion.id] ?? []
     : [];
+  const favoriteCount = favoriteGameIds.length;
   const answeredQuestionCount = useMemo(
     () =>
       questionnaireQuestions.reduce((count, question) => {
@@ -345,10 +462,12 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       }, 0),
     [questionnaireAnswers, questionnaireQuestions],
   );
+  const completedFavoriteStep = favoriteCount === FAVORITE_GAMES_TARGET ? 1 : 0;
+  const completedStepCount = answeredQuestionCount + completedFavoriteStep;
   const questionnaireProgressPercent = useMemo(() => {
     if (!questionnaireTotal) return 0;
-    return Math.round((answeredQuestionCount / questionnaireTotal) * 100);
-  }, [answeredQuestionCount, questionnaireTotal]);
+    return Math.round((completedStepCount / questionnaireTotal) * 100);
+  }, [completedStepCount, questionnaireTotal]);
 
   useEffect(() => {
     setDismissedQuestionnaireBanner(false);
@@ -383,6 +502,33 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   }, [questionnaireStorageKey]);
 
   useEffect(() => {
+    if (!questionnaireFavoritesStorageKey) {
+      setFavoriteGameIds([]);
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(questionnaireFavoritesStorageKey);
+      if (!raw) {
+        setFavoriteGameIds([]);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        setFavoriteGameIds([]);
+        return;
+      }
+      const normalized = parsed
+        .filter((item): item is number => Number.isFinite(item))
+        .map((item) => Number(item))
+        .filter((item) => item > 0)
+        .slice(0, FAVORITE_GAMES_TARGET);
+      setFavoriteGameIds(normalized);
+    } catch {
+      setFavoriteGameIds([]);
+    }
+  }, [questionnaireFavoritesStorageKey]);
+
+  useEffect(() => {
     if (!questionnaireStorageKey) return;
     try {
       localStorage.setItem(questionnaireStorageKey, JSON.stringify(questionnaireAnswers));
@@ -390,6 +536,18 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       // Ignore storage failures and continue.
     }
   }, [questionnaireAnswers, questionnaireStorageKey]);
+
+  useEffect(() => {
+    if (!questionnaireFavoritesStorageKey) return;
+    try {
+      localStorage.setItem(
+        questionnaireFavoritesStorageKey,
+        JSON.stringify(favoriteGameIds.slice(0, FAVORITE_GAMES_TARGET)),
+      );
+    } catch {
+      // Ignore storage failures and continue.
+    }
+  }, [favoriteGameIds, questionnaireFavoritesStorageKey]);
 
   useEffect(() => {
     setSearchInput(urlQuery);
@@ -406,11 +564,19 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       const selected = questionnaireAnswers[question.id] ?? [];
       return selected.length === 0;
     });
+    const shouldOpenFavoritesStep =
+      firstIncompleteIndex < 0 && favoriteGameIds.length !== FAVORITE_GAMES_TARGET;
     setShowQuestionnaireResult(false);
     setQuestionnaireValidationMessage(null);
-    setQuestionnaireStep(firstIncompleteIndex >= 0 ? firstIncompleteIndex : 0);
+    setQuestionnaireStep(
+      firstIncompleteIndex >= 0
+        ? firstIncompleteIndex
+        : shouldOpenFavoritesStep
+          ? questionnaireQuestionCount
+          : 0,
+    );
     setQuestionnaireOpen(true);
-  }, [questionnaireAnswers, questionnaireQuestions]);
+  }, [favoriteGameIds.length, questionnaireAnswers, questionnaireQuestionCount, questionnaireQuestions]);
 
   const {
     data: searchData,
@@ -466,6 +632,96 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   const hasMoreSearchResults = Boolean(searchData?.hasMore);
   const isLiveSearching =
     (isPending || isFetching) && normalizedSearchQuery.length > 0;
+  const normalizedFavoriteSearchInput = collapseWhitespace(favoriteSearchInput);
+  const {
+    data: favoriteSearchResults = [],
+    isFetching: favoriteSearchLoading,
+  } = useQuery<GameItem[], Error>({
+    queryKey: [
+      "discover-questionnaire-favorite-search",
+      normalizedFavoriteSearchInput,
+    ] as const,
+    enabled: questionnaireOpen && normalizedFavoriteSearchInput.length >= 2,
+    queryFn: async ({ signal }) => {
+      const query = new URLSearchParams({
+        q: normalizedFavoriteSearchInput,
+        mode: "contains",
+        limit: "8",
+        offset: "0",
+        include_media: "1",
+        exclude_non_base: "1",
+      });
+      const response = await fetch(
+        `${API_ROOT}/api/games/search?${query.toString()}`,
+        {
+          signal,
+          ...(authToken
+            ? { headers: { Authorization: `Bearer ${authToken}` } }
+            : {}),
+        },
+      );
+      if (!response.ok) {
+        return [];
+      }
+      const payload = await response.json();
+      if (!Array.isArray(payload)) return [];
+      const baseMatches = (payload as GameItem[])
+        .filter((game) => !shouldHideFromDiscover(game))
+        .filter((game) => !favoriteGameIds.includes(game.id));
+      const strictMatches = baseMatches.filter((game) => isEligibleFavoriteSearchGame(game));
+      const ranked = (strictMatches.length > 0 ? strictMatches : baseMatches).sort(
+        (left, right) => {
+          const votesDiff = getGameVoteCount(right) - getGameVoteCount(left);
+          if (votesDiff !== 0) return votesDiff;
+          const ratingDiff = getGameRating(right) - getGameRating(left);
+          if (ratingDiff !== 0) return ratingDiff;
+          return left.name.localeCompare(right.name);
+        },
+      );
+      return ranked.slice(0, 8);
+    },
+    staleTime: 30_000,
+  });
+  const {
+    data: favoriteSelectedGames = [],
+    isFetching: favoriteSelectedGamesLoading,
+  } = useQuery<GameItem[], Error>({
+    queryKey: [
+      "discover-questionnaire-favorite-selected",
+      favoriteGameIds.join(","),
+    ] as const,
+    enabled: favoriteGameIds.length > 0,
+    queryFn: async () => {
+      const fetched = await Promise.all(
+        favoriteGameIds.map(async (gameId) => {
+          const response = await fetch(`${API_ROOT}/api/games/${gameId}`, {
+            ...(authToken
+              ? { headers: { Authorization: `Bearer ${authToken}` } }
+              : {}),
+          });
+          if (!response.ok) return null;
+          const payload = (await response.json()) as GameItem;
+          return payload && typeof payload.id === "number" ? payload : null;
+        }),
+      );
+      const byId = new Map<number, GameItem>();
+      for (const item of fetched) {
+        if (!item) continue;
+        byId.set(item.id, item);
+      }
+      return favoriteGameIds
+        .map((id) => byId.get(id))
+        .filter((item): item is GameItem => Boolean(item))
+        .filter((item) => !shouldHideFromDiscover(item));
+    },
+    staleTime: 60_000,
+  });
+  useEffect(() => {
+    if (!favoriteGameIds.length || favoriteSelectedGamesLoading) return;
+    const allowedIds = new Set<number>(favoriteSelectedGames.map((game) => game.id));
+    if (allowedIds.size === favoriteGameIds.length) return;
+    setFavoriteGameIds((prev) => prev.filter((id) => allowedIds.has(id)));
+  }, [favoriteGameIds.length, favoriteSelectedGames, favoriteSelectedGamesLoading]);
   const handleSearchSubmit = useCallback(() => {
     setSearchPage(1);
     setSearchQuery(collapseWhitespace(searchInput));
@@ -477,6 +733,18 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     setSearchPage(1);
     navigate("/discover");
   }, [navigate]);
+  const addFavoriteGame = useCallback((game: GameItem) => {
+    setFavoriteGameIds((prev) => {
+      if (prev.includes(game.id)) return prev;
+      if (prev.length >= FAVORITE_GAMES_TARGET) return prev;
+      return [...prev, game.id];
+    });
+    setFavoriteSearchInput("");
+    setQuestionnaireValidationMessage(null);
+  }, []);
+  const removeFavoriteGame = useCallback((gameId: number) => {
+    setFavoriteGameIds((prev) => prev.filter((id) => id !== gameId));
+  }, []);
 
   const scrollToSection = useCallback((target: HTMLElement | null) => {
     if (!target) return;
@@ -499,6 +767,8 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   );
 
   const runQuestionnaireRecommendation = useCallback(async () => {
+    const runId = recommendationRunIdRef.current + 1;
+    recommendationRunIdRef.current = runId;
     if (!authUser?.id || !questionnaireComplete) {
       setRecommendedGames([]);
       setRecommendationStrategy(null);
@@ -509,7 +779,11 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     setRecommendationLoading(true);
     setRecommendationError(null);
     try {
-      const payload = buildRecommendRequestFromQuestionnaire(authUser.id, questionnaireAnswers);
+      const payload = buildRecommendRequestFromQuestionnaire(
+        authUser.id,
+        questionnaireAnswers,
+        favoriteGameIds,
+      );
       const response = await fetch(`${API_ROOT}/api/recommend`, {
         method: "POST",
         headers: {
@@ -534,23 +808,49 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
         return true;
       }
 
-      const fetched = await Promise.all(
-        candidateIds.map(async (gameId) => {
-          const gameResponse = await fetch(`${API_ROOT}/api/games/${gameId}`, {
-            ...(authToken ? { headers: { Authorization: `Bearer ${authToken}` } } : {}),
-          });
-          if (!gameResponse.ok) return null;
-          const game = (await gameResponse.json()) as GameItem;
-          return game && typeof game.id === "number" ? game : null;
-        }),
-      );
+      const cappedIds = Array.from(new Set(candidateIds)).slice(0, RECOMMENDATION_TARGET_SIZE);
+      const initialIds = cappedIds.slice(0, RECOMMENDATION_INITIAL_DETAIL_COUNT);
+      const remainingIds = cappedIds.slice(RECOMMENDATION_INITIAL_DETAIL_COUNT);
 
-      setRecommendedGames(
-        fetched.filter((game): game is GameItem => {
-          if (!game) return false;
-          return !shouldHideFromDiscover(game);
-        }),
-      );
+      const initialFetched = await fetchRecommendationDetailsByIds(initialIds, authToken);
+      if (recommendationRunIdRef.current !== runId) return false;
+      const initialVisibleRecommendations = initialFetched.filter((game): game is GameItem => {
+        if (!game) return false;
+        return !shouldHideFromDiscover(game);
+      });
+
+      setRecommendedGames(initialVisibleRecommendations);
+      setRecommendationLoading(false);
+
+      void (async () => {
+        const remainingFetched = await fetchRecommendationDetailsByIds(remainingIds, authToken);
+        if (recommendationRunIdRef.current !== runId) return;
+        const fullVisibleRecommendations = [
+          ...initialVisibleRecommendations,
+          ...remainingFetched.filter((game): game is GameItem => {
+            if (!game) return false;
+            return !shouldHideFromDiscover(game);
+          }),
+        ];
+        const dedupedRecommendations = fullVisibleRecommendations.filter((game, index, all) =>
+          all.findIndex((candidate) => candidate.id === game.id) === index,
+        );
+        if (dedupedRecommendations.length < RECOMMENDATION_TARGET_SIZE) {
+          const existingIds = new Set<number>(
+            dedupedRecommendations.map((game) => game.id),
+          );
+          const topUp = await fetchTopUpRecommendationGames(
+            RECOMMENDATION_TARGET_SIZE - dedupedRecommendations.length,
+            existingIds,
+            authToken,
+          );
+          dedupedRecommendations.push(...topUp);
+        }
+        if (recommendationRunIdRef.current !== runId) return;
+        setRecommendedGames(
+          dedupedRecommendations.slice(0, RECOMMENDATION_TARGET_SIZE),
+        );
+      })();
       return true;
     } catch (err) {
       setRecommendedGames([]);
@@ -559,7 +859,13 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     } finally {
       setRecommendationLoading(false);
     }
-  }, [authToken, authUser?.id, questionnaireAnswers, questionnaireComplete]);
+  }, [
+    authToken,
+    authUser?.id,
+    favoriteGameIds,
+    questionnaireAnswers,
+    questionnaireComplete,
+  ]);
 
   useEffect(() => {
     void runQuestionnaireRecommendation();
@@ -630,6 +936,12 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       setQuestionnaireValidationMessage("Please complete all questions before saving.");
       return;
     }
+    if (favoriteGameIds.length !== FAVORITE_GAMES_TARGET) {
+      setQuestionnaireValidationMessage(
+        `Please pick exactly ${FAVORITE_GAMES_TARGET} favorite games.`,
+      );
+      return;
+    }
     setQuestionnaireValidationMessage(null);
     if (questionnaireStorageKey) {
       try {
@@ -642,6 +954,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     const success = await runQuestionnaireRecommendation();
     setShowQuestionnaireResult(success);
   }, [
+    favoriteGameIds.length,
     questionnaireQuestions,
     questionnaireAnswers,
     questionnaireComplete,
@@ -653,20 +966,10 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     openQuestionnaireFlow();
   }, [openQuestionnaireFlow]);
 
-  const rankedRecommendedGames = useMemo(() => {
-    if (recommendedGames.length <= 1) return recommendedGames;
-    const answerSignature = Object.entries(questionnaireAnswers)
-      .map(([questionId, selected]) => `${questionId}:${[...selected].sort().join(",")}`)
-      .sort()
-      .join("|");
-    const headWindow = Math.min(4, recommendedGames.length);
-    const offset = hashString(answerSignature) % headWindow;
-    if (offset === 0) return recommendedGames;
-    return [
-      recommendedGames[offset],
-      ...recommendedGames.filter((_, index) => index !== offset),
-    ];
-  }, [questionnaireAnswers, recommendedGames]);
+  const rankedRecommendedGames = useMemo(
+    () => recommendedGames,
+    [recommendedGames],
+  );
 
   const topRecommendedGame = useMemo(
     () => rankedRecommendedGames[0] ?? null,
@@ -1351,9 +1654,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                           title={game.name || "Untitled"}
                           description={getExploreDescription(game)}
                           icon={
-                            normalizeMediaUrl(game.cover_image) ? (
+                            getPreferredCoverImage(game) ? (
                               <img
-                                src={normalizeMediaUrl(game.cover_image) ?? ""}
+                                src={getPreferredCoverImage(game) ?? ""}
                                 alt={game.name || "Game cover"}
                                 className="card__image"
                                 loading="lazy"
@@ -1439,9 +1742,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
 
                           <section className="games-result__card">
                             <div className="games-result__poster">
-                              {normalizeMediaUrl(topRecommendedGame.cover_image) ? (
+                              {getPreferredCoverImage(topRecommendedGame) ? (
                                 <img
-                                  src={normalizeMediaUrl(topRecommendedGame.cover_image) ?? ""}
+                                  src={getPreferredCoverImage(topRecommendedGame) ?? ""}
                                   alt={topRecommendedGame.name || "Top recommendation cover"}
                                   loading="lazy"
                                 />
@@ -1485,7 +1788,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                               <div className="games-result__list-grid">
                                 {pagedAdditionalRecommendations.map((game, index) => {
                                   const rank = 2 + ((currentResultPage - 1) * RESULT_PAGE_SIZE) + index;
-                                  const coverUrl = normalizeMediaUrl(game.cover_image);
+                                  const coverUrl = getPreferredCoverImage(game);
                                   return (
                                     <button
                                       key={`discover-result-${game.id}`}
@@ -1646,7 +1949,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                 {`Question ${Math.min(questionnaireStep + 1, questionnaireTotal)} of ${questionnaireTotal}`}
               </p>
               <p className="games-questionnaire__progress-count">
-                {`${answeredQuestionCount}/${questionnaireTotal} answered`}
+                {`${completedStepCount}/${questionnaireTotal} answered`}
               </p>
             </div>
             <div
@@ -1663,7 +1966,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
               />
             </div>
             <div className="games-questionnaire__body">
-              {activeQuestion ? (
+              {!isFavoriteQuestionStep && activeQuestion ? (
                 <section key={activeQuestion.id} className="games-questionnaire__question">
                   <h3>{activeQuestion.prompt}</h3>
                   <p className="games-questionnaire__hint">
@@ -1695,6 +1998,75 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                   </div>
                 </section>
               ) : null}
+              {isFavoriteQuestionStep ? (
+                <section className="games-questionnaire__question games-questionnaire__question--favorites">
+                  <h3>{`Top ${FAVORITE_GAMES_TARGET} games of all time`}</h3>
+                  <p className="games-questionnaire__hint">
+                    This final step boosts recommendation quality. Search is filtered to released, high-confidence titles. Pick exactly 3 games.
+                  </p>
+                  <input
+                    type="text"
+                    className="games-questionnaire__search-input"
+                    placeholder="Search game title..."
+                    value={favoriteSearchInput}
+                    onChange={(event) => setFavoriteSearchInput(event.target.value)}
+                    disabled={favoriteCount >= FAVORITE_GAMES_TARGET}
+                  />
+                  <p className="games-questionnaire__hint games-questionnaire__favorites-count">
+                    {`Selected ${favoriteCount}/${FAVORITE_GAMES_TARGET}`}
+                  </p>
+                  {favoriteSelectedGames.length > 0 ? (
+                    <div className="games-questionnaire__favorites">
+                      {favoriteSelectedGames.map((game) => (
+                        <button
+                          key={`favorite-selected-${game.id}`}
+                          type="button"
+                          className="games-questionnaire__favorite-chip"
+                          onClick={() => removeFavoriteGame(game.id)}
+                        >
+                          {`${game.name} x`}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  {favoriteSearchInput.trim().length >= 2 ? (
+                    <div className="games-questionnaire__favorites-search-results">
+                      {favoriteSearchLoading ? (
+                        <p className="games-questionnaire__hint">Searching...</p>
+                      ) : favoriteSearchResults.length > 0 ? (
+                        favoriteSearchResults.map((game) => (
+                          <button
+                            key={`favorite-search-${game.id}`}
+                            type="button"
+                            className="games-questionnaire__favorite-result"
+                            onClick={() => addFavoriteGame(game)}
+                            disabled={favoriteCount >= FAVORITE_GAMES_TARGET}
+                          >
+                            <span className="games-questionnaire__favorite-result-cover" aria-hidden="true">
+                              {getPreferredCoverImage(game) ? (
+                                <img
+                                  src={getPreferredCoverImage(game) ?? ""}
+                                  alt=""
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <span className="games-questionnaire__favorite-result-cover-fallback">
+                                  No image
+                                </span>
+                              )}
+                            </span>
+                            <span className="games-questionnaire__favorite-result-name">
+                              {game.name}
+                            </span>
+                          </button>
+                        ))
+                      ) : (
+                        <p className="games-questionnaire__hint">No matches found.</p>
+                      )}
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
             </div>
             {questionnaireValidationMessage ? (
               <p className="games-questionnaire__validation">{questionnaireValidationMessage}</p>
@@ -1719,7 +2091,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                 >
                   Previous
                 </button>
-                {questionnaireStep < questionnaireTotal - 1 ? (
+                {!isFavoriteQuestionStep ? (
                   <button
                     type="button"
                     className="games-questionnaire__button games-questionnaire__button--primary"
@@ -1735,7 +2107,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                     onClick={() => {
                       void handleQuestionnaireSubmit();
                     }}
-                    disabled={activeQuestionSelected.length === 0 || recommendationLoading}
+                    disabled={
+                      recommendationLoading || favoriteCount !== FAVORITE_GAMES_TARGET
+                    }
                   >
                     {recommendationLoading ? "Saving..." : "Save and get recommendations"}
                   </button>
@@ -1758,9 +2132,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
             {topRecommendedGame ? (
               <section className="games-result__card">
                 <div className="games-result__poster">
-                  {normalizeMediaUrl(topRecommendedGame.cover_image) ? (
+                  {getPreferredCoverImage(topRecommendedGame) ? (
                     <img
-                      src={normalizeMediaUrl(topRecommendedGame.cover_image) ?? ""}
+                      src={getPreferredCoverImage(topRecommendedGame) ?? ""}
                       alt={topRecommendedGame.name || "Top recommendation cover"}
                       loading="lazy"
                     />

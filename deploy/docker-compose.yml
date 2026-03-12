@@ -110,6 +110,21 @@ services:
     environment:
       CONFIG_FILE: /config/config.yaml
       PORT: "8082"
+      # Hybrid ranking weights: defaults below = balanced profile.
+      # Override these via environment or Make targets for A/B tuning.
+      RANK_WEIGHT_LIKED_KEYWORD: "${RANK_WEIGHT_LIKED_KEYWORD:-4.0}"
+      RANK_WEIGHT_LIKED_PLATFORM: "${RANK_WEIGHT_LIKED_PLATFORM:-2.5}"
+      RANK_WEIGHT_ANSWER_TOKEN: "${RANK_WEIGHT_ANSWER_TOKEN:-1.6}"
+      RANK_WEIGHT_FAVORITE_KEYWORD: "${RANK_WEIGHT_FAVORITE_KEYWORD:-3.0}"
+      RANK_WEIGHT_FAVORITE_PLATFORM: "${RANK_WEIGHT_FAVORITE_PLATFORM:-1.8}"
+      RANK_WEIGHT_FAVORITE_GENRE: "${RANK_WEIGHT_FAVORITE_GENRE:-2.2}"
+      RANK_WEIGHT_FAVORITE_TEXT_SIM: "${RANK_WEIGHT_FAVORITE_TEXT_SIM:-6.5}"
+      RANK_WEIGHT_DISLIKED_KEYWORD: "${RANK_WEIGHT_DISLIKED_KEYWORD:-5.5}"
+      RANK_WEIGHT_DISLIKED_PLATFORM: "${RANK_WEIGHT_DISLIKED_PLATFORM:-4.0}"
+      RANK_WEIGHT_MODEL_SEED_BOOST: "${RANK_WEIGHT_MODEL_SEED_BOOST:-3.0}"
+      RANK_WEIGHT_FAVORITE_SEED_BOOST: "${RANK_WEIGHT_FAVORITE_SEED_BOOST:-6.0}"
+      RANK_CAP_POPULARITY: "${RANK_CAP_POPULARITY:-1.2}"
+      RANK_CAP_RATING: "${RANK_CAP_RATING:-1.0}"
     volumes:
       - ./config/config.yaml:/config/config.yaml:ro
       - ../services/recommender/training/artifacts/current:/models/recommender/current:ro

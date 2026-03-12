@@ -13,6 +13,16 @@ from services.recommender.training.dataset_pipeline import (
 
 
 def test_generate_seeded_interactions_is_deterministic() -> None:
+    """
+    Verify that generate_seeded_interactions produces the same output given the same inputs.
+
+    This test is important because it ensures that the seeding process is reproducible, which is
+    a critical property for generating consistent experiment results.
+
+    The test generates two sets of seeded interactions using the same inputs and asserts that they are equal.
+    Additionally, it asserts that the generated interactions are non-empty.
+
+    """
     first = generate_seeded_interactions(
         seed=42,
         users=10,
@@ -32,6 +42,14 @@ def test_generate_seeded_interactions_is_deterministic() -> None:
 
 
 def test_merge_interaction_rows_with_external_csv(tmp_path: Path) -> None:
+    """
+    Verify that merge_interaction_rows correctly merges seeded interactions with external CSV data.
+
+    The test creates a temporary CSV file with a single interaction row, and then merges this data with a
+    set of seeded interactions. It asserts that the resulting merged dataset contains the same number of
+    interactions as the sum of the seeded interactions and the external interactions, and that the external
+    interaction is present in the merged dataset.
+    """
     ext_csv = tmp_path / "export.csv"
     with ext_csv.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(
@@ -64,6 +82,15 @@ def test_merge_interaction_rows_with_external_csv(tmp_path: Path) -> None:
 
 
 def test_evaluate_dataset_quality_catches_low_coverage(tmp_path: Path) -> None:
+    """
+    Verify that evaluate_dataset_quality catches datasets with fewer than the minimum required interactions.
+
+    The test creates three empty CSV files for the train, validation, and test datasets, and then runs
+    evaluate_dataset_quality on the profile built from these datasets. It asserts that the function returns
+    a list of failures, and that one of the failures is due to the dataset having fewer than the minimum
+    required interactions.
+
+    """
     train_csv = tmp_path / "train.csv"
     validation_csv = tmp_path / "validation.csv"
     test_csv = tmp_path / "test.csv"

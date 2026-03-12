@@ -809,6 +809,123 @@
   padding: 8px 10px;
 }
 
+.games-questionnaire__question--favorites {
+  border-color: rgba(140, 243, 122, 0.34);
+  background:
+    radial-gradient(circle at 8% 18%, rgba(140, 243, 122, 0.12), transparent 48%),
+    linear-gradient(145deg, rgba(6, 18, 29, 0.86), rgba(8, 24, 38, 0.68));
+}
+
+.games-questionnaire__search-input {
+  width: 100%;
+  border: 1px solid rgba(140, 243, 122, 0.34);
+  border-radius: 10px;
+  background: rgba(5, 16, 25, 0.9);
+  color: var(--games-text);
+  font-size: 13px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.games-questionnaire__search-input::placeholder {
+  color: var(--games-subtle);
+}
+
+.games-questionnaire__search-input:focus-visible {
+  outline: 2px solid rgba(140, 243, 122, 0.6);
+  outline-offset: 1px;
+}
+
+.games-questionnaire__favorites-count {
+  margin-bottom: 8px;
+}
+
+.games-questionnaire__favorites {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.games-questionnaire__favorite-chip {
+  border-radius: 999px;
+  border: 1px solid rgba(140, 243, 122, 0.5);
+  background: rgba(140, 243, 122, 0.18);
+  color: #e8ff9f;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.games-questionnaire__favorite-chip:hover {
+  border-color: rgba(140, 243, 122, 0.74);
+  background: rgba(140, 243, 122, 0.26);
+}
+
+.games-questionnaire__favorites-search-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.games-questionnaire__favorite-result {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(140, 243, 122, 0.28);
+  background: rgba(10, 30, 48, 0.6);
+  color: var(--games-text);
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.games-questionnaire__favorite-result-cover {
+  width: 42px;
+  height: 54px;
+  border-radius: 7px;
+  overflow: hidden;
+  border: 1px solid rgba(140, 243, 122, 0.22);
+  background: rgba(5, 16, 25, 0.88);
+  display: grid;
+  place-items: center;
+}
+
+.games-questionnaire__favorite-result-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.games-questionnaire__favorite-result-cover-fallback {
+  font-size: 9px;
+  color: var(--games-muted);
+  text-align: center;
+  padding: 2px;
+}
+
+.games-questionnaire__favorite-result-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.games-questionnaire__favorite-result:hover {
+  border-color: rgba(140, 243, 122, 0.58);
+  background: rgba(11, 38, 58, 0.74);
+}
+
+.games-questionnaire__favorite-result:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .games-result-backdrop {
   position: fixed;
   inset: 0;
@@ -1803,6 +1920,10 @@
   .games-questionnaire__button {
     flex: 1 1 100%;
     text-align: center;
+  }
+
+  .games-questionnaire__favorites-search-results {
+    grid-template-columns: 1fr;
   }
 
   .games-quick-actions {

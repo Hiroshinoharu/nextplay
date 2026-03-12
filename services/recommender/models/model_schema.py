@@ -17,6 +17,7 @@ class ModelInputSchema(BaseModel):
     liked_platform_ids: list[int] = Field(default_factory=list)
     disliked_keyword_ids: list[int] = Field(default_factory=list)
     disliked_platform_ids: list[int] = Field(default_factory=list)
+    favorite_game_ids: list[int] = Field(default_factory=list)
     questionnaire: dict[str, Any] = Field(default_factory=dict)
     feature_schema_version: str = FEATURE_SCHEMA_VERSION
 
@@ -50,6 +51,7 @@ class ModelInputSchema(BaseModel):
             liked_platform_ids=list(payload.liked_platforms),
             disliked_keyword_ids=list(payload.disliked_keywords),
             disliked_platform_ids=list(payload.disliked_platforms),
+            favorite_game_ids=list(payload.favorite_game_ids),
             questionnaire=dict(raw_questionnaire),
             feature_schema_version=schema_version or FEATURE_SCHEMA_VERSION,
         )

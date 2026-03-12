@@ -9,6 +9,7 @@ class RecommendRequest(BaseModel):
     liked_platforms: List[int] = Field(default_factory=list)
     disliked_keywords: List[int] = Field(default_factory=list)
     disliked_platforms: List[int] = Field(default_factory=list)
+    favorite_game_ids: List[int] = Field(default_factory=list)
     # Legacy field kept for backward compatibility.
     questionnaire: Optional[dict[str, Any]] = None
     # Preferred Stage 2 field: raw questionnaire blob for logging/future features.

@@ -8,6 +8,8 @@ from typing import Any, Protocol
 from .feature_contract import build_feature_vector_from_payload
 from .model_schema import ModelCandidateScore, ModelInputSchema, ModelOutputSchema
 
+MAX_MODEL_CANDIDATES = 100
+
 class InferenceService(Protocol):
     """
     Protocol for inference service that can be implemented with different ML frameworks.
@@ -75,7 +77,7 @@ class KerasInferenceService:
 
         candidates = [
             ModelCandidateScore(game_id=game_id, score=float(score), rank=rank)
-            for rank, (game_id, score) in enumerate(ranked[:10], start=1)
+            for rank, (game_id, score) in enumerate(ranked[:MAX_MODEL_CANDIDATES], start=1)
         ]
 
         return ModelOutputSchema(
