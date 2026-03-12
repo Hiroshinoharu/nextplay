@@ -720,6 +720,7 @@
   border-radius: 12px;
   padding: 10px;
   background: rgba(6, 18, 28, 0.55);
+  overflow-x: hidden;
 }
 
 .games-questionnaire__question h3 {
@@ -818,6 +819,8 @@
 
 .games-questionnaire__search-input {
   width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   border: 1px solid rgba(140, 243, 122, 0.34);
   border-radius: 10px;
   background: rgba(5, 16, 25, 0.9);
@@ -867,6 +870,14 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 8px;
+}
+
+.games-questionnaire__favorites-pagination {
+  grid-column: 1 / -1;
+  width: 100%;
+  padding-top: 4px;
+  gap: 10px;
+  flex-wrap: nowrap;
 }
 
 .games-questionnaire__favorite-result {

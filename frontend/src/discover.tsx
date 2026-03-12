@@ -47,6 +47,11 @@ type SearchPageResult = {
   hasMore: boolean;
 };
 
+type FavoriteSearchResult = {
+  items: GameItem[];
+  hasMore: boolean;
+};
+
 type RandomPoolPage = {
   items: GameItem[];
   page: number;
@@ -61,12 +66,18 @@ type RecommendResponse = {
   user_id: number;
   recommended_games: number[];
   strategy?: string;
+  scored_recommendations?: Array<{
+    game_id: number;
+    rank?: number;
+    score?: number;
+  }>;
 };
 
 const QUESTIONNAIRE_STORAGE_PREFIX = "nextplay_questionnaire_v1";
 const RESULT_PAGE_SIZE = 10;
-const RECOMMENDATION_TARGET_SIZE = 100;
+const RECOMMENDATION_TARGET_SIZE = 30;
 const FAVORITE_GAMES_TARGET = 3;
+const FAVORITE_SEARCH_PAGE_SIZE = 8;
 const FAVORITE_SEARCH_MIN_RATING = 65;
 const FAVORITE_SEARCH_MIN_VOTES = 100;
 const RECOMMENDATION_INITIAL_DETAIL_COUNT = 12;
@@ -113,6 +124,17 @@ const collapseWhitespace = (value?: string) => {
   return value.replace(/\s+/g, " ").trim();
 };
 
+const normalizeTitleForSearch = (value?: string) =>
+  collapseWhitespace(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const isLikelyVariantTitle = (value?: string) =>
+  /\b(remaster(?:ed)?|remake|reload|royal|strikers|tactica|dancing|episode|season|chapter|update|pack|dlc|definitive|deluxe|ultimate|collection|anthology)\b/i.test(
+    value ?? "",
+  );
+
 const formatReleaseDate = (value?: string) => {
   if (!value) return null;
   const parsed = new Date(value);
@@ -138,8 +160,23 @@ const getGameVoteCount = (game: GameItem) =>
     game.popularity ?? 0,
   );
 
+const getGameRatingCount = (game: GameItem) =>
+  Math.max(game.aggregated_rating_count ?? 0, game.total_rating_count ?? 0);
+
 const getGameRating = (game: GameItem) =>
   Math.max(game.aggregated_rating ?? 0, game.total_rating ?? 0);
+
+const clampNumber = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+
+const tokenizePreferenceText = (value?: string) => {
+  if (!value) return [] as string[];
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, " ");
+  return normalized
+    .split(" ")
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 3);
+};
 
 const normalizeMediaUrl = (url?: string) => {
   if (!url) return null;
@@ -147,6 +184,14 @@ const normalizeMediaUrl = (url?: string) => {
   return url;
 };
 
+/**
+ * Returns the preferred cover image for a given game.
+ * First tries to use the primary cover image, if that's null or undefined,
+ * then tries to find a suitable cover image from the game's media list.
+ * Prioritizes images with the type "cover", then "screenshot", and finally "artwork"
+ * @param game - The game item to retrieve the cover image for
+ * @returns The preferred cover image URL, or null if no suitable image is found
+ */
 const getPreferredCoverImage = (game: GameItem) => {
   const primaryCover = normalizeMediaUrl(game.cover_image);
   if (primaryCover) return primaryCover;
@@ -176,8 +221,50 @@ const stableOrderBySeed = (items: GameItem[], seed: string) =>
     return a.id - b.id;
   });
 
-const recommendationScoreFromRank = (rank: number) =>
-  Math.max(50, Math.round(100 - (rank - 1) * 2.5));
+/**
+ * Computes a weighted signal from a game item, its rank, and a personalization signal.
+ * The signal is a combination of the game's rank, rating, rating confidence, popularity, and personalization signal.
+ * The weights used are as follows:
+ * - rank: 0.42
+ * - rating: 0.2
+ * - rating confidence: 0.16
+ * - popularity: 0.08
+ * - personalization signal: 0.14
+ * @param game - the game item
+ * @param rank - the rank of the game
+ * @param personalizationSignal - the personalization signal
+ * @returns the weighted signal
+ */
+const recommendationRawSignalFromGame = (
+  game: GameItem,
+  rank: number,
+  personalizationSignal: number,
+) => {
+  const normalizedRank = clampNumber(
+    1 - (Math.max(rank, 1) - 1) / Math.max(RECOMMENDATION_TARGET_SIZE - 1, 1),
+    0,
+    1,
+  );
+  const normalizedRating = clampNumber(getGameRating(game) / 100, 0, 1);
+  const normalizedRatingConfidence = clampNumber(
+    Math.log10(getGameRatingCount(game) + 1) / 3.2,
+    0,
+    1,
+  );
+  const normalizedPopularity = clampNumber(
+    Math.log10((game.popularity ?? 0) + 1) / 3.5,
+    0,
+    1,
+  );
+
+  const weightedSignal =
+    (normalizedRank * 0.42) +
+    (normalizedRating * 0.2) +
+    (normalizedRatingConfidence * 0.16) +
+    (normalizedPopularity * 0.08) +
+    (clampNumber(personalizationSignal, 0, 1) * 0.14);
+  return weightedSignal;
+};
 
 // This parseGenres the genre string from the API, which may be a comma-separated list, and returns the first genre for display in the carousel description.
 const parseGenres = (value?: string) => {
@@ -266,9 +353,9 @@ const NORMALIZED_NSFW_TERMS = NSFW_TERMS.map((term) => normalizeFilterText(term)
 
 // A more comprehensive list of NSFW terms to check against game metadata for filtering out adult content from random carousels. This is still not perfect but should catch a wider range of explicit content based on common terminology.
 const NON_BASE_CONTENT_MATCHER =
-  /\b(dlc|downloadable content|expansion(?: pack)?|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|character pass|battle pass|starter pack|founder'?s pack|cosmetic(?: pack)?|skin(?: pack| set)?|costume(?: pack)?|outfit(?: pack)?|upgrade pack|item pack|consumable pack|limited edition|deluxe edition upgrade|ultimate edition upgrade)\b/i;
+  /\b(dlc|downloadable content|expansion(?: pack)?|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|character pass|battle pass|event pass|starter pack|founder'?s pack|cosmetic(?: pack)?|skin(?: pack| set)?|costume(?: pack)?|outfit(?: pack)?|upgrade pack|item pack|consumable pack|currency pack|booster pack|mission pack|limited edition|deluxe edition upgrade|ultimate edition upgrade)\b/i;
 const EPISODIC_LIVE_CONTENT_MATCHER =
-  /\b(episode\s*\d+|season\s*\d+|chapter\s*\d+|title update|content update|live service|patch\s*v?\d+|hotfix)\b/i;
+  /\b(episode\s*\d+|season\s*[0-9ivxlcdm]+|chapter\s*[0-9ivxlcdm]+(?:\s*[-:]\s*season\s*[0-9ivxlcdm]+)?|title update|content update|seasonal update|mid[- ]?season|live service|ranked split|split\s*\d+|rotation update|patch\s*v?\d+|hotfix|content drop)\b/i;
 
 const isNsfwGame = (game: GameItem) => {
   if (game.nsfw || game.is_nsfw || game.adult) return true;
@@ -317,6 +404,7 @@ const isEligibleFavoriteSearchGame = (game: GameItem) =>
 const fetchTopUpRecommendationGames = async (
   needed: number,
   existingIds: Set<number>,
+  excludedIds: Set<number>,
   authToken: string,
 ): Promise<GameItem[]> => {
   if (needed <= 0) return [];
@@ -328,6 +416,7 @@ const fetchTopUpRecommendationGames = async (
   const pushCandidate = (game: GameItem) => {
     if (topUp.length >= needed) return;
     if (existingIds.has(game.id)) return;
+    if (excludedIds.has(game.id)) return;
     if (shouldHideFromDiscover(game)) return;
     existingIds.add(game.id);
     topUp.push(game);
@@ -414,8 +503,12 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [recommendationStrategy, setRecommendationStrategy] = useState<string | null>(null);
   const [recommendedGames, setRecommendedGames] = useState<GameItem[]>([]);
+  const [backendRecommendationScores, setBackendRecommendationScores] = useState<Record<number, number>>({});
   const [favoriteGameIds, setFavoriteGameIds] = useState<number[]>([]);
   const [favoriteSearchInput, setFavoriteSearchInput] = useState<string>("");
+  const [favoriteSearchPage, setFavoriteSearchPage] = useState<number>(1);
+  const [debouncedFavoriteSearchInput, setDebouncedFavoriteSearchInput] =
+    useState<string>("");
   const [resultPage, setResultPage] = useState<number>(1);
   const avatarText = useMemo(() => getUserInitials(authUser), [authUser]);
   const authToken = authUser?.token?.trim() ?? "";
@@ -632,56 +725,124 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   const hasMoreSearchResults = Boolean(searchData?.hasMore);
   const isLiveSearching =
     (isPending || isFetching) && normalizedSearchQuery.length > 0;
-  const normalizedFavoriteSearchInput = collapseWhitespace(favoriteSearchInput);
+  const normalizedFavoriteSearchInput = collapseWhitespace(debouncedFavoriteSearchInput);
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedFavoriteSearchInput(favoriteSearchInput);
+    }, 220);
+    return () => window.clearTimeout(handle);
+  }, [favoriteSearchInput]);
+
+  useEffect(() => {
+    setFavoriteSearchPage(1);
+  }, [normalizedFavoriteSearchInput]);
+
   const {
-    data: favoriteSearchResults = [],
+    data: favoriteSearchData,
     isFetching: favoriteSearchLoading,
-  } = useQuery<GameItem[], Error>({
+  } = useQuery<FavoriteSearchResult, Error>({
     queryKey: [
       "discover-questionnaire-favorite-search",
       normalizedFavoriteSearchInput,
+      favoriteSearchPage,
     ] as const,
     enabled: questionnaireOpen && normalizedFavoriteSearchInput.length >= 2,
     queryFn: async ({ signal }) => {
-      const query = new URLSearchParams({
-        q: normalizedFavoriteSearchInput,
-        mode: "contains",
-        limit: "8",
-        offset: "0",
-        include_media: "1",
-        exclude_non_base: "1",
+      const fetchSearch = async (mode: "contains" | "starts_with", limit: number) => {
+        const baseOffset = Math.max(0, favoriteSearchPage - 1) * limit;
+        const query = new URLSearchParams({
+          q: normalizedFavoriteSearchInput,
+          mode,
+          limit: String(limit),
+          offset: String(baseOffset),
+          include_media: "0",
+          exclude_non_base: "1",
+        });
+        const response = await fetch(
+          `${API_ROOT}/api/games/search?${query.toString()}`,
+          {
+            signal,
+            ...(authToken
+              ? { headers: { Authorization: `Bearer ${authToken}` } }
+              : {}),
+          },
+        );
+        if (!response.ok) return [] as GameItem[];
+        const payload = await response.json();
+        return Array.isArray(payload) ? (payload as GameItem[]) : [];
+      };
+
+      const startsWithMatches = await fetchSearch("starts_with", 20);
+      const containsMatches =
+        startsWithMatches.length >= 8
+          ? []
+          : await fetchSearch("contains", 24);
+
+      const combinedById = new Map<number, GameItem>();
+      [...startsWithMatches, ...containsMatches].forEach((game) => {
+        if (!game || typeof game.id !== "number") return;
+        if (!combinedById.has(game.id)) {
+          combinedById.set(game.id, game);
+        }
       });
-      const response = await fetch(
-        `${API_ROOT}/api/games/search?${query.toString()}`,
-        {
-          signal,
-          ...(authToken
-            ? { headers: { Authorization: `Bearer ${authToken}` } }
-            : {}),
-        },
-      );
-      if (!response.ok) {
-        return [];
-      }
-      const payload = await response.json();
-      if (!Array.isArray(payload)) return [];
-      const baseMatches = (payload as GameItem[])
+
+      const baseMatches = Array.from(combinedById.values())
         .filter((game) => !shouldHideFromDiscover(game))
         .filter((game) => !favoriteGameIds.includes(game.id));
       const strictMatches = baseMatches.filter((game) => isEligibleFavoriteSearchGame(game));
-      const ranked = (strictMatches.length > 0 ? strictMatches : baseMatches).sort(
-        (left, right) => {
-          const votesDiff = getGameVoteCount(right) - getGameVoteCount(left);
-          if (votesDiff !== 0) return votesDiff;
-          const ratingDiff = getGameRating(right) - getGameRating(left);
+      const source = strictMatches.length > 0 ? strictMatches : baseMatches;
+      const normalizedQuery = normalizeTitleForSearch(normalizedFavoriteSearchInput);
+      const uniqueByTitle = new Map<string, GameItem>();
+      const scored = source
+        .map((game) => {
+          const normalizedName = normalizeTitleForSearch(game.name);
+          const isExact = normalizedName === normalizedQuery;
+          const startsWith = normalizedName.startsWith(normalizedQuery);
+          const contains = normalizedName.includes(normalizedQuery);
+          const variantPenalty = isLikelyVariantTitle(game.name) ? 1 : 0;
+          return {
+            game,
+            isExact,
+            startsWith,
+            contains,
+            variantPenalty,
+          };
+        })
+        .sort((left, right) => {
+          if (right.isExact !== left.isExact) return Number(right.isExact) - Number(left.isExact);
+          if (right.startsWith !== left.startsWith) {
+            return Number(right.startsWith) - Number(left.startsWith);
+          }
+          if (right.contains !== left.contains) return Number(right.contains) - Number(left.contains);
+          if (left.variantPenalty !== right.variantPenalty) {
+            return left.variantPenalty - right.variantPenalty;
+          }
+          const ratingDiff = getGameRating(right.game) - getGameRating(left.game);
           if (ratingDiff !== 0) return ratingDiff;
-          return left.name.localeCompare(right.name);
-        },
-      );
-      return ranked.slice(0, 8);
+          const votesDiff = getGameVoteCount(right.game) - getGameVoteCount(left.game);
+          if (votesDiff !== 0) return votesDiff;
+          return left.game.name.localeCompare(right.game.name);
+        });
+
+      for (const row of scored) {
+        const key = normalizeTitleForSearch(row.game.name);
+        if (!key) continue;
+        if (!uniqueByTitle.has(key)) {
+          uniqueByTitle.set(key, row.game);
+        }
+      }
+
+      const items = Array.from(uniqueByTitle.values()).slice(0, FAVORITE_SEARCH_PAGE_SIZE);
+      const hasMore = startsWithMatches.length >= 20 || containsMatches.length >= 24;
+      return { items, hasMore };
     },
     staleTime: 30_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+    placeholderData: (previous) => previous,
   });
+  const favoriteSearchResults = favoriteSearchData?.items ?? [];
+  const hasMoreFavoriteSearch = Boolean(favoriteSearchData?.hasMore);
   const {
     data: favoriteSelectedGames = [],
     isFetching: favoriteSelectedGamesLoading,
@@ -740,6 +901,8 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       return [...prev, game.id];
     });
     setFavoriteSearchInput("");
+    setDebouncedFavoriteSearchInput("");
+    setFavoriteSearchPage(1);
     setQuestionnaireValidationMessage(null);
   }, []);
   const removeFavoriteGame = useCallback((gameId: number) => {
@@ -771,6 +934,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     recommendationRunIdRef.current = runId;
     if (!authUser?.id || !questionnaireComplete) {
       setRecommendedGames([]);
+      setBackendRecommendationScores({});
       setRecommendationStrategy(null);
       setRecommendationError(null);
       return false;
@@ -801,10 +965,24 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       const candidateIds = Array.isArray(body.recommended_games)
         ? body.recommended_games.filter((id): id is number => Number.isFinite(id))
         : [];
+      const scoredRecommendations = Array.isArray(body.scored_recommendations)
+        ? body.scored_recommendations
+        : [];
+      const nextBackendScores: Record<number, number> = {};
+      for (const row of scoredRecommendations) {
+        if (!row || typeof row !== "object") continue;
+        const gameId = Number(row.game_id);
+        const score = Number(row.score);
+        if (!Number.isFinite(gameId) || gameId <= 0) continue;
+        if (!Number.isFinite(score)) continue;
+        nextBackendScores[gameId] = score;
+      }
+      setBackendRecommendationScores(nextBackendScores);
       setRecommendationStrategy(typeof body.strategy === "string" ? body.strategy : null);
 
       if (!candidateIds.length) {
         setRecommendedGames([]);
+        setBackendRecommendationScores({});
         return true;
       }
 
@@ -816,7 +994,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       if (recommendationRunIdRef.current !== runId) return false;
       const initialVisibleRecommendations = initialFetched.filter((game): game is GameItem => {
         if (!game) return false;
-        return !shouldHideFromDiscover(game);
+        return !shouldHideFromDiscover(game) && !favoriteGameIds.includes(game.id);
       });
 
       setRecommendedGames(initialVisibleRecommendations);
@@ -829,7 +1007,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
           ...initialVisibleRecommendations,
           ...remainingFetched.filter((game): game is GameItem => {
             if (!game) return false;
-            return !shouldHideFromDiscover(game);
+            return !shouldHideFromDiscover(game) && !favoriteGameIds.includes(game.id);
           }),
         ];
         const dedupedRecommendations = fullVisibleRecommendations.filter((game, index, all) =>
@@ -842,6 +1020,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
           const topUp = await fetchTopUpRecommendationGames(
             RECOMMENDATION_TARGET_SIZE - dedupedRecommendations.length,
             existingIds,
+            new Set<number>(favoriteGameIds),
             authToken,
           );
           dedupedRecommendations.push(...topUp);
@@ -854,6 +1033,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       return true;
     } catch (err) {
       setRecommendedGames([]);
+      setBackendRecommendationScores({});
       setRecommendationError(err instanceof Error ? err.message : String(err));
       return false;
     } finally {
@@ -999,6 +1179,109 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     if (!source) return "Open this title to view full details and see why it matches your answers.";
     return source.length > 260 ? `${source.slice(0, 260).trimEnd()}...` : source;
   }, [topRecommendedGame]);
+
+  const answerPreferenceTokens = useMemo(() => {
+    const tokenSet = new Set<string>();
+    for (const selected of Object.values(questionnaireAnswers)) {
+      for (const value of selected) {
+        tokenizePreferenceText(value.replace(/_/g, " ")).forEach((token) => tokenSet.add(token));
+      }
+    }
+    return tokenSet;
+  }, [questionnaireAnswers]);
+
+  const favoritePreferenceTokens = useMemo(() => {
+    const tokenSet = new Set<string>();
+    for (const game of favoriteSelectedGames) {
+      tokenizePreferenceText(game.name).forEach((token) => tokenSet.add(token));
+      tokenizePreferenceText(game.genre).forEach((token) => tokenSet.add(token));
+    }
+    return tokenSet;
+  }, [favoriteSelectedGames]);
+
+  const getPersonalizationSignal = useCallback((game: GameItem) => {
+    const gameTokens = new Set<string>([
+      ...tokenizePreferenceText(game.name),
+      ...tokenizePreferenceText(game.genre),
+      ...tokenizePreferenceText(game.description),
+    ]);
+    if (!gameTokens.size) return 0;
+
+    const answerOverlap = answerPreferenceTokens.size
+      ? Array.from(answerPreferenceTokens).filter((token) => gameTokens.has(token)).length /
+        answerPreferenceTokens.size
+      : 0;
+    const favoriteOverlap = favoritePreferenceTokens.size
+      ? Array.from(favoritePreferenceTokens).filter((token) => gameTokens.has(token)).length /
+        favoritePreferenceTokens.size
+      : 0;
+    return clampNumber((answerOverlap * 0.55) + (favoriteOverlap * 0.45), 0, 1);
+  }, [answerPreferenceTokens, favoritePreferenceTokens]);
+
+  const recommendationDisplayScores = useMemo(() => {
+    if (!rankedRecommendedGames.length) return new Map<number, number>();
+    const rows = rankedRecommendedGames.map((game, index) => ({
+      id: game.id,
+      rank: index + 1,
+      raw: recommendationRawSignalFromGame(
+        game,
+        index + 1,
+        getPersonalizationSignal(game),
+      ),
+    }));
+    const minRaw = Math.min(...rows.map((row) => row.raw));
+    const maxRaw = Math.max(...rows.map((row) => row.raw));
+    const span = maxRaw - minRaw;
+    const sortedByRaw = [...rows].sort((left, right) => right.raw - left.raw);
+    const percentileById = new Map<number, number>();
+    const denom = Math.max(sortedByRaw.length - 1, 1);
+    sortedByRaw.forEach((row, index) => {
+      // Top item gets percentile 1.0; bottom item gets 0.0.
+      percentileById.set(row.id, 1 - (index / denom));
+    });
+
+    const scores = new Map<number, number>();
+    for (const row of rows) {
+      let rawNormalized: number;
+      if (span < 1e-6) {
+        rawNormalized = clampNumber(
+          1 - ((row.rank - 1) / Math.max(RECOMMENDATION_TARGET_SIZE - 1, 1)),
+          0,
+          1,
+        );
+      } else {
+        rawNormalized = clampNumber((row.raw - minRaw) / span, 0, 1);
+      }
+      const percentile = percentileById.get(row.id) ?? rawNormalized;
+      // Percentile weighting guarantees visible separation between neighbors.
+      const blended = clampNumber((percentile * 0.7) + (rawNormalized * 0.3), 0, 1);
+      const eased = Math.pow(blended, 0.88);
+      const displayScore = Math.round(40 + (eased * 59));
+      scores.set(row.id, displayScore);
+    }
+    return scores;
+  }, [getPersonalizationSignal, rankedRecommendedGames]);
+
+  const effectiveRecommendationScores = useMemo(() => {
+    const scores = new Map<number, number>();
+    const hasBackendScores = Object.keys(backendRecommendationScores).length > 0;
+    let previousScore = 99;
+    for (const game of rankedRecommendedGames) {
+      const backendScore = backendRecommendationScores[game.id];
+      if (hasBackendScores) {
+        const resolved = Number.isFinite(backendScore)
+          ? clampNumber(Math.round(backendScore), 55, 99)
+          : clampNumber(previousScore - 1, 55, 99);
+        const monotonic = Math.min(previousScore, resolved);
+        scores.set(game.id, monotonic);
+        previousScore = monotonic;
+        continue;
+      }
+      const fallbackScore = recommendationDisplayScores.get(game.id) ?? 40;
+      scores.set(game.id, fallbackScore);
+    }
+    return scores;
+  }, [backendRecommendationScores, rankedRecommendedGames, recommendationDisplayScores]);
 
   useEffect(() => {
     setResultPage(1);
@@ -1774,7 +2057,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                               <p>Rank</p>
                               <div className="games-result__score-pill">#1</div>
                               <p className="games-result__score-sub">
-                                {`Score: ${recommendationScoreFromRank(1)}%`}
+                                {`Score: ${effectiveRecommendationScores.get(topRecommendedGame.id) ?? 99}%`}
                               </p>
                             </aside>
                           </section>
@@ -1816,7 +2099,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                                           : "Release: n/a"}
                                       </span>
                                       <span className="games-result__list-item-meta">
-                                        {`Score: ${recommendationScoreFromRank(rank)}%`}
+                                        {`Score: ${effectiveRecommendationScores.get(game.id) ?? 58}%`}
                                       </span>
                                       </span>
                                     </button>
@@ -2009,7 +2292,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                     className="games-questionnaire__search-input"
                     placeholder="Search game title..."
                     value={favoriteSearchInput}
-                    onChange={(event) => setFavoriteSearchInput(event.target.value)}
+                    onChange={(event) => {
+                      setFavoriteSearchInput(event.target.value);
+                    }}
                     disabled={favoriteCount >= FAVORITE_GAMES_TARGET}
                   />
                   <p className="games-questionnaire__hint games-questionnaire__favorites-count">
@@ -2034,32 +2319,57 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                       {favoriteSearchLoading ? (
                         <p className="games-questionnaire__hint">Searching...</p>
                       ) : favoriteSearchResults.length > 0 ? (
-                        favoriteSearchResults.map((game) => (
-                          <button
-                            key={`favorite-search-${game.id}`}
-                            type="button"
-                            className="games-questionnaire__favorite-result"
-                            onClick={() => addFavoriteGame(game)}
-                            disabled={favoriteCount >= FAVORITE_GAMES_TARGET}
-                          >
-                            <span className="games-questionnaire__favorite-result-cover" aria-hidden="true">
-                              {getPreferredCoverImage(game) ? (
-                                <img
-                                  src={getPreferredCoverImage(game) ?? ""}
-                                  alt=""
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <span className="games-questionnaire__favorite-result-cover-fallback">
-                                  No image
-                                </span>
-                              )}
+                        <>
+                          {favoriteSearchResults.map((game) => (
+                            <button
+                              key={`favorite-search-${game.id}`}
+                              type="button"
+                              className="games-questionnaire__favorite-result"
+                              onClick={() => addFavoriteGame(game)}
+                              disabled={favoriteCount >= FAVORITE_GAMES_TARGET}
+                            >
+                              <span className="games-questionnaire__favorite-result-cover" aria-hidden="true">
+                                {getPreferredCoverImage(game) ? (
+                                  <img
+                                    src={getPreferredCoverImage(game) ?? ""}
+                                    alt=""
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <span className="games-questionnaire__favorite-result-cover-fallback">
+                                    No image
+                                  </span>
+                                )}
+                              </span>
+                              <span className="games-questionnaire__favorite-result-name">
+                                {game.name}
+                              </span>
+                            </button>
+                          ))}
+                          <div className="games-pagination games-result__pagination games-questionnaire__favorites-pagination">
+                            <button
+                              type="button"
+                              className="games-pagination__button"
+                              onClick={() =>
+                                setFavoriteSearchPage((page) => Math.max(1, page - 1))
+                              }
+                              disabled={favoriteSearchPage <= 1 || favoriteSearchLoading}
+                            >
+                              Previous
+                            </button>
+                            <span className="games-pagination__status">
+                              Page {favoriteSearchPage}
                             </span>
-                            <span className="games-questionnaire__favorite-result-name">
-                              {game.name}
-                            </span>
-                          </button>
-                        ))
+                            <button
+                              type="button"
+                              className="games-pagination__button"
+                              onClick={() => setFavoriteSearchPage((page) => page + 1)}
+                              disabled={!hasMoreFavoriteSearch || favoriteSearchLoading}
+                            >
+                              Next
+                            </button>
+                          </div>
+                        </>
                       ) : (
                         <p className="games-questionnaire__hint">No matches found.</p>
                       )}
@@ -2159,7 +2469,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                   <p>Rank</p>
                   <div className="games-result__score-pill">#1</div>
                   <p className="games-result__score-sub">
-                    {`Score: ${recommendationScoreFromRank(1)}%`}
+                    {`Score: ${effectiveRecommendationScores.get(topRecommendedGame.id) ?? 99}%`}
                   </p>
                 </aside>
               </section>

@@ -126,7 +126,13 @@ def _predict_scores(model: Any, feature_vector: list[float]) -> list[float]:
     """
     numpy_module = importlib.import_module("numpy")
     batch = numpy_module.asarray([feature_vector], dtype="float32")
-    raw_predictions = model.predict(batch, verbose=0)
+    try:
+        raw_predictions = model.predict(batch, verbose=0)
+    except TypeError as exc:
+        # Test doubles and some wrappers expose predict(payload) without kwargs.
+        if "verbose" not in str(exc):
+            raise
+        raw_predictions = model.predict(batch.tolist())
 
     if hasattr(raw_predictions, "tolist"):
         raw_predictions = raw_predictions.tolist()

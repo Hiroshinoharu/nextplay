@@ -69,12 +69,33 @@ const apiUrl = (path: string) => {
 
 // Key for storing auth user in localStorage
 const AUTH_STORAGE_KEY = "nextplay_user";
+const SWIPE_SCROLL_STEP_RATIO = 0.82;
+const SWIPE_TRIGGER_PX = 64;
+const SWIPE_MAX_DURATION_MS = 700;
+const SWIPE_VERTICAL_DOMINANCE = 1.25;
+const SWIPE_IGNORE_SELECTOR = [
+  "input",
+  "textarea",
+  "select",
+  "button",
+  "a",
+  "[role='button']",
+  "[contenteditable='true']",
+  ".games-row",
+  ".popular__cards",
+  ".games-hero__screenshots-row",
+].join(",");
 
 const HEALTH_SERVICE_LABELS: Record<string, string> = {
   gateway: "Gateway",
   game: "Game Service",
   user: "User Service",
   recommender: "Recommender Service",
+};
+
+const shouldIgnoreVerticalSwipe = (target: EventTarget | null) => {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest(SWIPE_IGNORE_SELECTOR));
 };
 
 type RouteTransitionLoaderProps = {
@@ -577,6 +598,55 @@ function App() {
       window.fetch = originalFetch;
     };
   }, [authUser, handleSignOut, navigate]);
+
+  useEffect(() => {
+    let startX = 0;
+    let startY = 0;
+    let touchStartTs = 0;
+
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) return;
+      if (shouldIgnoreVerticalSwipe(event.target)) {
+        touchStartTs = 0;
+        return;
+      }
+      const touch = event.touches[0];
+      startX = touch.clientX;
+      startY = touch.clientY;
+      touchStartTs = Date.now();
+    };
+
+    const handleTouchEnd = (event: TouchEvent) => {
+      if (touchStartTs <= 0 || event.changedTouches.length !== 1) return;
+      const elapsedMs = Date.now() - touchStartTs;
+      touchStartTs = 0;
+      if (elapsedMs > SWIPE_MAX_DURATION_MS) return;
+
+      const touch = event.changedTouches[0];
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+
+      if (absY < SWIPE_TRIGGER_PX) return;
+      if (absY < absX * SWIPE_VERTICAL_DOMINANCE) return;
+
+      const viewportStep = Math.round(window.innerHeight * SWIPE_SCROLL_STEP_RATIO);
+      const scrollDirection = deltaY < 0 ? 1 : -1;
+      window.scrollBy({
+        top: viewportStep * scrollDirection,
+        behavior: "smooth",
+      });
+    };
+
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, []);
 
   const loaderTitle =
     location.pathname === "/"

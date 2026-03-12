@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from .feature_contract import FEATURE_SCHEMA_VERSION
 from .request import RecommendRequest
-from .response import UserRecommendResponse
+from .response import ScoredRecommendation, UserRecommendResponse
 
 
 class ModelInputSchema(BaseModel):
@@ -82,4 +82,12 @@ class ModelOutputSchema(BaseModel):
             user_id=resolved_user_id,
             recommended_games=[candidate.game_id for candidate in self.candidates],
             strategy=self.strategy,
+            scored_recommendations=[
+                ScoredRecommendation(
+                    game_id=candidate.game_id,
+                    rank=index,
+                    score=round(float(candidate.score), 4),
+                )
+                for index, candidate in enumerate(self.candidates, start=1)
+            ],
         )

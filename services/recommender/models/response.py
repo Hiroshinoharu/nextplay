@@ -1,6 +1,12 @@
 from typing import Any, Dict, List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class ScoredRecommendation(BaseModel):
+    game_id: int
+    rank: int
+    score: float
 
 class UserRecommendResponse(BaseModel):
     """
@@ -12,6 +18,7 @@ class UserRecommendResponse(BaseModel):
     user_id: int
     recommended_games: List[int]
     strategy: str
+    scored_recommendations: List[ScoredRecommendation] = Field(default_factory=list)
 
 
 class SimilarResponse(BaseModel):

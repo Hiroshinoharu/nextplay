@@ -58,6 +58,64 @@
       ]
     },
     {
+      "id": "era_preference",
+      "prompt": "What release era do you usually prefer?",
+      "type": "single_select",
+      "weight": 1.15,
+      "options": [
+        {
+          "id": "classics_90s_00s",
+          "label": "Classics (90s to 2000s)",
+          "mapping": {
+            "liked_keywords": [],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "older_2000s_early_2010s",
+          "label": "Older gems (2000s to early 2010s)",
+          "mapping": {
+            "liked_keywords": [],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "modern_2015_plus",
+          "label": "Modern (2015+)",
+          "mapping": {
+            "liked_keywords": [],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "latest_2020_plus",
+          "label": "Latest releases (2020+)",
+          "mapping": {
+            "liked_keywords": [],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "no_era_preference",
+          "label": "No era preference",
+          "mapping": {
+            "liked_keywords": [],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        }
+      ]
+    },
+    {
       "id": "play_mode",
       "prompt": "How do you usually play?",
       "type": "single_select",
@@ -298,6 +356,160 @@
             "liked_keywords": [2297],
             "disliked_keywords": [],
             "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "genre_mix",
+      "prompt": "Pick up to 3 genres you want right now",
+      "type": "multi_select",
+      "weight": 1.25,
+      "options": [
+        {
+          "id": "genre_mix_rpg",
+          "label": "RPG / Adventure",
+          "mapping": {
+            "liked_keywords": [1577, 5536, 277],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "genre_mix_action",
+          "label": "Action / Shooter",
+          "mapping": {
+            "liked_keywords": [6149, 1962],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "genre_mix_strategy",
+          "label": "Strategy / Tactics",
+          "mapping": {
+            "liked_keywords": [3511, 322, 277],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "genre_mix_sim",
+          "label": "Sim / Management",
+          "mapping": {
+            "liked_keywords": [3903, 4383],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "genre_mix_relax",
+          "label": "Cozy / Puzzle / Chill",
+          "mapping": {
+            "liked_keywords": [5069, 59, 322],
+            "disliked_keywords": [1962],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "genre_mix_social",
+          "label": "Multiplayer / Social",
+          "mapping": {
+            "liked_keywords": [981, 59],
+            "disliked_keywords": [5262],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "time_commitment",
+      "prompt": "How much time do you want to commit to your next game?",
+      "type": "single_select",
+      "weight": 1.1,
+      "options": [
+        {
+          "id": "one_night",
+          "label": "One-night / short experience",
+          "mapping": {
+            "liked_keywords": [59, 5069],
+            "disliked_keywords": [3903, 5420],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "mid_length",
+          "label": "10 to 25 hours",
+          "mapping": {
+            "liked_keywords": [277, 1577],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "long_commitment",
+          "label": "40+ hour long-form game",
+          "mapping": {
+            "liked_keywords": [3903, 5420, 5536],
+            "disliked_keywords": [59],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "ongoing_live",
+          "label": "Ongoing game I can keep returning to",
+          "mapping": {
+            "liked_keywords": [981, 3903, 59],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "complexity_tolerance",
+      "prompt": "How much mechanical complexity do you want?",
+      "type": "single_select",
+      "weight": 1.1,
+      "options": [
+        {
+          "id": "very_accessible",
+          "label": "Very accessible, low complexity",
+          "mapping": {
+            "liked_keywords": [5069, 59],
+            "disliked_keywords": [4383, 277],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "moderate_complexity",
+          "label": "Moderate complexity",
+          "mapping": {
+            "liked_keywords": [277, 59],
+            "disliked_keywords": [],
+            "liked_platforms": [],
+            "disliked_platforms": []
+          }
+        },
+        {
+          "id": "high_complexity",
+          "label": "High complexity and systems depth",
+          "mapping": {
+            "liked_keywords": [4383, 3903, 277],
+            "disliked_keywords": [59],
+            "liked_platforms": [204],
             "disliked_platforms": []
           }
         }

@@ -107,8 +107,14 @@ const API_ROOT = RAW_BASE_URL.endsWith("/api")
 // Normalize media  URLs to ensure they are absolute and use HTTPS
 const normalizeMediaUrl = (url?: string) => {
   if (!url) return null;
-  if (url.startsWith("//")) return `https:${url}`;
-  return url;
+  const absoluteUrl = url.startsWith("//") ? `https:${url}` : url;
+  if (/images\.igdb\.com\/igdb\/image\/upload\//i.test(absoluteUrl)) {
+    if (/\/t_[^/]+\//i.test(absoluteUrl)) {
+      return absoluteUrl.replace(/\/t_[^/]+\//i, "/t_original/");
+    }
+    return absoluteUrl.replace(/\/upload\//i, "/upload/t_original/");
+  }
+  return absoluteUrl;
 };
 
 // Upgrade IGDB image URLs to a specified size by replacing the size segment in the URL

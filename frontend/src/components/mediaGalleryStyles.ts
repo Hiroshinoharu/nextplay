@@ -33,6 +33,7 @@ export const FrameButton = styled.button`
   ${sharedFrameShell}
   padding: 0;
   cursor: pointer;
+  max-height: min(72vh, 560px);
 
   &:focus-visible {
     outline: 2px solid var(--game-accent, #8cf37a);
@@ -43,7 +44,7 @@ export const FrameButton = styled.button`
 export const FrameImage = styled.img`
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 `
 
@@ -153,7 +154,7 @@ export const ThumbButton = styled.button`
 export const ThumbImage = styled.img`
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
   opacity: 0.92;
   transition: transform 0.2s ease, opacity 0.2s ease;

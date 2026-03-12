@@ -9,7 +9,7 @@ import (
 	"github.com/maxceban/nextplay/services/game/models"
 )
 
-const nonBaseContentRegex = `(\m(dlc|downloadable content|expansion|expansion pack|add[- ]?on|bonus( content)?|soundtrack|artbook|season pass|character pass|battle pass|starter pack|founder.?s pack|cosmetic pack|skin( pack| set)?|costume( pack)?|outfit( pack)?|upgrade pack|item pack|consumable( pack)?|bundle|edition upgrade|currency pack|booster pack|mission pack)\M)`
+const nonBaseContentRegex = `(\m(dlc|downloadable content|expansion|expansion pack|add[- ]?on|bonus( content)?|soundtrack|artbook|season pass|character pass|battle pass|event pass|starter pack|founder.?s pack|cosmetic pack|skin( pack| set)?|costume( pack)?|outfit( pack)?|upgrade pack|item pack|consumable( pack)?|bundle|edition upgrade|currency pack|booster pack|mission pack|title update|content update|seasonal update|mid[- ]?season|live service|ranked split|rotation update|patch( v?[0-9]+)?|hotfix|content drop|episode[[:space:]]*[0-9ivxlcdm]+|season[[:space:]]*[0-9ivxlcdm]+|chapter[[:space:]]*[0-9ivxlcdm]+)\M)`
 
 // GetGames retrieves a page of games from the database.
 // Use includeMedia for detail-heavy responses; it is off by default for speed.

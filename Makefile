@@ -1,4 +1,4 @@
-.PHONY: retrain retrain-export retrain-from-db retrain-from-db-local recommender-balanced recommender-favorites-strong
+.PHONY: retrain retrain-export retrain-from-db retrain-from-db-local recommender-balanced recommender-favorites-strong retrain-seeded-xl
 
 RETRAIN_SCRIPT := services/recommender/training/retrain.sh
 TRAINING_DIR := services/recommender/training
@@ -43,3 +43,9 @@ recommender-favorites-strong:
 	@echo "Recommender profile: favorites-strong"
 
 recommender-favorites-strong: SHELL := powershell.exe
+
+retrain-seeded-xl:
+	@python -m services.recommender.training.retrain --source_mode seeded_plus_db --seed_users 10000 --seed_games 50000 --seed_history_per_user 50 --seed_holdout_per_user 5 --epochs 12 --batch_size 64 --thresholds_json services/recommender/training/offline_eval_thresholds_large_catalog.json --promote_current
+	@echo "Retrain profile: seeded-xl"
+
+retrain-seeded-xl: SHELL := powershell.exe

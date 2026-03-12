@@ -15,6 +15,7 @@ export type QuestionnaireQuestion = {
   id: string;
   prompt: string;
   type: "single_select" | "multi_select";
+  weight?: number;
   options: QuestionnaireOption[];
 };
 
@@ -167,6 +168,64 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
       ],
     },
     {
+      id: "era_preference",
+      prompt: "What release era do you usually prefer?",
+      type: "single_select",
+      weight: 1.15,
+      options: [
+        {
+          id: "classics_90s_00s",
+          label: "Classics (90s to 2000s)",
+          mapping: {
+            liked_keywords: [],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "older_2000s_early_2010s",
+          label: "Older gems (2000s to early 2010s)",
+          mapping: {
+            liked_keywords: [],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "modern_2015_plus",
+          label: "Modern (2015+)",
+          mapping: {
+            liked_keywords: [],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "latest_2020_plus",
+          label: "Latest releases (2020+)",
+          mapping: {
+            liked_keywords: [],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "no_era_preference",
+          label: "No era preference",
+          mapping: {
+            liked_keywords: [],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+      ],
+    },
+    {
       id: "play_mode",
       prompt: "How do you usually play?",
       type: "single_select",
@@ -292,7 +351,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "theme_preferences",
-      prompt: "Which genres do you enjoy? (from your database)",
+      prompt: "Which genres do you enjoy?",
       type: "multi_select",
       options: [
         {
@@ -1157,6 +1216,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
       id: "engagement_goal",
       prompt: "What do you want from your next game?",
       type: "single_select",
+      weight: 1.2,
       options: [
         {
           id: "finish_story_once",
@@ -1205,6 +1265,348 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
             liked_keywords: [5069, 59],
             disliked_keywords: [1962, 3903],
             liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+      ],
+    },
+    {
+      id: "narrative_depth",
+      prompt: "How much narrative depth do you want?",
+      type: "single_select",
+      options: [
+        {
+          id: "minimal_story",
+          label: "Minimal story, straight to gameplay",
+          mapping: {
+            liked_keywords: [277, 6149],
+            disliked_keywords: [1577],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "light_story",
+          label: "Light story, mostly gameplay",
+          mapping: {
+            liked_keywords: [277, 59],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "balanced_story",
+          label: "Balanced story and gameplay",
+          mapping: {
+            liked_keywords: [1577, 277],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "deep_narrative",
+          label: "Deep narrative and character arcs",
+          mapping: {
+            liked_keywords: [1577, 5069],
+            disliked_keywords: [6149],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+      ],
+    },
+    {
+      id: "progression_style",
+      prompt: "Which progression style keeps you engaged?",
+      type: "single_select",
+      options: [
+        {
+          id: "skill_mastery",
+          label: "Skill mastery and challenge",
+          mapping: {
+            liked_keywords: [1962, 277],
+            disliked_keywords: [3903],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "build_crafting",
+          label: "Builds, loot, and crafting",
+          mapping: {
+            liked_keywords: [3903, 5536],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "world_completion",
+          label: "Exploration and completion",
+          mapping: {
+            liked_keywords: [3773, 1577, 5536],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "quick_match_progress",
+          label: "Quick rounds with steady progress",
+          mapping: {
+            liked_keywords: [59, 981],
+            disliked_keywords: [3903],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+      ],
+    },
+    {
+      id: "setting_preference",
+      prompt: "Which settings are you in the mood for?",
+      type: "multi_select",
+      options: [
+        {
+          id: "fantasy_setting",
+          label: "Fantasy worlds",
+          mapping: {
+            liked_keywords: [5536, 1577],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "sci_fi_setting",
+          label: "Sci-fi and futuristic",
+          mapping: {
+            liked_keywords: [3773, 6149],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "historical_setting",
+          label: "Historical / grounded",
+          mapping: {
+            liked_keywords: [1577, 322],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "horror_setting",
+          label: "Dark / horror",
+          mapping: {
+            liked_keywords: [5741, 1962],
+            disliked_keywords: [5069],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "cozy_setting",
+          label: "Cozy and uplifting",
+          mapping: {
+            liked_keywords: [5069, 59],
+            disliked_keywords: [5741],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+      ],
+    },
+    {
+      id: "failure_tolerance",
+      prompt: "How do you feel about failing and retrying?",
+      type: "single_select",
+      options: [
+        {
+          id: "very_low_retry",
+          label: "Low tolerance, keep it smooth",
+          mapping: {
+            liked_keywords: [5069, 59],
+            disliked_keywords: [1962],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "moderate_retry",
+          label: "Some retries are fine",
+          mapping: {
+            liked_keywords: [277, 59],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "high_retry",
+          label: "High tolerance, I like learning through failure",
+          mapping: {
+            liked_keywords: [1962, 277, 4383],
+            disliked_keywords: [5069],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+      ],
+    },
+    {
+      id: "genre_mix",
+      prompt: "Pick up to 3 genres you want right now",
+      type: "multi_select",
+      weight: 1.25,
+      options: [
+        {
+          id: "genre_mix_rpg",
+          label: "RPG / Adventure",
+          mapping: {
+            liked_keywords: [1577, 5536, 277],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "genre_mix_action",
+          label: "Action / Shooter",
+          mapping: {
+            liked_keywords: [6149, 1962],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "genre_mix_strategy",
+          label: "Strategy / Tactics",
+          mapping: {
+            liked_keywords: [3511, 322, 277],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "genre_mix_sim",
+          label: "Sim / Management",
+          mapping: {
+            liked_keywords: [3903, 4383],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "genre_mix_relax",
+          label: "Cozy / Puzzle / Chill",
+          mapping: {
+            liked_keywords: [5069, 59, 322],
+            disliked_keywords: [1962],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "genre_mix_social",
+          label: "Multiplayer / Social",
+          mapping: {
+            liked_keywords: [981, 59],
+            disliked_keywords: [5262],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+      ],
+    },
+    {
+      id: "time_commitment",
+      prompt: "How much time do you want to commit to your next game?",
+      type: "single_select",
+      weight: 1.1,
+      options: [
+        {
+          id: "one_night",
+          label: "One-night / short experience",
+          mapping: {
+            liked_keywords: [59, 5069],
+            disliked_keywords: [3903, 5420],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "mid_length",
+          label: "10 to 25 hours",
+          mapping: {
+            liked_keywords: [277, 1577],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "long_commitment",
+          label: "40+ hour long-form game",
+          mapping: {
+            liked_keywords: [3903, 5420, 5536],
+            disliked_keywords: [59],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "ongoing_live",
+          label: "Ongoing game I can keep returning to",
+          mapping: {
+            liked_keywords: [981, 3903, 59],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+      ],
+    },
+    {
+      id: "complexity_tolerance",
+      prompt: "How much mechanical complexity do you want?",
+      type: "single_select",
+      weight: 1.1,
+      options: [
+        {
+          id: "very_accessible",
+          label: "Very accessible, low complexity",
+          mapping: {
+            liked_keywords: [5069, 59],
+            disliked_keywords: [4383, 277],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "moderate_complexity",
+          label: "Moderate complexity",
+          mapping: {
+            liked_keywords: [277, 59],
+            disliked_keywords: [],
+            liked_platforms: [],
+            disliked_platforms: [],
+          },
+        },
+        {
+          id: "high_complexity",
+          label: "High complexity and systems depth",
+          mapping: {
+            liked_keywords: [4383, 3903, 277],
+            disliked_keywords: [59],
+            liked_platforms: [204],
             disliked_platforms: [],
           },
         },
@@ -1302,6 +1704,10 @@ export const buildRecommendRequestFromQuestionnaire = (
     }
   }
 
+  const questionWeights = Object.fromEntries(
+    QUESTIONNAIRE_V1.questions.map((question) => [question.id, question.weight ?? 1]),
+  );
+
   return {
     user_id: userId,
     liked_keywords: Array.from(likedKeywords),
@@ -1314,6 +1720,7 @@ export const buildRecommendRequestFromQuestionnaire = (
       feature_schema_version: QUESTIONNAIRE_V1.feature_schema_version,
       id_catalog: QUESTIONNAIRE_V1.id_catalog,
       answers,
+      question_weights: questionWeights,
       favorite_game_ids: favoriteGameIds.slice(0, 3),
     },
   };

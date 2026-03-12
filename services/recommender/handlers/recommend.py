@@ -2,16 +2,18 @@ import logging
 import os
 import time
 from typing import Any
+import hashlib
+from datetime import datetime
 
 from fastapi import HTTPException, Request
 
 from ..models.inference import build_inference_service
 from ..models.model_schema import ModelInputSchema
 from ..models.request import RecommendRequest, SimilarRequest
-from ..models.response import SimilarResponse, UserRecommendResponse
+from ..models.response import ScoredRecommendation, SimilarResponse, UserRecommendResponse
 
 logger = logging.getLogger(__name__)
-RECOMMEND_TARGET_SIZE = 100
+RECOMMEND_TARGET_SIZE = 30
 
 
 def _read_float_env(name: str, default: float, *, minimum: float = -100.0, maximum: float = 100.0) -> float:
@@ -39,6 +41,18 @@ RANK_WEIGHT_MODEL_SEED_BOOST = _read_float_env("RANK_WEIGHT_MODEL_SEED_BOOST", 3
 RANK_WEIGHT_FAVORITE_SEED_BOOST = _read_float_env("RANK_WEIGHT_FAVORITE_SEED_BOOST", 6.0)
 RANK_CAP_POPULARITY = _read_float_env("RANK_CAP_POPULARITY", 1.2)
 RANK_CAP_RATING = _read_float_env("RANK_CAP_RATING", 1.0)
+RANK_WEIGHT_RELEASE_ERA_MATCH = _read_float_env("RANK_WEIGHT_RELEASE_ERA_MATCH", 1.8)
+RANK_WEIGHT_EXPLORATION_JITTER = _read_float_env(
+    "RANK_WEIGHT_EXPLORATION_JITTER",
+    0.35,
+    minimum=0.0,
+    maximum=5.0,
+)
+
+
+def _stable_unit_noise(seed: str, game_id: int) -> float:
+    digest = hashlib.sha256(f"{seed}:{game_id}".encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], byteorder="big", signed=False) / float(2**64 - 1)
 
 
 def _increment_metric(metrics: dict[str, int | float], key: str, amount: int | float = 1) -> None:
@@ -88,6 +102,49 @@ def _record_recommend_metrics(
     _increment_metric(metrics, f"recommend_outcome_{outcome}_total")
     if fallback_reason:
         _increment_metric(metrics, f"recommend_fallback_reason_{fallback_reason}_total")
+
+
+def _build_scored_recommendations(
+    recommended_ids: list[int],
+    *,
+    raw_score_by_id: dict[int, float] | None = None,
+) -> list[ScoredRecommendation]:
+    if not recommended_ids:
+        return []
+
+    resolved_scores: dict[int, float] = {}
+    if raw_score_by_id:
+        candidate_values = [raw_score_by_id.get(game_id, 0.0) for game_id in recommended_ids]
+        min_raw = min(candidate_values)
+        max_raw = max(candidate_values)
+        span = max_raw - min_raw
+        for rank, game_id in enumerate(recommended_ids, start=1):
+            raw_value = raw_score_by_id.get(game_id, min_raw)
+            if span <= 1e-9:
+                normalized = max(0.0, 1.0 - ((rank - 1) / max(len(recommended_ids) - 1, 1)))
+            else:
+                normalized = min(1.0, max(0.0, (raw_value - min_raw) / span))
+            resolved_scores[game_id] = round(55.0 + (normalized * 44.0), 2)
+    else:
+        for rank, game_id in enumerate(recommended_ids, start=1):
+            normalized = max(0.0, 1.0 - ((rank - 1) / max(len(recommended_ids) - 1, 1)))
+            resolved_scores[game_id] = round(55.0 + (normalized * 44.0), 2)
+
+    # Keep UI scores aligned with ranking order: later ranks should not show a
+    # higher score than earlier ranks, even when diversity re-ordering is applied.
+    monotonic_scores: list[ScoredRecommendation] = []
+    previous_score: float | None = None
+    for rank, game_id in enumerate(recommended_ids, start=1):
+        score = float(resolved_scores.get(game_id, 55.0))
+        if previous_score is not None and score > previous_score:
+            score = previous_score
+        score = round(score, 2)
+        monotonic_scores.append(
+            ScoredRecommendation(game_id=game_id, rank=rank, score=score)
+        )
+        previous_score = score
+
+    return monotonic_scores
 
 
 def _safe_get_json(http, url: str, timeout):
@@ -144,6 +201,70 @@ def _extract_number(game: dict[str, Any], field: str) -> float:
         return float(value)
     except (ValueError, TypeError):
         return 0.0
+
+
+def _extract_release_year(value: Any) -> int | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).year
+    except ValueError:
+        try:
+            return int(raw[:4])
+        except (ValueError, TypeError):
+            return None
+
+
+def _extract_release_year_preference(questionnaire: dict[str, Any]) -> str:
+    answers = questionnaire.get("answers")
+    if not isinstance(answers, dict):
+        return "no_preference"
+    selected = answers.get("era_preference")
+    if not isinstance(selected, list) or not selected:
+        return "no_preference"
+    value = str(selected[0] or "").strip().lower()
+    allowed = {
+        "classics_90s_00s",
+        "older_2000s_early_2010s",
+        "modern_2015_plus",
+        "latest_2020_plus",
+        "no_era_preference",
+    }
+    if value not in allowed:
+        return "no_preference"
+    return value
+
+
+def _release_era_alignment_score(release_year: int | None, preference: str) -> float:
+    if release_year is None or preference in {"", "no_era_preference"}:
+        return 0.0
+
+    if preference == "classics_90s_00s":
+        if release_year <= 2009:
+            return 1.0
+        if release_year <= 2013:
+            return 0.4
+        return -0.45
+    if preference == "older_2000s_early_2010s":
+        if 2000 <= release_year <= 2014:
+            return 1.0
+        if 1995 <= release_year <= 1999 or 2015 <= release_year <= 2017:
+            return 0.4
+        return -0.35
+    if preference == "modern_2015_plus":
+        if release_year >= 2015:
+            return 1.0
+        if release_year >= 2012:
+            return 0.4
+        return -0.4
+    if preference == "latest_2020_plus":
+        if release_year >= 2020:
+            return 1.0
+        if release_year >= 2018:
+            return 0.45
+        return -0.5
+    return 0.0
 
 
 def _normalize_primary_genre(value: Any) -> str:
@@ -485,19 +606,21 @@ def _build_personalized_recommendation_ids(
     disliked_keyword_ids: set[int],
     disliked_platform_ids: set[int],
     favorite_game_ids: list[int],
-    answer_tokens: set[str],
+    answer_token_weights: dict[str, float],
     favorite_seed_ids: list[int],
     model_seed_ids: list[int],
+    release_year_preference: str,
     top_n: int,
+    ranking_seed: str = "",
     excluded_game_ids: set[int] | None = None,
-) -> list[int]:
+) -> tuple[list[int], dict[int, float]]:
     """
     Build a larger personalized recommendation list by scoring game-service
     candidates using questionnaire preference overlap, with optional seed boosts.
     """
     candidates = _fetch_candidate_games_for_user(request, limit=max(200, top_n * 10))
     if not candidates:
-        return []
+        return [], {}
 
     favorite_seed_rank = {game_id: index for index, game_id in enumerate(favorite_seed_ids, start=1)}
     model_seed_rank = {
@@ -515,6 +638,7 @@ def _build_personalized_recommendation_ids(
         favorite_token_sets,
     ) = _build_favorite_profile(request, favorite_game_ids)
     scored_rows: list[tuple[float, float, int]] = []
+    seeded_rows: list[tuple[float, float, int]] = []
     for game in candidates:
         game_id = _extract_game_id(game)
         if game_id is None:
@@ -530,7 +654,11 @@ def _build_personalized_recommendation_ids(
         liked_platform_overlap = len(liked_platform_ids & game_platforms)
         disliked_keyword_overlap = len(disliked_keyword_ids & game_keywords)
         disliked_platform_overlap = len(disliked_platform_ids & game_platforms)
-        answer_token_overlap = len(answer_tokens & game_text_tokens) if answer_tokens else 0
+        answer_token_overlap = (
+            sum(weight for token, weight in answer_token_weights.items() if token in game_text_tokens)
+            if answer_token_weights
+            else 0.0
+        )
         favorite_keyword_overlap = len(favorite_keyword_ids & game_keywords)
         favorite_platform_overlap = len(favorite_platform_ids & game_platforms)
         favorite_genre_match = 1 if _normalize_primary_genre(game.get("genre")) in favorite_genres else 0
@@ -551,6 +679,7 @@ def _build_personalized_recommendation_ids(
 
         popularity = _extract_number(game, "popularity")
         rating = _extract_number(game, "aggregated_rating")
+        release_year = _extract_release_year(game.get("release_date"))
         score = 0.0
         score += liked_keyword_overlap * RANK_WEIGHT_LIKED_KEYWORD
         score += liked_platform_overlap * RANK_WEIGHT_LIKED_PLATFORM
@@ -563,6 +692,7 @@ def _build_personalized_recommendation_ids(
         score -= disliked_platform_overlap * RANK_WEIGHT_DISLIKED_PLATFORM
         score += min(max(popularity, 0.0) / 1000.0, RANK_CAP_POPULARITY)
         score += min(max(rating, 0.0) / 100.0, RANK_CAP_RATING)
+        score += _release_era_alignment_score(release_year, release_year_preference) * RANK_WEIGHT_RELEASE_ERA_MATCH
 
         if game_id in favorite_seed_rank:
             score += RANK_WEIGHT_FAVORITE_SEED_BOOST / float(favorite_seed_rank[game_id])
@@ -570,11 +700,15 @@ def _build_personalized_recommendation_ids(
             score += RANK_WEIGHT_MODEL_SEED_BOOST / float(model_seed_rank[game_id])
 
         scored_rows.append((score, popularity, game_id))
+        if ranking_seed and RANK_WEIGHT_EXPLORATION_JITTER > 0:
+            score += _stable_unit_noise(ranking_seed, game_id) * RANK_WEIGHT_EXPLORATION_JITTER
+        seeded_rows.append((score, popularity, game_id))
 
     if not scored_rows:
-        return []
+        return [], {}
 
-    scored_rows.sort(key=lambda row: (-row[0], -row[1], row[2]))
+    seeded_rows.sort(key=lambda row: (-row[0], -row[1], row[2]))
+    raw_score_by_id = {game_id: score for score, _, game_id in scored_rows}
 
     diverse: list[int] = []
     diverse_set: set[int] = set()
@@ -585,7 +719,7 @@ def _build_personalized_recommendation_ids(
     token_by_id: dict[int, set[str]] = {
         gid: _tokenize_game_text(game) for gid, game in game_by_id.items()
     }
-    ranked_ids = [game_id for _, _, game_id in scored_rows]
+    ranked_ids = [game_id for _, _, game_id in seeded_rows]
     max_per_genre = max(2, min(4, top_n // 6 + 1))
 
     # First pass: enforce genre caps and avoid near-duplicate text matches.
@@ -632,18 +766,27 @@ def _build_personalized_recommendation_ids(
         if len(diverse) >= top_n:
             break
 
-    return diverse[:top_n]
+    final_ids = diverse[:top_n]
+    return final_ids, {game_id: raw_score_by_id.get(game_id, 0.0) for game_id in final_ids}
 
-def _extract_questionnaire_answer_tokens(questionnaire: dict[str, Any]) -> set[str]:
-    tokens: set[str] = set()
+def _extract_questionnaire_answer_tokens(questionnaire: dict[str, Any]) -> dict[str, float]:
+    tokens: dict[str, float] = {}
     answers = questionnaire.get("answers")
     if not isinstance(answers, dict):
         return tokens
+    raw_weights = questionnaire.get("question_weights")
+    question_weights = raw_weights if isinstance(raw_weights, dict) else {}
 
     stop_words = {"preference", "preferences", "primary", "mode", "content", "level"}
-    for selected in answers.values():
+    for question_id, selected in answers.items():
         if not isinstance(selected, list):
             continue
+        raw_weight = question_weights.get(question_id, 1.0)
+        try:
+            question_weight = float(raw_weight)
+        except (ValueError, TypeError):
+            question_weight = 1.0
+        question_weight = min(max(question_weight, 0.1), 5.0)
         for value in selected:
             if not isinstance(value, str):
                 continue
@@ -651,7 +794,7 @@ def _extract_questionnaire_answer_tokens(questionnaire: dict[str, Any]) -> set[s
                 token = chunk.strip().lower()
                 if len(token) < 3 or token in stop_words:
                     continue
-                tokens.add(token)
+                tokens[token] = tokens.get(token, 0.0) + question_weight
     return tokens
 
 
@@ -856,9 +999,14 @@ async def recommend(payload: RecommendRequest, request: Request) -> UserRecommen
         model_version,
     )
 
-    inference = getattr(request.app.state, "inference_service", None)
-    if inference is None:
-        inference = getattr(request.app.state, "inference", None)
+    inference_service = getattr(request.app.state, "inference_service", None)
+    inference_alias = getattr(request.app.state, "inference", None)
+    # Backward compatibility for tests/integrations that still patch app.state.inference.
+    # If both are present and differ, prefer the explicit alias override.
+    if inference_alias is not None and inference_alias is not inference_service:
+        inference = inference_alias
+    else:
+        inference = inference_service if inference_service is not None else inference_alias
 
     model_loaded = getattr(request.app.state, "model", None) is not None
     model_load_failed = bool(getattr(request.app.state, "model_load_failed", False))
@@ -970,19 +1118,22 @@ async def recommend(payload: RecommendRequest, request: Request) -> UserRecommen
         favorite_game_ids=model_input.favorite_game_ids,
         top_k_per_game=20,
     )
-    answer_tokens = _extract_questionnaire_answer_tokens(model_input.questionnaire)
+    answer_token_weights = _extract_questionnaire_answer_tokens(model_input.questionnaire)
+    release_year_preference = _extract_release_year_preference(model_input.questionnaire)
     interacted_game_ids = _fetch_user_interacted_game_ids(request, int(model_input.user_id or 0))
-    personalized_ids = _build_personalized_recommendation_ids(
+    personalized_ids, personalized_score_by_id = _build_personalized_recommendation_ids(
         request,
         liked_keyword_ids=set(model_input.liked_keyword_ids),
         liked_platform_ids=set(model_input.liked_platform_ids),
         disliked_keyword_ids=set(model_input.disliked_keyword_ids),
         disliked_platform_ids=set(model_input.disliked_platform_ids),
         favorite_game_ids=model_input.favorite_game_ids,
-        answer_tokens=answer_tokens,
+        answer_token_weights=answer_token_weights,
         favorite_seed_ids=favorite_seed_ids,
         model_seed_ids=model_seed_ids,
+        release_year_preference=release_year_preference,
         top_n=RECOMMEND_TARGET_SIZE,
+        ranking_seed=str(request_id),
         excluded_game_ids=interacted_game_ids,
     )
     if personalized_ids:
@@ -1002,6 +1153,10 @@ async def recommend(payload: RecommendRequest, request: Request) -> UserRecommen
             user_id=model_input.user_id,
             recommended_games=personalized_ids,
             strategy=strategy,
+            scored_recommendations=_build_scored_recommendations(
+                personalized_ids,
+                raw_score_by_id=personalized_score_by_id,
+            ),
         )
 
     if getattr(inference_output, "strategy", "") == "rule_based_fallback_v1":
@@ -1019,6 +1174,7 @@ async def recommend(payload: RecommendRequest, request: Request) -> UserRecommen
                 user_id=model_input.user_id,
                 recommended_games=dynamic_fallback_ids,
                 strategy="popularity_diversity_v1",
+                scored_recommendations=_build_scored_recommendations(dynamic_fallback_ids),
             )
 
     return inference_output.to_user_recommend_response(fallback_user_id=model_input.user_id)

@@ -84,8 +84,16 @@ const API_ROOT = RAW_BASE_URL.endsWith("/api")
 // Normalize cover image URLs to ensure they are absolute and use HTTPS
 const normalizeCoverUrl = (url?: string) => {
   if (!url) return null;
-  if (url.startsWith("//")) return `https:${url}`;
-  return url;
+  const absoluteUrl = url.startsWith("//") ? `https:${url}` : url;
+  // IGDB image URLs include a size token segment (e.g. /t_thumb/, /t_1080p/).
+  // Use t_original to preserve full composition (portrait/tall images especially).
+  if (/images\.igdb\.com\/igdb\/image\/upload\//i.test(absoluteUrl)) {
+    if (/\/t_[^/]+\//i.test(absoluteUrl)) {
+      return absoluteUrl.replace(/\/t_[^/]+\//i, "/t_original/");
+    }
+    return absoluteUrl.replace(/\/upload\//i, "/upload/t_original/");
+  }
+  return absoluteUrl;
 };
 
 // Parse release date strings into Date objects, returning null for invalid or missing dates

@@ -30,10 +30,11 @@ def test_get_recommend_for_user_valid_id_returns_expected_payload():
     
     assert response.status_code == 200
     body = response.json()
-    assert set(body.keys()) == {'user_id', 'recommended_games', 'strategy'}
+    assert set(body.keys()) >= {'user_id', 'recommended_games', 'strategy'}
     assert body['user_id'] == 1
     assert body['recommended_games'] == [71, 72, 73, 74, 75]
-    assert body['strategy'] == 'placeholder_user_based' 
+    assert body['strategy'] == 'placeholder_user_based'
+    assert body.get("scored_recommendations") == []
 
 
 def test_get_recommend_for_user_invalid_id_returns_400_with_clear_detail():
@@ -114,11 +115,15 @@ def test_existing_recommend_item_and_recommend_routes_still_respond_as_expected(
         },
     )
     assert recommend_response.status_code == 200
-    assert recommend_response.json() == {
-        'user_id': 1,
-        'recommended_games': [901, 902, 903],
-        'strategy': 'keras_inference_v1',
-    }
+    recommend_body = recommend_response.json()
+    assert recommend_body["user_id"] == 1
+    assert recommend_body["recommended_games"] == [901, 902, 903]
+    assert recommend_body["strategy"] == "keras_inference_v1"
+    assert recommend_body["scored_recommendations"] == [
+        {"game_id": 901, "rank": 1, "score": 0.95},
+        {"game_id": 902, "rank": 2, "score": 0.9},
+        {"game_id": 903, "rank": 3, "score": 0.85},
+    ]
     
     similar_post_response = client.post('/recommend/item', json={'item_id': 11, 'top_k': 5})
     assert similar_post_response.status_code == 200
@@ -207,11 +212,11 @@ def test_recommend_for_user_live_dependencies_and_ranks_candidates():
     response = client.get("/recommend/user/9")
     
     assert response.status_code == 200
-    assert response.json() == {
-        'user_id': 9,
-        'recommended_games': [200, 101, 102, 104, 103],
-        'strategy': 'keyword_platform_overlap_v1',
-    }
+    body = response.json()
+    assert body["user_id"] == 9
+    assert body["recommended_games"] == [200, 101, 102, 104, 103]
+    assert body["strategy"] == "keyword_platform_overlap_v1"
+    assert body.get("scored_recommendations") == []
     
     for attr in ("service_urls", "http", "request_timeout"):
         if hasattr(app.state, attr):

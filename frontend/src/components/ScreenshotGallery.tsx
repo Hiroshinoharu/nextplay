@@ -1,9 +1,11 @@
 import {
+  useCallback,
   useMemo,
   useRef,
   useState,
   type MouseEvent,
   type PointerEvent,
+  type SyntheticEvent,
   type TouchEvent,
 } from 'react'
 import {
@@ -47,6 +49,7 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
   }, [screenshots])
 
   const [activeIndex, setActiveIndex] = useState(0)
+  const [aspectRatioBySrc, setAspectRatioBySrc] = useState<Record<string, number>>({})
   const touchStartX = useRef<number | null>(null)
   const touchStartY = useRef<number | null>(null)
 
@@ -55,6 +58,8 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
   const safeActiveIndex = activeIndex < items.length ? activeIndex : 0
   const activeShot = items[safeActiveIndex]
   const canNavigate = items.length > 1
+  const activeAspectRatio = aspectRatioBySrc[activeShot.src] ?? 16 / 9
+  const clampedAspectRatio = Math.max(0.75, Math.min(2.2, activeAspectRatio))
 
   const showPrevious = () => {
     if (!canNavigate) return
@@ -141,6 +146,22 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
     }
   }
 
+  const handleImageLoad = useCallback(
+    (src: string, event: SyntheticEvent<HTMLImageElement>) => {
+      const { naturalWidth, naturalHeight } = event.currentTarget
+      if (!naturalWidth || !naturalHeight) return
+      const ratio = naturalWidth / naturalHeight
+      if (!Number.isFinite(ratio) || ratio <= 0) return
+      setAspectRatioBySrc((current) => {
+        if (current[src] && Math.abs(current[src] - ratio) < 0.01) {
+          return current
+        }
+        return { ...current, [src]: ratio }
+      })
+    },
+    [],
+  )
+
   return (
     <Gallery>
       <FrameWrap onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
@@ -157,11 +178,16 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
         ) : null}
         <FrameButton
           type="button"
+          style={{ aspectRatio: `${clampedAspectRatio}` }}
           onPointerUp={handleFramePointerUp}
           onClick={handleFrameClick}
           aria-label={`Open screenshot ${safeActiveIndex + 1} of ${gameName}`}
         >
-          <FrameImage src={activeShot.src} alt={`${gameName} screenshot ${safeActiveIndex + 1}`} />
+          <FrameImage
+            src={activeShot.src}
+            alt={`${gameName} screenshot ${safeActiveIndex + 1}`}
+            onLoad={(event) => handleImageLoad(activeShot.src, event)}
+          />
         </FrameButton>
         {canNavigate ? (
           <NavButton
