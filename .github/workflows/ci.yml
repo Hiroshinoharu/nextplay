@@ -1,32 +1,22 @@
-# Name of the workflow shown in GitHub Actions UI
 name: NextPlay CI - Build & Test
 
-# Events that trigger the workflow: on push and on pull request
 on:
   push:
   pull_request:
 
 jobs:
-  # Single job that builds and tests all services
   ci:
-    runs-on: ubuntu-latest  # Runner environment
+    runs-on: ubuntu-latest
 
     steps:
-
-    # --------------------
-    #   GO SERVICES
-    # --------------------
-    # Checkout the repository so the runner has the source code
     - name: Checkout code
       uses: actions/checkout@v3
 
-    # Install the specified Go toolchain version
     - name: Install Go
       uses: actions/setup-go@v4
       with:
         go-version: '1.24.5'
 
-    # Cache Go modules and build cache to speed up subsequent runs
     - name: Cache Go dependencies
       uses: actions/cache@v4
       with:
@@ -37,7 +27,6 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-go-v2-
 
-    # Build each Go microservice in its directory
     - name: Build gateway service
       working-directory: services/gateway
       run: go build .
@@ -50,36 +39,82 @@ jobs:
       working-directory: services/user
       run: go build .
 
-    # --------------------
-    #   PYTHON SERVICE
-    # --------------------
-    # Install Python runtime
     - name: Install Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.11"
 
-    # Install Python dependencies for the recommender service
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r services/recommender/requirements.txt
 
-    # Quick validation: import the recommender module (fails fast if broken)
     - name: Validate recommender service
       run: |
         python -c "import sys; sys.path.append('services'); import recommender.main"
 
-    # --------------------
-    #     FRONTEND
-    # --------------------
-    # Install Node.js runtime
+    - name: Run recommender training tests
+      run: |
+        pytest -q services/recommender/tests/training/test_offline_eval.py
+        pytest -q services/recommender/tests/training/test_retrain.py
+        pytest -q services/recommender/tests/training/test_dataset_pipeline.py
+
+    - name: Run retrain gate smoke (seeded fixture)
+      run: |
+        python -m services.recommender.training.retrain \
+          --source_mode seeded_only \
+          --run_id ci_gate \
+          --runs_dir services/recommender/training/runs \
+          --seed 42 \
+          --seed_users 24 \
+          --seed_games 80 \
+          --seed_history_per_user 12 \
+          --seed_holdout_per_user 1 \
+          --epochs 1 \
+          --batch_size 16 \
+          --k 10
+
+    - name: Validate retrain gate artifacts
+      run: |
+        python - <<'PY'
+        import json
+        from pathlib import Path
+
+        run_dir = Path("services/recommender/training/runs/ci_gate")
+        required = ["run_log.json", "dataset_profile.json", "gate_result.json"]
+        missing = [name for name in required if not (run_dir / name).exists()]
+        if missing:
+            raise SystemExit(f"Missing required artifacts: {missing}")
+
+        run_log = json.loads((run_dir / "run_log.json").read_text(encoding="utf-8"))
+        gate_result = json.loads((run_dir / "gate_result.json").read_text(encoding="utf-8"))
+        profile = json.loads((run_dir / "dataset_profile.json").read_text(encoding="utf-8"))
+
+        if gate_result.get("code") != "ok":
+            raise SystemExit(f"Gate failed: {gate_result}")
+        if not run_log.get("metrics", {}).get("passed"):
+            raise SystemExit("Offline metrics gate did not pass")
+
+        model_metrics = run_log["metrics"]["model"]
+        if model_metrics["recall_at_k"] <= 0 or model_metrics["ndcg_at_k"] <= 0:
+            raise SystemExit(f"Expected non-zero metrics, got: {model_metrics}")
+
+        if not profile.get("quality_passed"):
+            raise SystemExit(f"Dataset quality failed unexpectedly: {profile.get('quality_failures')}")
+        PY
+
+    - name: Upload retrain gate artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: recommender-retrain-gate-artifacts
+        path: services/recommender/training/runs/ci_gate
+
     - name: Install Node
       uses: actions/setup-node@v4
       with:
         node-version: "20"
 
-    # Cache Node modules to speed up CI
     - name: Cache Node dependencies
       uses: actions/cache@v4
       with:
@@ -88,12 +123,10 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-node-
 
-    # Install frontend dependencies using a clean install
     - name: Install Frontend dependencies
       working-directory: frontend
       run: npm ci
 
-    # Build the frontend static assets
     - name: Build Frontend
       working-directory: frontend
       run: npm run build

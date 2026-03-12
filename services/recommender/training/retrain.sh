@@ -25,6 +25,12 @@ for arg in "$@"; do
   if [[ "$arg" == "--input_csv" || "$arg" == --input_csv=* ]]; then
     exec "$PYTHON_BIN" -m services.recommender.training.retrain "$@"
   fi
+  if [[ "$arg" == "--db_export_csv" || "$arg" == --db_export_csv=* ]]; then
+    exec "$PYTHON_BIN" -m services.recommender.training.retrain "$@"
+  fi
+  if [[ "$arg" == "--source_mode" || "$arg" == --source_mode=* ]]; then
+    exec "$PYTHON_BIN" -m services.recommender.training.retrain "$@"
+  fi
 done
 
 if ! "$PYTHON_BIN" -c "import tensorflow" >/dev/null 2>&1; then
