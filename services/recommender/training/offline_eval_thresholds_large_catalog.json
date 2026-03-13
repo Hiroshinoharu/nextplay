@@ -2,7 +2,7 @@
   "min_recall_at_k": 0.20,
   "min_ndcg_at_k": 0.15,
   "min_map_at_k": 0.12,
-  "min_coverage_at_k": 0.005,
+  "min_coverage_at_k": 0.0019,
   "min_list_diversity_at_k": 0.90,
   "min_recall_lift_vs_popularity": 0.00,
   "min_ndcg_lift_vs_popularity": 0.00,

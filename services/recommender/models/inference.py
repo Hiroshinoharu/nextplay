@@ -3,13 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 import importlib
 import math
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar
 
 from .feature_contract import build_feature_vector_from_payload
 from .model_schema import ModelCandidateScore, ModelInputSchema, ModelOutputSchema
 
 MAX_MODEL_CANDIDATES = 100
 MODEL_SCORE_TIEBREAKER_WEIGHT = 1e-6
+TGameId = TypeVar("TGameId")
 
 
 class InferenceService(Protocol):
@@ -45,7 +46,7 @@ class KerasInferenceService:
     def infer(self, payload: ModelInputSchema) -> ModelOutputSchema:
         feature_vector = build_feature_vector_from_payload(payload)
         scores = _predict_scores(self.model, feature_vector)
-        valid_scores: list[tuple[int, float, float]] = []
+        candidate_rows: list[tuple[int, float, float]] = []
         for candidate_index, score in enumerate(scores, start=1):
             if not math.isfinite(score):
                 continue
@@ -54,21 +55,20 @@ class KerasInferenceService:
             if game_id is None:
                 continue
 
-            hybrid_score = _combine_scores(
-                model_score=float(score),
-                popularity_prior=self.popularity_prior_map.get(candidate_index, 0.0)
+            popularity_prior = (
+                self.popularity_prior_map.get(candidate_index, 0.0)
                 if self.popularity_prior_map is not None
-                else 0.0,
+                else 0.0
             )
-            valid_scores.append((game_id, hybrid_score, float(score)))
+            candidate_rows.append((game_id, float(score), float(popularity_prior)))
 
-        ranked = sorted(valid_scores, key=lambda row: row[1], reverse=True)
+        ranked = rank_candidate_rows(candidate_rows)
         candidates = [
             ModelCandidateScore(game_id=game_id, score=model_score, rank=rank)
-            for rank, (game_id, _hybrid_score, model_score) in enumerate(ranked[:MAX_MODEL_CANDIDATES], start=1)
+            for rank, (game_id, model_score, _popularity_prior) in enumerate(ranked[:MAX_MODEL_CANDIDATES], start=1)
         ]
 
-        strategy = "keras_popularity_hybrid_v1" if self.popularity_prior_map else "keras_inference_v1"
+        strategy = "keras_popularity_hybrid_v3" if self.popularity_prior_map else "keras_inference_v1"
         return ModelOutputSchema(
             user_id=payload.user_id,
             strategy=strategy,
@@ -95,11 +95,28 @@ def build_inference_service(
     return RuleBasedInferenceService()
 
 
+def rank_candidate_rows(candidate_rows: list[tuple[TGameId, float, float]]) -> list[tuple[TGameId, float, float]]:
+    """Rank candidates by flattened popularity prior with model-score tie-breaking."""
+    if not candidate_rows:
+        return []
+
+    if not any(popularity_prior > 0.0 for _, _, popularity_prior in candidate_rows):
+        return sorted(candidate_rows, key=lambda row: (row[1], row[0]), reverse=True)
+
+    return sorted(
+        candidate_rows,
+        key=lambda row: (_combine_scores(model_score=row[1], popularity_prior=row[2]), row[0]),
+        reverse=True,
+    )
+
+
 def _combine_scores(*, model_score: float, popularity_prior: float) -> float:
-    return float(popularity_prior) + (MODEL_SCORE_TIEBREAKER_WEIGHT * float(model_score))
+    flattened_prior = math.sqrt(max(0.0, float(popularity_prior)))
+    return flattened_prior + (MODEL_SCORE_TIEBREAKER_WEIGHT * float(model_score))
 
 
 def _predict_scores(model: Any, feature_vector: list[float]) -> list[float]:
+    """Run a single-feature inference call and normalize the model output into a flat score list."""
     numpy_module = importlib.import_module("numpy")
     batch = numpy_module.asarray([feature_vector], dtype="float32")
     try:

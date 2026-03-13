@@ -3,6 +3,7 @@ from services.recommender.models.inference import (
     KerasInferenceService,
     RuleBasedInferenceService,
     build_inference_service,
+    rank_candidate_rows,
 )
 from services.recommender.models.model_schema import ModelInputSchema
 from services.recommender.training.feature_transform import build_training_feature_vector
@@ -53,11 +54,24 @@ def test_keras_inference_service_wraps_predict_call_and_ranks_results() -> None:
     assert [candidate.game_id for candidate in result.candidates[:3]] == [2, 3, 1]
 
 
+def test_rank_candidate_rows_uses_flattened_popularity_prior() -> None:
+    ranked = rank_candidate_rows(
+        [
+            (1001, 0.2, 1.0),
+            (1002, 0.8, 0.25),
+            (1003, 0.4, 0.49),
+            (1004, 0.9, 0.16),
+        ]
+    )
+
+    assert [game_id for game_id, _score, _prior in ranked[:4]] == [1001, 1003, 1002, 1004]
+
+
 def test_keras_inference_service_uses_popularity_prior_for_hybrid_ranking() -> None:
     service = KerasInferenceService(
         model=_FakePredictModel(),
         candidate_index_map={1: 1001, 2: 1002, 3: 1003},
-        popularity_prior_map={1: 1.0, 2: 0.5, 3: 0.7},
+        popularity_prior_map={1: 1.0, 2: 0.25, 3: 0.49},
     )
 
     result = service.infer(
@@ -70,7 +84,7 @@ def test_keras_inference_service_uses_popularity_prior_for_hybrid_ranking() -> N
         )
     )
 
-    assert result.strategy == "keras_popularity_hybrid_v1"
+    assert result.strategy == "keras_popularity_hybrid_v3"
     assert [candidate.game_id for candidate in result.candidates[:3]] == [1001, 1003, 1002]
 
 

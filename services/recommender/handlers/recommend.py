@@ -1137,9 +1137,10 @@ async def recommend(payload: RecommendRequest, request: Request) -> UserRecommen
         excluded_game_ids=interacted_game_ids,
     )
     if personalized_ids:
+        inference_strategy = getattr(inference_output, "strategy", "unknown")
         strategy = (
-            "hybrid_model_profile_v1"
-            if getattr(inference_output, "strategy", "") != "rule_based_fallback_v1"
+            inference_strategy
+            if inference_strategy != "rule_based_fallback_v1"
             else "hybrid_profile_fallback_v1"
         )
         logger.info(

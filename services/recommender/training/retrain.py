@@ -20,6 +20,7 @@ from services.recommender.models.feature_contract import (
     FEATURE_SCHEMA_VERSION,
     build_feature_vector_from_counts,
 )
+from services.recommender.models.inference import rank_candidate_rows
 from services.recommender.models.model_loader import (
     load_candidate_index_map,
     load_model,
@@ -241,7 +242,8 @@ def _load_train_popularity(train_csv: Path) -> tuple[dict[str, set[str]], list[s
             if not user_id or not game_id:
                 continue
             seen.setdefault(user_id, set()).add(game_id)
-            popularity[game_id] = popularity.get(game_id, 0) + 1
+            if (row.get("label") or "").strip() == "1":
+                popularity[game_id] = popularity.get(game_id, 0) + 1
 
     ranked_games = [
         game_id
@@ -329,9 +331,8 @@ def _build_user_feature_vectors(train_csv: Path) -> tuple[dict[str, set[str]], d
                 continue
 
             seen.setdefault(user_id, set()).add(game_id)
-            popularity[game_id] = popularity.get(game_id, 0) + 1
-
             if label_raw == "1":
+                popularity[game_id] = popularity.get(game_id, 0) + 1
                 positive_counts[user_id] = positive_counts.get(user_id, 0) + 1
             elif label_raw == "0":
                 negative_counts[user_id] = negative_counts.get(user_id, 0) + 1
@@ -383,7 +384,7 @@ def _write_predictions_csv(
         for user_id in users:
             seen_games = seen_by_user.get(user_id, set())
             feature_vector = features_by_user.get(user_id, fallback_feature_vector)
-            scored_candidates: list[tuple[str, float]] = []
+            candidate_rows: list[tuple[str, float, float]] = []
             for candidate_index, score in enumerate(_predict_score_row(model, feature_vector), start=1):
                 if not math.isfinite(score):
                     continue
@@ -394,11 +395,10 @@ def _write_predictions_csv(
                 if game_id_str in seen_games:
                     continue
                 popularity_prior = float(popularity_prior_map.get(candidate_index, 0.0))
-                combined_score = popularity_prior + (1e-6 * float(score))
-                scored_candidates.append((game_id_str, combined_score))
+                candidate_rows.append((game_id_str, float(score), popularity_prior))
 
-            scored_candidates.sort(key=lambda row: row[1], reverse=True)
-            recommendations = [game_id for game_id, _ in scored_candidates[:k]]
+            ranked_candidates = rank_candidate_rows(candidate_rows)
+            recommendations = [game_id for game_id, _score, _prior in ranked_candidates[:k]]
             if len(recommendations) < k:
                 existing = set(recommendations)
                 recommendations.extend(
