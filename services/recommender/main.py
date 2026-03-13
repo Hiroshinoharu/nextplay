@@ -11,7 +11,11 @@ import uvicorn
 
 from services.recommender.models.artifact_manifest import ArtifactManifest, load_artifact_manifest
 from services.recommender.models.inference import build_inference_service
-from services.recommender.models.model_loader import load_candidate_index_map, load_model
+from services.recommender.models.model_loader import (
+    load_candidate_index_map,
+    load_model,
+    load_popularity_prior_map,
+)
 from services.recommender.routes.routes import register_routes
 
 logger = logging.getLogger(__name__)
@@ -92,6 +96,7 @@ def _build_loaded_model_identity(app: FastAPI) -> dict[str, str | bool | None]:
         "configured_model_version": configured_version,
         "loaded_model_version": loaded_version,
         "feature_schema_version": manifest.feature_schema_version if manifest is not None else None,
+        "popularity_prior_path": manifest.popularity_prior_path if manifest is not None else None,
         "dataset_hash": manifest.dataset_hash if manifest is not None else None,
         "git_commit": manifest.git_commit if manifest is not None else None,
         "manifest_path": getattr(app.state, "model_manifest_path", None),
@@ -109,6 +114,7 @@ def _initialise_optional_model_state(app: FastAPI, validated_model_path: Path | 
     app.state.model_manifest = None
     app.state.model = None
     app.state.candidate_index_map = None
+    app.state.popularity_prior_map = None
     app.state.model_load_failed = False
     app.state.model_load_failure_reason = None
 
@@ -119,6 +125,7 @@ def _initialise_optional_model_state(app: FastAPI, validated_model_path: Path | 
         app.state.model = load_model(app.state.model_path) if app.state.model_path else None
 
         candidate_index_map_path = None
+        popularity_prior_path = None
         if app.state.model_manifest is not None:
             candidate_index_map_path = app.state.model_manifest.candidate_index_map_path
             candidate_map = Path(candidate_index_map_path)
@@ -126,8 +133,17 @@ def _initialise_optional_model_state(app: FastAPI, validated_model_path: Path | 
                 candidate_map = (Path(app.state.model_manifest_path).resolve().parent / candidate_map).resolve()
             candidate_index_map_path = candidate_map.as_posix()
 
+            if app.state.model_manifest.popularity_prior_path:
+                popularity_prior = Path(app.state.model_manifest.popularity_prior_path)
+                if not popularity_prior.is_absolute() and app.state.model_manifest_path is not None:
+                    popularity_prior = (Path(app.state.model_manifest_path).resolve().parent / popularity_prior).resolve()
+                popularity_prior_path = popularity_prior.as_posix()
+
         app.state.candidate_index_map = (
             load_candidate_index_map(candidate_index_map_path) if candidate_index_map_path else None
+        )
+        app.state.popularity_prior_map = (
+            load_popularity_prior_map(popularity_prior_path) if popularity_prior_path else None
         )
     except Exception as exc:
         if model_required:
@@ -143,7 +159,7 @@ def _initialise_optional_model_state(app: FastAPI, validated_model_path: Path | 
         app.state.model_manifest = None
         app.state.model = None
         app.state.candidate_index_map = None
-
+        app.state.popularity_prior_map = None
     app.state.loaded_model_identity = _build_loaded_model_identity(app)
 
 
@@ -161,7 +177,11 @@ async def lifespan(app: FastAPI):
     validated_model_path = _validate_model_config(app.state.model_config)
     _initialise_optional_model_state(app, validated_model_path)
 
-    app.state.inference_service = build_inference_service(app.state.model, app.state.candidate_index_map)
+    app.state.inference_service = build_inference_service(
+        app.state.model,
+        app.state.candidate_index_map,
+        app.state.popularity_prior_map,
+    )
     app.state.fallback_inference = build_inference_service(None)
     app.state.inference = app.state.inference_service
 

@@ -192,6 +192,8 @@ def test_run_experiment_logs_hashes_and_gate_artifacts_reproducibly(tmp_path: Pa
     assert persisted["training"]["tensorboard_log_dir"].endswith("tensorboard")
     assert Path(persisted["training"]["tensorboard_log_dir"]).exists()
     assert "git_commit" in manifest
+    assert manifest["popularity_prior_path"] == "popularity_prior.json"
+    assert Path(persisted["artifacts"]["popularity_prior_path"]).exists()
 
 
 def test_run_experiment_blocks_promotion_when_offline_gates_fail(tmp_path: Path) -> None:
@@ -236,6 +238,7 @@ def test_run_experiment_blocks_promotion_when_offline_gates_fail(tmp_path: Path)
     assert persisted["promotion"]["artifact_version"] == "run_fail"
     assert persisted["promotion"]["manifest_path"].endswith("artifact_manifest.json")
     assert persisted["promotion"]["candidate_index_map_path"].endswith("candidate_index_map.json")
+    assert persisted["promotion"]["popularity_prior_path"].endswith("popularity_prior.json")
 
 
 def test_run_experiment_fails_dataset_quality_before_training(tmp_path: Path) -> None:

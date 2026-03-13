@@ -20,7 +20,11 @@ from services.recommender.models.feature_contract import (
     FEATURE_SCHEMA_VERSION,
     build_feature_vector_from_counts,
 )
-from services.recommender.models.model_loader import load_candidate_index_map, load_model
+from services.recommender.models.model_loader import (
+    load_candidate_index_map,
+    load_model,
+    load_popularity_prior_map,
+)
 from services.recommender.training.data_prep import run_split
 from services.recommender.training.dataset_pipeline import (
     DatasetQualityConfig,
@@ -284,6 +288,30 @@ def _build_proxy_feature_counts(*, liked_count: int, disliked_count: int) -> dic
     }
 
 
+def _build_popularity_prior_map(train_csv: Path, candidate_index_map: dict[int, int]) -> dict[int, float]:
+    """Build a normalized popularity prior keyed by candidate index for hybrid ranking."""
+    positive_counts: dict[int, int] = {}
+    with train_csv.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if (row.get("label") or "").strip() != "1":
+                continue
+            game_id_raw = (row.get("game_id") or "").strip()
+            if not game_id_raw:
+                continue
+            try:
+                game_id = int(game_id_raw)
+            except ValueError:
+                continue
+            positive_counts[game_id] = positive_counts.get(game_id, 0) + 1
+
+    max_count = max(positive_counts.values(), default=1)
+    priors: dict[int, float] = {}
+    for candidate_index, game_id in candidate_index_map.items():
+        priors[candidate_index] = positive_counts.get(game_id, 0) / max_count
+    return priors
+
+
 def _build_user_feature_vectors(train_csv: Path) -> tuple[dict[str, set[str]], dict[str, list[float]], list[str]]:
     """Build stable per-user features and popularity order from the train split."""
     seen: dict[str, set[str]] = {}
@@ -331,11 +359,15 @@ def _write_predictions_csv(
     k: int,
     model_path: Path,
     candidate_index_map_path: Path,
+    popularity_prior_path: Path | None = None,
 ) -> None:
     """Write model-ranked predictions for offline evaluation."""
     users = _load_positive_test_users(test_csv)
     seen_by_user, features_by_user, ranked_games = _build_user_feature_vectors(train_csv)
     candidate_index_map = load_candidate_index_map(str(candidate_index_map_path))
+    popularity_prior_map = (
+        load_popularity_prior_map(str(popularity_prior_path)) if popularity_prior_path is not None else {}
+    )
     model = load_model(str(model_path))
     fallback_feature_vector = build_feature_vector_from_counts(
         liked_keyword_count=0,
@@ -361,7 +393,9 @@ def _write_predictions_csv(
                 game_id_str = str(game_id)
                 if game_id_str in seen_games:
                     continue
-                scored_candidates.append((game_id_str, float(score)))
+                popularity_prior = float(popularity_prior_map.get(candidate_index, 0.0))
+                combined_score = popularity_prior + (1e-6 * float(score))
+                scored_candidates.append((game_id_str, combined_score))
 
             scored_candidates.sort(key=lambda row: row[1], reverse=True)
             recommendations = [game_id for game_id, _ in scored_candidates[:k]]
@@ -468,6 +502,7 @@ def _write_artifact_bundle(
     bundle_dir.mkdir(parents=True, exist_ok=True)
     
     candidate_map_path = bundle_dir / "candidate_index_map.json"
+    popularity_prior_path = bundle_dir / "popularity_prior.json"
     _seen_by_user, _features_by_user, ranked_games = _build_user_feature_vectors(train_csv)
     candidate_index_map: dict[str, int] = {}
     for candidate_index, game_id in enumerate(ranked_games, start=1):
@@ -476,13 +511,19 @@ def _write_artifact_bundle(
         except ValueError:
             continue
     candidate_map_path.write_text(json.dumps(candidate_index_map, indent=4), encoding="utf-8")
-    
+    popularity_prior_map = _build_popularity_prior_map(
+        train_csv,
+        {int(candidate_index): game_id for candidate_index, game_id in candidate_index_map.items()},
+    )
+    popularity_prior_path.write_text(json.dumps(popularity_prior_map, indent=4), encoding="utf-8")
+
     model_path = bundle_dir / f"recommender_{artifact_version}.keras"
     manifest_path = bundle_dir / "artifact_manifest.json"
     manifest_payload = {
         "model_version": artifact_version,
         "feature_schema_version": FEATURE_SCHEMA_VERSION,
         "candidate_index_map_path": candidate_map_path.name,
+        "popularity_prior_path": popularity_prior_path.name,
         "training_config": {
             "train_ratio": train_ratio,
             "validation_ratio": validation_ratio,
@@ -510,6 +551,7 @@ def _write_artifact_bundle(
         "model_stub_metadata": model_stub_metadata,
         "manifest_path": str(manifest_path),
         "candidate_index_map_path": str(candidate_map_path),
+        "popularity_prior_path": str(popularity_prior_path),
     }
 
 def _build_training_rows(
@@ -649,6 +691,7 @@ def _promote_artifacts_to_current(*, run_log: dict[str, Any], repo_root: Path) -
     source_model = Path(artifacts["model_path"])
     source_manifest = Path(artifacts["manifest_path"])
     source_candidate_map = Path(artifacts["candidate_index_map_path"])
+    source_popularity_prior = Path(artifacts["popularity_prior_path"])
 
     current_dir = repo_root / "services/recommender/training/artifacts/current"
     current_dir.mkdir(parents=True, exist_ok=True)
@@ -656,13 +699,16 @@ def _promote_artifacts_to_current(*, run_log: dict[str, Any], repo_root: Path) -
     target_model = current_dir / "model.keras"
     target_manifest = current_dir / "artifact_manifest.json"
     target_candidate_map = current_dir / "candidate_index_map.json"
+    target_popularity_prior = current_dir / "popularity_prior.json"
 
     shutil.copy2(source_model, target_model)
     shutil.copy2(source_manifest, target_manifest)
     shutil.copy2(source_candidate_map, target_candidate_map)
+    shutil.copy2(source_popularity_prior, target_popularity_prior)
 
     manifest_payload = json.loads(target_manifest.read_text(encoding="utf-8"))
     manifest_payload["candidate_index_map_path"] = target_candidate_map.name
+    manifest_payload["popularity_prior_path"] = target_popularity_prior.name
     target_manifest.write_text(json.dumps(manifest_payload, indent=4), encoding="utf-8")
 
     return {
@@ -670,6 +716,7 @@ def _promote_artifacts_to_current(*, run_log: dict[str, Any], repo_root: Path) -
         "model_path": str(target_model),
         "manifest_path": str(target_manifest),
         "candidate_index_map_path": str(target_candidate_map),
+        "popularity_prior_path": str(target_popularity_prior),
     }
 
 
@@ -959,6 +1006,7 @@ def run_experiment(
             k=k,
             model_path=Path(artifacts["model_path"]),
             candidate_index_map_path=Path(artifacts["candidate_index_map_path"]),
+            popularity_prior_path=Path(artifacts["popularity_prior_path"]),
         )
         logger.info(
             "retrain.predictions_completed run_id=%s predictions_csv=%s latency_ms=%.2f",
@@ -1014,6 +1062,7 @@ def run_experiment(
                 "model_path": artifacts["model_path"],
                 "manifest_path": artifacts["manifest_path"],
                 "candidate_index_map_path": artifacts["candidate_index_map_path"],
+                "popularity_prior_path": artifacts["popularity_prior_path"],
             }
         )
 

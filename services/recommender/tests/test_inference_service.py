@@ -53,6 +53,27 @@ def test_keras_inference_service_wraps_predict_call_and_ranks_results() -> None:
     assert [candidate.game_id for candidate in result.candidates[:3]] == [2, 3, 1]
 
 
+def test_keras_inference_service_uses_popularity_prior_for_hybrid_ranking() -> None:
+    service = KerasInferenceService(
+        model=_FakePredictModel(),
+        candidate_index_map={1: 1001, 2: 1002, 3: 1003},
+        popularity_prior_map={1: 1.0, 2: 0.5, 3: 0.7},
+    )
+
+    result = service.infer(
+        ModelInputSchema(
+            user_id=12,
+            liked_keyword_ids=[1, 2],
+            liked_platform_ids=[3],
+            disliked_keyword_ids=[],
+            disliked_platform_ids=[9],
+        )
+    )
+
+    assert result.strategy == "keras_popularity_hybrid_v1"
+    assert [candidate.game_id for candidate in result.candidates[:3]] == [1001, 1003, 1002]
+
+
 def test_keras_inference_service_maps_candidate_indices_to_game_ids() -> None:
     service = KerasInferenceService(
         model=_FakePredictModel(),
