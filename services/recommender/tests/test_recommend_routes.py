@@ -2,6 +2,12 @@ from fastapi.testclient import TestClient
 import pytest
 
 from services.recommender.main import app
+from services.recommender.handlers.recommend import (
+    _extract_release_year_preference,
+    _is_strict_release_year_preference,
+    _release_era_alignment_score,
+    _release_year_matches_preference,
+)
 from services.recommender.models.model_schema import ModelCandidateScore, ModelOutputSchema
 
 client = TestClient(app)
@@ -509,3 +515,25 @@ def test_recommend_route_requires_user_id_in_payload():
 
     assert response.status_code == 400
     assert response.json() == {'detail': 'user_id is required for /recommend'}
+
+
+def test_release_year_preference_supports_strict_only_variants() -> None:
+    preference = _extract_release_year_preference(
+        {"answers": {"era_preference": ["latest_2020_plus_only"]}}
+    )
+
+    assert preference == "latest_2020_plus_only"
+    assert _is_strict_release_year_preference(preference) is True
+    assert _release_year_matches_preference(2021, preference) is True
+    assert _release_year_matches_preference(2019, preference) is False
+
+
+def test_release_year_preference_keeps_soft_latest_choice_but_penalizes_older_titles() -> None:
+    preference = _extract_release_year_preference(
+        {"answers": {"era_preference": ["latest_2020_plus"]}}
+    )
+
+    assert preference == "latest_2020_plus"
+    assert _is_strict_release_year_preference(preference) is False
+    assert _release_era_alignment_score(2022, preference) > _release_era_alignment_score(2018, preference)
+    assert _release_era_alignment_score(2018, preference) > _release_era_alignment_score(2012, preference)

@@ -229,11 +229,34 @@ def _extract_release_year_preference(questionnaire: dict[str, Any]) -> str:
         "older_2000s_early_2010s",
         "modern_2015_plus",
         "latest_2020_plus",
+        "modern_2015_plus_only",
+        "latest_2020_plus_only",
+        "strict_modern_2015_plus",
+        "strict_latest_2020_plus",
         "no_era_preference",
     }
     if value not in allowed:
         return "no_preference"
     return value
+
+
+def _is_strict_release_year_preference(preference: str) -> bool:
+    return preference in {
+        "modern_2015_plus_only",
+        "latest_2020_plus_only",
+        "strict_modern_2015_plus",
+        "strict_latest_2020_plus",
+    }
+
+
+def _release_year_matches_preference(release_year: int | None, preference: str) -> bool:
+    if release_year is None:
+        return False
+    if preference in {"modern_2015_plus_only", "strict_modern_2015_plus"}:
+        return release_year >= 2015
+    if preference in {"latest_2020_plus_only", "strict_latest_2020_plus"}:
+        return release_year >= 2020
+    return True
 
 
 def _release_era_alignment_score(release_year: int | None, preference: str) -> float:
@@ -252,18 +275,18 @@ def _release_era_alignment_score(release_year: int | None, preference: str) -> f
         if 1995 <= release_year <= 1999 or 2015 <= release_year <= 2017:
             return 0.4
         return -0.35
-    if preference == "modern_2015_plus":
+    if preference in {"modern_2015_plus", "modern_2015_plus_only", "strict_modern_2015_plus"}:
         if release_year >= 2015:
             return 1.0
         if release_year >= 2012:
-            return 0.4
-        return -0.4
-    if preference == "latest_2020_plus":
+            return 0.1
+        return -1.15
+    if preference in {"latest_2020_plus", "latest_2020_plus_only", "strict_latest_2020_plus"}:
         if release_year >= 2020:
             return 1.0
         if release_year >= 2018:
-            return 0.45
-        return -0.5
+            return 0.05
+        return -1.35
     return 0.0
 
 
@@ -680,6 +703,11 @@ def _build_personalized_recommendation_ids(
         popularity = _extract_number(game, "popularity")
         rating = _extract_number(game, "aggregated_rating")
         release_year = _extract_release_year(game.get("release_date"))
+        if _is_strict_release_year_preference(release_year_preference) and not _release_year_matches_preference(
+            release_year,
+            release_year_preference,
+        ):
+            continue
         score = 0.0
         score += liked_keyword_overlap * RANK_WEIGHT_LIKED_KEYWORD
         score += liked_platform_overlap * RANK_WEIGHT_LIKED_PLATFORM
