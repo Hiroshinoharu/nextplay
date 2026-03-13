@@ -10,13 +10,14 @@ from .feature_contract import FEATURE_SCHEMA_VERSION
 
 class ArtifactManifest(BaseModel):
     """Metadata contract for recommender model artifacts"""
-    
+
     model_version: str
     feature_schema_version: str
     candidate_index_map_path: str
     training_config: dict[str, Any] = Field(default_factory=dict)
     random_seed: int | None = None
     dataset_hash: str | None = None
+    git_commit: str | None = None
 
 def load_artifact_manifest(*, manifest_path: str, model_path: str | None, expected_model_version: str) -> ArtifactManifest:
     """Load and validate model artifact metadata required for serving compatibility."""

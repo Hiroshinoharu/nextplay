@@ -1,27 +1,24 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 from ..handlers.recommend import (
-    recommend, 
-    recommend_for_user, 
-    recommend_similar, 
-    recommend_similar_post)
-
+    recommend,
+    recommend_for_user,
+    recommend_similar,
+    recommend_similar_post,
+)
 from ..models.response import SimilarResponse, UserRecommendResponse
 
+
 def register_routes(app: FastAPI):
-    
     @app.get("/health")
-    async def health():
-        return {"service": "recommender", "status" : "running"}
+    async def health(request: Request):
+        return {
+            "service": "recommender",
+            "status": "running",
+            "model": getattr(request.app.state, "loaded_model_identity", None),
+        }
 
-    # POST /recommend
     app.post("/recommend", response_model=UserRecommendResponse)(recommend)
-
-    # GET /recommend/user/{user_id}
     app.get("/recommend/user/{user_id}", response_model=UserRecommendResponse)(recommend_for_user)
-
-    # GET /recommend/item/{item_id}
     app.get("/recommend/item/{item_id}", response_model=SimilarResponse)(recommend_similar)
-
-    # POST /recommend/item
     app.post("/recommend/item", response_model=SimilarResponse)(recommend_similar_post)

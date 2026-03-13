@@ -20,11 +20,21 @@ def build_training_feature_vector(row: dict[str, str | int | float]) -> list[flo
             return 0
         return int(value)
 
+    def _float_from_value(value: str | int | float | None) -> float:
+        if value is None or value == "":
+            return 0.0
+        if isinstance(value, (int, float)):
+            return float(value)
+        return float(value)
+
     return build_feature_vector_from_counts(
         liked_keyword_count=_count_from_value(row.get("liked_keyword_count")),
         liked_platform_count=_count_from_value(row.get("liked_platform_count")),
         disliked_keyword_count=_count_from_value(row.get("disliked_keyword_count")),
         disliked_platform_count=_count_from_value(row.get("disliked_platform_count")),
+        favorite_game_count=_count_from_value(row.get("favorite_game_count")),
+        questionnaire_answer_count=_count_from_value(row.get("questionnaire_answer_count")),
+        questionnaire_total_weight=_float_from_value(row.get("questionnaire_total_weight")),
     )
 
 

@@ -6,6 +6,7 @@ import hashlib
 import importlib
 import json
 import logging
+import math
 import os
 import random
 import shutil
@@ -15,7 +16,11 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any
 
-from services.recommender.models.feature_contract import FEATURE_SCHEMA_VERSION
+from services.recommender.models.feature_contract import (
+    FEATURE_SCHEMA_VERSION,
+    build_feature_vector_from_counts,
+)
+from services.recommender.models.model_loader import load_candidate_index_map, load_model
 from services.recommender.training.data_prep import run_split
 from services.recommender.training.dataset_pipeline import (
     DatasetQualityConfig,
@@ -241,36 +246,103 @@ def _load_train_popularity(train_csv: Path) -> tuple[dict[str, set[str]], list[s
     return seen, ranked_games
 
 
+def _predict_score_row(model: Any, feature_vector: list[float]) -> list[float]:
+    """Run a single-feature inference call and normalize the model output into a flat score list."""
+    numpy_module = importlib.import_module("numpy")
+    batch = numpy_module.asarray([feature_vector], dtype="float32")
+    try:
+        raw_predictions = model.predict(batch, verbose=0)
+    except TypeError as exc:
+        if "verbose" not in str(exc):
+            raise
+        raw_predictions = model.predict(batch.tolist())
+
+    if hasattr(raw_predictions, "tolist"):
+        raw_predictions = raw_predictions.tolist()
+    if not raw_predictions:
+        return []
+
+    first_row = raw_predictions[0]
+    if hasattr(first_row, "tolist"):
+        first_row = first_row.tolist()
+    return [float(score) for score in first_row]
+
+
+def _build_proxy_feature_counts(*, liked_count: int, disliked_count: int) -> dict[str, float]:
+    """Derive deterministic questionnaire/favorite proxies from interaction history for training-time features."""
+    favorite_game_count = min(3, liked_count)
+    questionnaire_answer_count = min(12, liked_count + disliked_count)
+    questionnaire_total_weight = float(questionnaire_answer_count) + (0.25 * min(4, liked_count))
+    return {
+        "liked_keyword_count": liked_count,
+        "liked_platform_count": liked_count,
+        "disliked_keyword_count": disliked_count,
+        "disliked_platform_count": disliked_count,
+        "favorite_game_count": favorite_game_count,
+        "questionnaire_answer_count": questionnaire_answer_count,
+        "questionnaire_total_weight": questionnaire_total_weight,
+    }
+
+
+def _build_user_feature_vectors(train_csv: Path) -> tuple[dict[str, set[str]], dict[str, list[float]], list[str]]:
+    """Build stable per-user features and popularity order from the train split."""
+    seen: dict[str, set[str]] = {}
+    popularity: dict[str, int] = {}
+    positive_counts: dict[str, int] = {}
+    negative_counts: dict[str, int] = {}
+
+    with train_csv.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            user_id = (row.get("user_id") or "").strip()
+            game_id = (row.get("game_id") or "").strip()
+            label_raw = (row.get("label") or "").strip()
+            if not user_id or not game_id:
+                continue
+
+            seen.setdefault(user_id, set()).add(game_id)
+            popularity[game_id] = popularity.get(game_id, 0) + 1
+
+            if label_raw == "1":
+                positive_counts[user_id] = positive_counts.get(user_id, 0) + 1
+            elif label_raw == "0":
+                negative_counts[user_id] = negative_counts.get(user_id, 0) + 1
+
+    ranked_games = [
+        game_id
+        for game_id, _ in sorted(popularity.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    features_by_user = {
+        user_id: build_feature_vector_from_counts(
+            **_build_proxy_feature_counts(
+                liked_count=positive_counts.get(user_id, 0),
+                disliked_count=negative_counts.get(user_id, 0),
+            )
+        )
+        for user_id in seen
+    }
+    return seen, features_by_user, ranked_games
+
 def _write_predictions_csv(
-    *, train_csv: Path, test_csv: Path, output_path: Path, k: int
+    *,
+    train_csv: Path,
+    test_csv: Path,
+    output_path: Path,
+    k: int,
+    model_path: Path,
+    candidate_index_map_path: Path,
 ) -> None:
-    """
-    Write predictions to a CSV file based on game recommendations.
-
-    This function generates personalized game recommendations for each user by:
-
-    1. Loading users with positive test interactions
-    2. Loading training data to identify games seen by users and their popularity ranking
-    3. For each user, selecting the top-k games they haven't seen, ranked by popularity
-
-    Args:
-        train_csv: Path to the training CSV file containing user-game interactions
-        test_csv: Path to the test CSV file containing positive user interactions
-        output_path: Path where the predictions CSV will be written
-        k: Number of top games to recommend per user
-
-    Returns:
-        None. Writes predictions to a CSV file at output_path with columns:
-        - user_id: The user identifier
-        - game_id: The recommended game identifier
-        - rank: The recommendation rank (1 to k)
-
-    Raises:
-        FileNotFoundError: If train_csv or test_csv do not exist
-        IOError: If output_path cannot be written to
-    """
+    """Write model-ranked predictions for offline evaluation."""
     users = _load_positive_test_users(test_csv)
-    seen_by_user, ranked_games = _load_train_popularity(train_csv)
+    seen_by_user, features_by_user, ranked_games = _build_user_feature_vectors(train_csv)
+    candidate_index_map = load_candidate_index_map(str(candidate_index_map_path))
+    model = load_model(str(model_path))
+    fallback_feature_vector = build_feature_vector_from_counts(
+        liked_keyword_count=0,
+        liked_platform_count=0,
+        disliked_keyword_count=0,
+        disliked_platform_count=0,
+    )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8", newline="") as f:
@@ -278,13 +350,33 @@ def _write_predictions_csv(
         writer.writeheader()
         for user_id in users:
             seen_games = seen_by_user.get(user_id, set())
-            top_recommended_games = [
-                game_id for game_id in ranked_games if game_id not in seen_games
-            ][:k]
-            for idx, game_id in enumerate(top_recommended_games, start=1):
+            feature_vector = features_by_user.get(user_id, fallback_feature_vector)
+            scored_candidates: list[tuple[str, float]] = []
+            for candidate_index, score in enumerate(_predict_score_row(model, feature_vector), start=1):
+                if not math.isfinite(score):
+                    continue
+                game_id = candidate_index_map.get(candidate_index)
+                if game_id is None:
+                    continue
+                game_id_str = str(game_id)
+                if game_id_str in seen_games:
+                    continue
+                scored_candidates.append((game_id_str, float(score)))
+
+            scored_candidates.sort(key=lambda row: row[1], reverse=True)
+            recommendations = [game_id for game_id, _ in scored_candidates[:k]]
+            if len(recommendations) < k:
+                existing = set(recommendations)
+                recommendations.extend(
+                    [
+                        game_id
+                        for game_id in ranked_games
+                        if game_id not in seen_games and game_id not in existing
+                    ][: k - len(recommendations)]
+                )
+
+            for idx, game_id in enumerate(recommendations, start=1):
                 writer.writerow({"user_id": user_id, "game_id": game_id, "rank": idx})
-
-
 def _collect_code_hash(repo_root: Path) -> str:
     """
     Generate a SHA256 hash of the combined contents of tracked training files.
@@ -330,11 +422,14 @@ def _write_artifact_bundle(
     run_dir: Path,
     run_id: str,
     train_csv: Path,
+    repo_root: Path,
     seed: int,
     train_ratio: float,
     validation_ratio: float,
     k: int,
     dataset_hash: str,
+    epochs: int,
+    batch_size: int,
 ) -> dict[str, Any]:
     """
     Write an artifact bundle to disk containing model metadata, candidate index mapping, and a reserved .keras model path.
@@ -373,7 +468,7 @@ def _write_artifact_bundle(
     bundle_dir.mkdir(parents=True, exist_ok=True)
     
     candidate_map_path = bundle_dir / "candidate_index_map.json"
-    _seen_by_user, ranked_games = _load_train_popularity(train_csv)
+    _seen_by_user, _features_by_user, ranked_games = _build_user_feature_vectors(train_csv)
     candidate_index_map: dict[str, int] = {}
     for candidate_index, game_id in enumerate(ranked_games, start=1):
         try:
@@ -392,16 +487,19 @@ def _write_artifact_bundle(
             "train_ratio": train_ratio,
             "validation_ratio": validation_ratio,
             "k": k,
+            "epochs": epochs,
+            "batch_size": batch_size,
             "model_format": ".keras",
         },
         "random_seed": seed,
         "dataset_hash": dataset_hash,
+        "git_commit": _git_commit_hash(repo_root),
     }
     manifest_path.write_text(json.dumps(manifest_payload, indent=4), encoding="utf-8")
     
     model_stub_metadata = {
         "status": "pending_training_output",
-        "note": "Model training is baseline-stubbed; .keras artifact path is reserved for future trainer output.",
+        "note": "Artifact bundle created before model fit; .keras file will be populated by the trainer.",
     }
     
     return {
@@ -421,15 +519,13 @@ def _build_training_rows(
     """
     Build simple user-history features and positive-class targets for multiclass training.
 
-    The feature order intentionally matches feature_contract.py:
-    [liked_keyword_count, liked_platform_count, disliked_keyword_count, disliked_platform_count]
+    The feature order intentionally matches feature_contract.py.
     """
     features: list[list[float]] = []
     targets: list[int] = []
 
     positive_counts: dict[str, int] = {}
     negative_counts: dict[str, int] = {}
-    seen_counts: dict[str, int] = {}
 
     with train_csv.open("r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
@@ -447,35 +543,29 @@ def _build_training_rows(
 
             liked_so_far = positive_counts.get(user_id, 0)
             disliked_so_far = negative_counts.get(user_id, 0)
-            seen_so_far = seen_counts.get(user_id, 0)
-
-            # Keep feature semantics stable with the runtime contract.
-            row_features = [
-                float(liked_so_far),
-                float(seen_so_far),
-                float(disliked_so_far),
-                float(disliked_so_far),
-            ]
+            row_features = build_feature_vector_from_counts(
+                **_build_proxy_feature_counts(
+                    liked_count=liked_so_far,
+                    disliked_count=disliked_so_far,
+                )
+            )
 
             if label_raw == "1":
                 candidate_index = candidate_to_index.get(game_id)
                 if candidate_index is not None:
                     features.append(row_features)
-                    # Keras sparse categorical targets are zero-based class indices.
                     targets.append(candidate_index - 1)
                 positive_counts[user_id] = liked_so_far + 1
             else:
                 negative_counts[user_id] = disliked_so_far + 1
 
-            seen_counts[user_id] = seen_so_far + 1
-
     return features, targets
-
 def _train_and_save_model(
     *,
     train_csv: Path,
     candidate_index_map_path: Path,
     model_path: Path,
+    tensorboard_log_dir: Path,
     seed: int,
     epochs: int,
     batch_size: int,
@@ -507,7 +597,7 @@ def _train_and_save_model(
 
     model = tf_module.keras.Sequential(
         [
-            tf_module.keras.layers.Input(shape=(4,), name="features"),
+            tf_module.keras.layers.Input(shape=(len(features[0]),), name="features"),
             tf_module.keras.layers.Dense(32, activation="relu"),
             tf_module.keras.layers.Dense(16, activation="relu"),
             tf_module.keras.layers.Dense(num_classes, activation="softmax", name="scores"),
@@ -518,12 +608,22 @@ def _train_and_save_model(
         loss="sparse_categorical_crossentropy",
     )
 
+    tensorboard_log_dir.mkdir(parents=True, exist_ok=True)
+    callbacks = [
+        tf_module.keras.callbacks.TensorBoard(
+            log_dir=str(tensorboard_log_dir),
+            histogram_freq=1,
+            write_graph=True,
+        )
+    ]
+
     history = model.fit(
         x_train,
         y_train,
         epochs=max(1, epochs),
         batch_size=max(1, min(batch_size, len(features))),
         verbose=2,
+        callbacks=callbacks,
     )
 
     model_path.parent.mkdir(parents=True, exist_ok=True)
@@ -537,6 +637,8 @@ def _train_and_save_model(
         "batch_size": max(1, min(batch_size, len(features))),
         "final_loss": final_loss,
         "model_saved": model_path.exists(),
+        "tensorboard_log_dir": str(tensorboard_log_dir),
+        "tensorboard_enabled": True,
     }
 
 def _promote_artifacts_to_current(*, run_log: dict[str, Any], repo_root: Path) -> dict[str, str]:
@@ -763,6 +865,7 @@ def run_experiment(
     validation_csv = prepared_dir / "validation.csv"
     test_csv = prepared_dir / "test.csv"
     predictions_csv = predictions_dir / "predictions.csv"
+    tensorboard_log_dir = run_dir / "tensorboard"
 
     dataset_profile = build_dataset_profile(
         train_csv=train_csv,
@@ -815,11 +918,14 @@ def run_experiment(
             run_dir=run_dir,
             run_id=run_dir.name,
             train_csv=train_csv,
+            repo_root=repo_root,
             seed=seed,
             train_ratio=train_ratio,
             validation_ratio=validation_ratio,
             k=k,
             dataset_hash=manifest["source_sha256"],
+            epochs=epochs,
+            batch_size=batch_size,
         )
 
         train_started = perf_counter()
@@ -827,14 +933,16 @@ def run_experiment(
             train_csv=train_csv,
             candidate_index_map_path=Path(artifacts["candidate_index_map_path"]),
             model_path=Path(artifacts["model_path"]),
+            tensorboard_log_dir=tensorboard_log_dir,
             seed=seed,
             epochs=epochs,
             batch_size=batch_size,
         )
         logger.info(
-            "retrain.training_completed run_id=%s model_path=%s latency_ms=%.2f",
+            "retrain.training_completed run_id=%s model_path=%s tensorboard_log_dir=%s latency_ms=%.2f",
             run_dir.name,
             artifacts["model_path"],
+            tensorboard_log_dir.as_posix(),
             (perf_counter() - train_started) * 1000,
         )
         artifacts["model_exists"] = Path(artifacts["model_path"]).exists()
@@ -849,6 +957,8 @@ def run_experiment(
             test_csv=test_csv,
             output_path=predictions_csv,
             k=k,
+            model_path=Path(artifacts["model_path"]),
+            candidate_index_map_path=Path(artifacts["candidate_index_map_path"]),
         )
         logger.info(
             "retrain.predictions_completed run_id=%s predictions_csv=%s latency_ms=%.2f",
@@ -979,6 +1089,14 @@ def run_experiment(
 
 
 def _parse_args() -> argparse.Namespace:
+    """
+    Parse command-line arguments for reproducible recommender retraining.
+
+    The script requires a runs directory (--runs_dir), but all other parameters have default values.
+    The default runs directory is "services/recommender/training/runs".
+    The default offline evaluation thresholds JSON file path is "services/recommender/training/offline_eval_thresholds.json".
+    The default output decision filename is "launch_gate_decision.json".
+    """
     parser = argparse.ArgumentParser(
         description="One-command reproducible recommender retraining."
     )
@@ -1126,14 +1244,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
 
 
 

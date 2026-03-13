@@ -48,4 +48,9 @@ retrain-seeded-xl:
 	@python -m services.recommender.training.retrain --source_mode seeded_plus_db --seed_users 10000 --seed_games 50000 --seed_history_per_user 50 --seed_holdout_per_user 5 --epochs 12 --batch_size 64 --thresholds_json services/recommender/training/offline_eval_thresholds_large_catalog.json --promote_current
 	@echo "Retrain profile: seeded-xl"
 
+tensorboard:
+	@python -m tensorboard --logdir services/recommender/training/runs
+
+tensorboard: SHELL := powershell.exe
+
 retrain-seeded-xl: SHELL := powershell.exe

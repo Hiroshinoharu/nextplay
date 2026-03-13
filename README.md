@@ -14,7 +14,7 @@ a React-based frontend, and modern cloud-native deployment using Docker and Kube
 - **Containerization:** Docker for each service  
 - **Orchestration:** Kubernetes (Docker Desktop cluster)  
 
-This setup validates the overall architecture and deployment pipeline before adding full functionality such as database integration, IGDB API access, and ML-based recommendations.
+The repo now includes a working end-to-end recommendation flow: the frontend can submit questionnaire-driven recommendation requests through the gateway, the recommender can serve a trained `.keras` model artifact with fallback behavior, and the Go services expose authenticated user and game APIs for the UI. Database coverage, IGDB enrichment, and production hardening are still in progress.
 
 ---
 
@@ -43,11 +43,14 @@ This setup validates the overall architecture and deployment pipeline before add
 **Purpose:** Manages game data including fetching, storing, and updating game information.
 
 **Endpoints Implemented:**
-`GET /health` - Health check endpoint
+- `GET /health`
+- `GET /games`, `GET /games/search`, `GET /games/popular`, `GET /games/top`, `GET /games/:id`, `GET /games/:id/related-content`
+- Relationship endpoints for platforms, keywords, companies, franchise, and series
+- Service-auth protected write routes for ETL/admin flows
 
 **Docker setup:** Dockerfile included for containerization.
 
-**Status:** Basic structure in place, endpoints to be implemented.
+**Status:** Read-heavy game APIs and relationship management are implemented; IGDB-backed ingestion and broader catalog operations still need hardening.
 
 ### 📞 Recommender Service
 **Purpose:** Handles recommendation logic and interfaces with the ML service.
@@ -61,17 +64,20 @@ This setup validates the overall architecture and deployment pipeline before add
 
 **Docker setup:** Dockerfile included for containerization.
 
-**Status:** Core recommendation endpoints, fallback behavior, and training-readiness controls are implemented; production rollout controls and integrations still need hardening.
+**Status:** Core recommendation endpoints, trained-model artifact loading, offline evaluation gates, and rule-based fallback behavior are implemented; threshold calibration and rollout operations still need hardening.
 
 ### 🧑 User Service
 **Purpose:** Manages user data and authentication.
 
 **Endpoints Implemented:**
-`GET /health` - Health check endpoint
+- `GET /health`
+- `POST /users/register`, `POST /users/login`
+- Authenticated profile CRUD on `/users/:id`
+- Authenticated interaction, keyword preference, and platform preference routes under `/users/:id/*`
 
 **Docker setup:** Dockerfile included for containerization.
 
-**Status:** Basic structure in place, endpoints to be implemented.
+**Status:** JWT-based auth and user-preference APIs are implemented; broader account and product features still need expansion.
 
 **Auth (JWT):**
 - Set `JWT_SECRET` for the user service.
@@ -79,39 +85,41 @@ This setup validates the overall architecture and deployment pipeline before add
 - Pass `Authorization: Bearer <token>` for `/users/:id` and all `/users/:id/*` routes.
 
 ### 🛡️ API Gateway
-**Purpose:** Routes requests between frontend and backend microservices. The gateway handles incoming API requests and forwards them to the appropriate microservice it is done via REST calls.
+**Purpose:** Routes requests between frontend and backend microservices.
 
 **Endpoints Implemented:**
-`GET /health` - Health check endpoint
+- `GET /health`
+- Aggregated downstream health routes under `/api/health/*`
+- Proxied user, game, and recommender routes under `/api/*`
+- JWT enforcement for user-facing routes and service-token enforcement for internal write routes
 
 **Docker setup:** Dockerfile included for containerization.
 
-**Status:** Basic structure in place, routing logic to be implemented.
+**Status:** Gateway routing, auth middleware, and proxy helpers are implemented; observability and production policy still need expansion.
 
 ### 🖥️ Frontend Service
 **Purpose:** Provides the user interface for interacting with the NextPlay system.
 
 **Features Implemented:**
-- Basic layout with Tailwind CSS
+- React/Vite UI for landing, login, user, game, games, and discover flows
+- Questionnaire-driven recommendation requests against `/api/recommend`
+- Authenticated fetches to gateway-backed user and game APIs
 - Docker setup: Dockerfile included for containerization.
-- Status: Basic UI structure in place, full functionality to be developed.
 
-**Status:** Basic UI structure in place, full functionality to be developed.
+**Status:** The frontend supports the current discovery and recommendation flow; polish, content breadth, and additional product features remain.
 
 ## Current Implementation Status
-- All microservices have basic health check endpoints implemented.
-- Recommender service includes recommendation endpoints, model artifact loading/validation, and rule-based fallback execution.
-- Dockerfiles are provided for containerization of each service.
-- Kubernetes manifests are set up for local deployment.
-- Frontend has a basic layout but lacks full functionality.
-- No database integration or IGDB API access yet.
-- Current recommender limitations are operational rather than foundational: baseline threshold calibration, production data/monitoring integrations, and full launch operations still need to be finalized for sustained model rollouts.
-- Comprehensive testing and CI/CD pipelines are in place and can be viewed on github actions.
-- Monitoring, logging, and security features are not yet integrated.
+- All microservices expose health endpoints, and the gateway also exposes aggregated downstream health checks.
+- Game, user, and gateway services contain implemented authenticated API routes beyond service skeletons.
+- Recommender service includes trained-model artifact loading, manifest validation, offline evaluation gates, and rule-based fallback execution.
+- Dockerfiles are provided for containerization of each service, and deploy manifests are present for local stack startup.
+- The frontend is wired to the gateway for login, game discovery, questionnaire capture, and recommendation rendering.
+- No full IGDB-backed production catalog sync or complete product hardening yet.
+- Current recommender limitations are operational rather than foundational: threshold calibration, richer training data, monitoring integrations, and launch operations still need to be finalized for sustained rollouts.
+- Comprehensive testing and CI/CD pipelines are in place and can be viewed on GitHub Actions.
+- Monitoring, logging, and security hardening are still incomplete.
 - Scalability and load balancing configurations are not yet optimized.
-- Documentation is limited; more detailed guides and API documentation are needed.
-- Error handling and validation are minimal.
-- Performance optimizations have not been addressed.
+- Documentation is still evolving, especially around deployment and API behavior.
 
 ## Kubernetes Deployment
 Kubernetes manifests are provided in the `/deploy` directory to deploy all services to a local Docker Desktop Kubernetes cluster. Each service has its own deployment and service definition.
@@ -195,25 +203,20 @@ Kubernetes manifests are provided in the `/deploy` directory to deploy all servi
 ---
 
 ## Current Limitations
-- Endpoints for each microservice are not fully implemented.
-- No database integration; data persistence is not yet available.
-- No integration with IGDB API for game data.
-- Recommender ML capabilities exist (offline evaluation gates, reproducible retraining entrypoint, artifact/serving compatibility checks), but production calibration and launch operations still need completion.
-- Frontend lacks full user interaction features.
-- Monitoring and logging solutions are not yet integrated.
-- Security features such as authentication and authorization are not implemented.
+- Some product areas are still partial, but the main game, user, gateway, and recommender API surfaces are implemented.
+- No complete production database/content pipeline or IGDB-backed catalog sync yet.
+- Recommender ML capabilities exist (trained `.keras` artifacts, offline evaluation gates, reproducible retraining entrypoint, artifact/serving compatibility checks), but production calibration and launch operations still need completion.
+- The frontend still needs more depth in account, social, and content-management interactions.
+- Monitoring and logging solutions are not yet integrated end-to-end.
+- Authentication and authorization exist for current JWT-protected routes, but security hardening is still incomplete.
 - Scalability and load balancing configurations are not yet optimized.
-- Documentation is limited; more detailed guides and API documentation are needed.
-- Error handling and validation are minimal.
-- Performance optimizations have not been addressed.
 - No user analytics or tracking implemented.
 - Localization and internationalization features are not included.
----
+
 ## 🚧 Future Work
-- Implement full functioning endpoints for each microservice.
-- Integrate with IGDB API for game data.
-- Develop machine learning models for personalized recommendations.
-- Add database integration for persistent storage.
-- Enhance frontend with more user features and improved UI/UX.
-- Implement comprehensive testing and CI/CD pipelines.
+- Expand IGDB-backed ingestion and catalog freshness workflows.
+- Improve recommendation quality with richer training data and calibrated rollout thresholds.
+- Add more user-facing features on top of the existing authenticated API surface.
+- Add database integration and stronger operational tooling.
 - Integrate monitoring and logging solutions for better observability.
+

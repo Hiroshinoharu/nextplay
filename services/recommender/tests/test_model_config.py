@@ -101,3 +101,14 @@ def test_resolve_manifest_path_defaults_from_model_path(tmp_path: Path) -> None:
     resolved = _resolve_manifest_path({"manifest_path": ""}, model_file)
 
     assert resolved == model_file.with_suffix(".manifest.json").as_posix()
+
+def test_resolve_manifest_path_prefers_artifact_manifest_when_present(tmp_path: Path) -> None:
+    model_file = tmp_path / "model.keras"
+    model_file.write_text("keras")
+    artifact_manifest = tmp_path / "artifact_manifest.json"
+    artifact_manifest.write_text("{}")
+
+    resolved = _resolve_manifest_path({"manifest_path": ""}, model_file)
+
+    assert resolved == artifact_manifest.as_posix()
+

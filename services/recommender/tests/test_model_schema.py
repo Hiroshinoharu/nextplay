@@ -9,15 +9,14 @@ from services.recommender.models.model_schema import (
 from services.recommender.models.request import RecommendRequest
 
 
-# Unit tests for model_schema.py to validate schema transformations and mappings.
 def test_model_input_schema_maps_from_recommend_request() -> None:
-    # Unit tests are pure schema/mapping tests and do not query the database.
     payload = RecommendRequest(
         user_id=1,
         liked_keywords=[1, 2],
         liked_platforms=[7],
         disliked_keywords=[9],
         disliked_platforms=[3],
+        favorite_game_ids=[10, 11],
         questionnaire={"session_length": "short"},
     )
 
@@ -28,9 +27,10 @@ def test_model_input_schema_maps_from_recommend_request() -> None:
     assert model_input.liked_platform_ids == [7]
     assert model_input.disliked_keyword_ids == [9]
     assert model_input.disliked_platform_ids == [3]
+    assert model_input.favorite_game_ids == [10, 11]
     assert model_input.questionnaire == {"session_length": "short"}
 
-# Test feature schema version defaults to the shared contract version
+
 def test_model_input_schema_defaults_feature_schema_version() -> None:
     payload = RecommendRequest(
         user_id=3,
@@ -46,7 +46,6 @@ def test_model_input_schema_defaults_feature_schema_version() -> None:
     assert model_input.feature_schema_version == FEATURE_SCHEMA_VERSION
 
 
-# Test feature schema version can be set explicitly from questionnaire metadata
 def test_model_input_schema_uses_explicit_feature_schema_version() -> None:
     payload = RecommendRequest(
         user_id=3,
@@ -60,7 +59,8 @@ def test_model_input_schema_uses_explicit_feature_schema_version() -> None:
     model_input = ModelInputSchema.from_recommend_request(payload)
 
     assert model_input.feature_schema_version == "recommender_feature_schema_v2"
-# Test Stage 2 field questionnaire_raw is used as the primary raw blob.
+
+
 def test_model_input_schema_prefers_questionnaire_raw() -> None:
     payload = RecommendRequest(
         user_id=3,
@@ -81,7 +81,6 @@ def test_model_input_schema_prefers_questionnaire_raw() -> None:
     assert model_input.feature_schema_version == "recommender_feature_schema_v2"
 
 
-# Test backward compatibility when only legacy questionnaire is provided.
 def test_model_input_schema_uses_legacy_questionnaire_when_raw_missing() -> None:
     payload = RecommendRequest(
         user_id=3,
@@ -96,7 +95,7 @@ def test_model_input_schema_uses_legacy_questionnaire_when_raw_missing() -> None
 
     assert model_input.questionnaire == {"session_length": "short"}
 
-# Additional tests for ModelOutputSchema to validate conversion to API response format.
+
 def test_model_output_schema_maps_to_user_recommend_response() -> None:
     model_output = ModelOutputSchema(
         user_id=2,
@@ -113,7 +112,7 @@ def test_model_output_schema_maps_to_user_recommend_response() -> None:
     assert response.recommended_games == [120, 77]
     assert response.strategy == "keras_two_tower_v1"
 
-# Test that ModelOutputSchema can use fallback_user_id if user_id is not set
+
 def test_model_output_schema_uses_fallback_user_id() -> None:
     model_output = ModelOutputSchema(
         strategy="keras_two_tower_v1",
@@ -126,7 +125,6 @@ def test_model_output_schema_uses_fallback_user_id() -> None:
     assert response.recommended_games == [120]
 
 
-# Test that ModelOutputSchema raises an error if user_id is not set and no fallback is provided
 def test_model_output_schema_requires_user_id_if_fallback_not_provided() -> None:
     model_output = ModelOutputSchema(strategy="keras_two_tower_v1")
 
