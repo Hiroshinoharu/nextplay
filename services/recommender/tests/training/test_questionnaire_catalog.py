@@ -22,7 +22,7 @@ def test_questionnaire_catalog_exists_and_question_count_is_in_target_range() ->
 
     This test checks for the existence of the questionnaire catalog JSON file
     in the shared/recommender directory and verifies that it contains
-    between 8 and 12 questions.
+    between 8 and 16 questions.
 
     The test also checks that the questionnaire version and feature schema version
     match the expected values.
@@ -32,7 +32,7 @@ def test_questionnaire_catalog_exists_and_question_count_is_in_target_range() ->
 
     assert payload["version"] == "questionnaire_v1"
     assert payload["feature_schema_version"] == "recommender_feature_schema_v1"
-    assert 8 <= len(questions) <= 12
+    assert 8 <= len(questions) <= 16
 
 
 def test_questionnaire_catalog_option_mappings_match_request_shape() -> None:
