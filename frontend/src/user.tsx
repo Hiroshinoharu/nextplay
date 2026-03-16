@@ -1,21 +1,31 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type MouseEvent,
+} from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import Card from "./components/card";
 import FilterRadio from "./components/filterRadio";
+import MinecraftTorch from "./components/Minecraft_Torch";
 import Navbar from "./components/Navbar";
 import Searchbar from "./components/Searchbar";
 import SiteFooter from "./components/SiteFooter";
 import logoUrl from "./assets/logo.png";
-import { getUserDisplayName, getUserInitials, type AuthUser } from "./utils/authUser";
+import {
+  getUserDisplayName,
+  getUserInitials,
+  type AuthUser,
+} from "./utils/authUser";
 import "./user.css";
 
-// Define the props for the UserPage component
 type UserPageProps = {
   authUser: AuthUser | null;
   onSignOut: () => void;
 };
 
-// Define the structure of a user interaction item based on expected API response fields
 type UserInteraction = {
   user_id: number;
   game_id: number;
@@ -35,6 +45,7 @@ type GameItem = {
 };
 
 type ListFilter = "all" | "liked" | "favorited" | "rated" | "reviewed";
+type ThemeMode = "dark" | "light";
 
 const hasMeaningfulInteraction = (item: UserInteraction) =>
   (typeof item.rating === "number" && Number.isFinite(item.rating)) ||
@@ -42,11 +53,14 @@ const hasMeaningfulInteraction = (item: UserInteraction) =>
   item.favorited === true ||
   Boolean(item.review?.trim());
 
-// Base URL for API requests, ensuring no trailing slash
 const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(/\/+$/, "");
 const API_ROOT = RAW_BASE_URL.endsWith("/api")
   ? RAW_BASE_URL.slice(0, -4)
   : RAW_BASE_URL;
+const THEME_STORAGE_KEY = "nextplay-user-theme";
+const DELETE_CONFIRMATION_TEXT = "DELETE";
+const PASSWORD_POLICY_TEXT =
+  "Use at least 8 characters with an upper-case letter, lower-case letter, number, and symbol.";
 
 const normalizeCoverUrl = (url?: string) => {
   if (!url) return null;
@@ -65,9 +79,20 @@ const formatReleaseDate = (value?: string) => {
   });
 };
 
-  // Main component for the user account page, displaying user info and interactions
+const getInitialTheme = (): ThemeMode => {
+  if (typeof window === "undefined") return "dark";
+  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (storedTheme === "light" || storedTheme === "dark") return storedTheme;
+  if (
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-color-scheme: light)").matches
+  ) {
+    return "light";
+  }
+  return "dark";
+};
+
 const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
-  // Hook for programmatic navigation
   const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState("");
   const [interactions, setInteractions] = useState<UserInteraction[]>([]);
@@ -76,15 +101,74 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
   const [gamesById, setGamesById] = useState<Record<number, GameItem>>({});
   const [gamesLoading, setGamesLoading] = useState(false);
   const [listFilter, setListFilter] = useState<ListFilter>("all");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordStatus, setPasswordStatus] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
   const authToken = authUser?.token?.trim() ?? "";
+  const userId = authUser?.id;
 
   const userDisplayName = getUserDisplayName(authUser);
   const avatarText = getUserInitials(authUser);
+  const settingsBusy = passwordSaving || deletePending;
+
+  const resetSettingsState = useCallback(() => {
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordStatus(null);
+    setPasswordError(null);
+    setDeleteConfirmation("");
+    setDeleteError(null);
+  }, []);
+
+  const openSettingsModal = useCallback(() => {
+    resetSettingsState();
+    setSettingsOpen(true);
+  }, [resetSettingsState]);
+
+  const closeSettingsModal = useCallback(() => {
+    if (settingsBusy) return;
+    setSettingsOpen(false);
+    resetSettingsState();
+  }, [resetSettingsState, settingsBusy]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeSettingsModal();
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closeSettingsModal, settingsOpen]);
 
   useEffect(() => {
     if (!authUser?.id) {
       setInteractions([]);
-      setInteractionsError("User id is missing for interaction lookup.");
+      setInteractionsLoading(false);
+      setInteractionsError(authUser ? "User id is missing for interaction lookup." : null);
       return;
     }
 
@@ -94,15 +178,12 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
       setInteractionsLoading(true);
       setInteractionsError(null);
       try {
-        const response = await fetch(
-          `${API_ROOT}/api/users/${authUser.id}/interactions`,
-          {
-            signal: controller.signal,
-            ...(authToken
-              ? { headers: { Authorization: `Bearer ${authToken}` } }
-              : {}),
-          },
-        );
+        const response = await fetch(`${API_ROOT}/api/users/${authUser.id}/interactions`, {
+          signal: controller.signal,
+          ...(authToken
+            ? { headers: { Authorization: `Bearer ${authToken}` } }
+            : {}),
+        });
         if (!response.ok) {
           setInteractionsError(`Failed to load interactions: ${response.status}`);
           return;
@@ -115,10 +196,10 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
         const sorted = [...payload]
           .filter(hasMeaningfulInteraction)
           .sort((a, b) => {
-          const left = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-          const right = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-          return right - left;
-        });
+            const left = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+            const right = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+            return right - left;
+          });
         setInteractions(sorted);
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
@@ -132,9 +213,8 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
 
     void loadInteractions();
     return () => controller.abort();
-  }, [authToken, authUser?.id]);
+  }, [authToken, authUser, authUser?.id]);
 
-  // Effect to load game details for all games that the user has interacted with, based on the interactions data. This ensures that we can display relevant game information alongside each interaction in the user's list.
   useEffect(() => {
     const gameIds = Array.from(
       new Set(
@@ -150,7 +230,6 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
       return;
     }
 
-    // Using Promise.all to fetch details for all games in parallel, while also handling potential errors and ensuring that the component's state is updated appropriately based on the success or failure of these requests.
     const controller = new AbortController();
     const loadGames = async () => {
       setGamesLoading(true);
@@ -242,6 +321,13 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
     [favoritedCount, interactions.length, likedCount, ratedItems.length, reviewedCount],
   );
 
+  const deleteConfirmationMatches =
+    deleteConfirmation.trim().toUpperCase() === DELETE_CONFIRMATION_TEXT;
+  const themeSummary =
+    theme === "dark"
+      ? "Torch lit: the page stays in dark mode with neon contrast."
+      : "Torch dimmed: the page switches to a brighter light mode shell.";
+
   const handleSearchSubmit = useCallback(() => {
     const query = searchInput.trim();
     if (!query) {
@@ -252,24 +338,129 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
     navigate(`/discover?${params.toString()}`);
   }, [navigate, searchInput]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     onSignOut();
     navigate("/", { replace: true });
-  };
+  }, [navigate, onSignOut]);
+
+  const handleThemeToggle = useCallback((checked: boolean) => {
+    setTheme(checked ? "dark" : "light");
+  }, []);
+
+  const handlePasswordChange = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      setPasswordStatus(null);
+      setPasswordError(null);
+
+      if (!userId || !authToken) {
+        setPasswordError("You need an active session before changing your password.");
+        return;
+      }
+
+      const trimmedCurrentPassword = currentPassword.trim();
+      const trimmedNewPassword = newPassword.trim();
+      const trimmedConfirmPassword = confirmPassword.trim();
+
+      if (!trimmedCurrentPassword || !trimmedNewPassword || !trimmedConfirmPassword) {
+        setPasswordError("Fill in your current password, new password, and confirmation.");
+        return;
+      }
+      if (trimmedNewPassword !== trimmedConfirmPassword) {
+        setPasswordError("New password and confirmation do not match.");
+        return;
+      }
+
+      setPasswordSaving(true);
+      try {
+        const response = await fetch(`${API_ROOT}/api/users/${userId}/password`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            current_password: trimmedCurrentPassword,
+            new_password: trimmedNewPassword,
+          }),
+        });
+        const payload = (await response.json().catch(() => null)) as {
+          error?: string;
+          message?: string;
+        } | null;
+        if (!response.ok) {
+          setPasswordError(payload?.error ?? `Password change failed: ${response.status}`);
+          return;
+        }
+
+        setPasswordStatus(payload?.message ?? "Password updated successfully.");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      } catch (err) {
+        setPasswordError(`${err}`);
+      } finally {
+        setPasswordSaving(false);
+      }
+    },
+    [authToken, confirmPassword, currentPassword, newPassword, userId],
+  );
+
+  const handleDeleteAccount = useCallback(async () => {
+    setDeleteError(null);
+
+    if (!userId || !authToken) {
+      setDeleteError("You need an active session before deleting your account.");
+      return;
+    }
+    if (!deleteConfirmationMatches) {
+      setDeleteError(`Type ${DELETE_CONFIRMATION_TEXT} to confirm account deletion.`);
+      return;
+    }
+
+    setDeletePending(true);
+    try {
+      const response = await fetch(`${API_ROOT}/api/users/${userId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      if (!response.ok) {
+        setDeleteError(payload?.error ?? `Account deletion failed: ${response.status}`);
+        return;
+      }
+
+      onSignOut();
+      navigate("/", { replace: true });
+    } catch (err) {
+      setDeleteError(`${err}`);
+    } finally {
+      setDeletePending(false);
+    }
+  }, [authToken, deleteConfirmationMatches, navigate, onSignOut, userId]);
+
+  const handleModalBackdropClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (event.target === event.currentTarget) {
+        closeSettingsModal();
+      }
+    },
+    [closeSettingsModal],
+  );
 
   if (!authUser) {
     return <Navigate to="/login" replace />;
   }
 
   return (
-    <div className="user-page">
+    <div className="user-page" data-theme={theme}>
       <div className="user-shell">
         <header className="user-header">
-          <button
-            type="button"
-            className="user-brand"
-            onClick={() => navigate("/")}
-          >
+          <button type="button" className="user-brand" onClick={() => navigate("/")}>
             <img src={logoUrl} alt="NextPlay Logo" />
             <span className="user-brand__text">
               <span className="user-brand__title">NextPlay</span>
@@ -288,8 +479,8 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
             <button
               type="button"
               className="user-avatar"
-              aria-label="Account menu"
-              onClick={() => navigate("/user")}
+              aria-label="Open settings"
+              onClick={openSettingsModal}
             >
               {avatarText}
             </button>
@@ -301,12 +492,23 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
             <p className="user-hero__eyebrow">Signed in as</p>
             <h1 className="user-hero__title">{userDisplayName}</h1>
             <p className="user-hero__subtitle">
-              Track what you liked, favorited, rated, and reviewed. Use filters to
-              focus your list quickly.
+              Track what you liked, favorited, rated, and reviewed. Open settings to
+              update your password, switch the page theme, or delete the account.
             </p>
             <div className="user-hero__actions">
-              <button type="button" className="user-hero__button" onClick={() => navigate("/games")}>
+              <button
+                type="button"
+                className="user-hero__button"
+                onClick={() => navigate("/games")}
+              >
                 Browse Games
+              </button>
+              <button
+                type="button"
+                className="user-hero__button"
+                onClick={openSettingsModal}
+              >
+                Settings
               </button>
               <button type="button" className="user-hero__button" onClick={handleLogout}>
                 Log Out
@@ -334,9 +536,7 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
             ) : interactionsError ? (
               <div className="user-empty-state">{interactionsError}</div>
             ) : filteredInteractions.length === 0 ? (
-              <div className="user-empty-state">
-                No entries found for this filter yet.
-              </div>
+              <div className="user-empty-state">No entries found for this filter yet.</div>
             ) : (
               <div className="user-interaction-list">
                 {filteredInteractions.map((item) => {
@@ -376,7 +576,9 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
                       <div className="user-interaction-card__details">
                         <div className="user-interaction-card__top">
                           <h3>Your interaction</h3>
-                          <span className="user-interaction-card__updated">Updated: {timestampText}</span>
+                          <span className="user-interaction-card__updated">
+                            Updated: {timestampText}
+                          </span>
                         </div>
                         <div className="user-interaction-card__meta">
                           <span className="user-chip">
@@ -428,6 +630,169 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
 
         <SiteFooter />
       </div>
+
+      {settingsOpen ? (
+        <div className="user-modal-backdrop" onClick={handleModalBackdropClick}>
+          <section
+            className="user-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="user-settings-title"
+          >
+            <header className="user-modal__header">
+              <div>
+                <p className="user-modal__eyebrow">Account controls</p>
+                <h2 id="user-settings-title" className="user-modal__title">
+                  Settings
+                </h2>
+                <p className="user-modal__subtitle">
+                  Manage your password, account safety, and page theme from one place.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="user-modal__close"
+                onClick={closeSettingsModal}
+                disabled={settingsBusy}
+              >
+                Close
+              </button>
+            </header>
+
+            <div className="user-modal__body">
+              <article className="user-settings-card user-settings-card--appearance">
+                <div className="user-settings-card__header">
+                  <div>
+                    <h3>Appearance</h3>
+                    <p>Use the torch to switch between dark and light mode for this page.</p>
+                  </div>
+                  <span className="user-settings-badge">{theme === "dark" ? "Dark" : "Light"}</span>
+                </div>
+                <div className="user-theme-panel">
+                  <div className="user-theme-panel__toggle">
+                    <MinecraftTorch
+                      checked={theme === "dark"}
+                      onChange={handleThemeToggle}
+                      label="Toggle dark mode"
+                      onLabel="Dark mode"
+                      offLabel="Light mode"
+                    />
+                  </div>
+                  <div className="user-theme-panel__copy">
+                    <p className="user-inline-note">{themeSummary}</p>
+                    <div className="user-theme-preview">
+                      <span className="user-theme-preview__swatch" aria-hidden="true" />
+                      <div>
+                        <strong>{theme === "dark" ? "Night raid" : "Daylight base"}</strong>
+                        <p>
+                          The choice is stored locally, so this page keeps the same look the next
+                          time you open it.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article className="user-settings-card">
+                <div className="user-settings-card__header">
+                  <div>
+                    <h3>Change password</h3>
+                    <p>Verify your current password before setting a new one.</p>
+                  </div>
+                </div>
+                <form className="user-settings-form" onSubmit={handlePasswordChange}>
+                  <div className="user-field">
+                    <label htmlFor="user-current-password">Current password</label>
+                    <input
+                      id="user-current-password"
+                      name="current_password"
+                      type="password"
+                      autoComplete="current-password"
+                      value={currentPassword}
+                      onChange={(event) => setCurrentPassword(event.target.value)}
+                    />
+                  </div>
+                  <div className="user-form-row">
+                    <div className="user-field">
+                      <label htmlFor="user-new-password">New password</label>
+                      <input
+                        id="user-new-password"
+                        name="new_password"
+                        type="password"
+                        autoComplete="new-password"
+                        value={newPassword}
+                        onChange={(event) => setNewPassword(event.target.value)}
+                      />
+                    </div>
+                    <div className="user-field">
+                      <label htmlFor="user-confirm-password">Confirm new password</label>
+                      <input
+                        id="user-confirm-password"
+                        name="confirm_password"
+                        type="password"
+                        autoComplete="new-password"
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <p className="user-inline-note">{PASSWORD_POLICY_TEXT}</p>
+                  {passwordError ? (
+                    <div className="user-status user-status--error">{passwordError}</div>
+                  ) : null}
+                  {passwordStatus ? (
+                    <div className="user-status user-status--success">{passwordStatus}</div>
+                  ) : null}
+                  <button
+                    type="submit"
+                    className="user-settings-button"
+                    disabled={passwordSaving}
+                  >
+                    {passwordSaving ? "Updating..." : "Update password"}
+                  </button>
+                </form>
+              </article>
+
+              <article className="user-settings-card user-settings-card--danger">
+                <div className="user-settings-card__header">
+                  <div>
+                    <h3>Danger zone</h3>
+                    <p>Permanently delete your account, interactions, and recommendation history.</p>
+                  </div>
+                </div>
+                <p className="user-danger-copy">
+                  This action is irreversible. Type {DELETE_CONFIRMATION_TEXT} to enable deletion.
+                </p>
+                <div className="user-delete-row">
+                  <div className="user-field">
+                    <label htmlFor="user-delete-confirmation">Confirmation text</label>
+                    <input
+                      id="user-delete-confirmation"
+                      name="delete_confirmation"
+                      type="text"
+                      placeholder={DELETE_CONFIRMATION_TEXT}
+                      value={deleteConfirmation}
+                      onChange={(event) => setDeleteConfirmation(event.target.value)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="user-settings-button user-settings-button--danger"
+                    onClick={handleDeleteAccount}
+                    disabled={!deleteConfirmationMatches || deletePending}
+                  >
+                    {deletePending ? "Deleting..." : "Delete account"}
+                  </button>
+                </div>
+                {deleteError ? (
+                  <div className="user-status user-status--error">{deleteError}</div>
+                ) : null}
+              </article>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 };

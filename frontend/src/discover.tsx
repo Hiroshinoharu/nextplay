@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Card from "./components/card";
 import GameCarousel from "./components/GameCarousel";
@@ -554,6 +554,7 @@ type DiscoverCarousel = {
 
 function DiscoverPage({ authUser }: DiscoverPageProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const urlQuery = collapseWhitespace(searchParams.get("q") ?? "");
   const [searchInput, setSearchInput] = useState<string>(urlQuery);
@@ -783,25 +784,14 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     setQuestionnaireOpen(true);
   }, [favoriteGameIds.length, questionnaireAnswers, questionnaireQuestionCount, questionnaireQuestions]);
 
-  const {
-    data: searchData,
-    isPending,
-    isFetching,
-    error,
-  } = useQuery<SearchPageResult, Error>({
-    queryKey: [
-      "discover-search-page",
-      normalizedSearchQuery,
-      searchPage,
-      searchPageSize,
-    ] as const,
-    enabled: normalizedSearchQuery.length >= 1,
-    queryFn: async ({ signal }) => {
+  const fetchDiscoverSearchPage = useCallback(
+    async (page: number, signal?: AbortSignal): Promise<SearchPageResult> => {
+      const offset = (page - 1) * searchPageSize;
       const query = new URLSearchParams({
         q: normalizedSearchQuery,
         mode: "contains",
         limit: String(searchPageSize),
-        offset: String(searchOffset),
+        offset: String(offset),
         include_media: "1",
         exclude_non_base: "1",
       });
@@ -822,21 +812,76 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       if (!Array.isArray(payload)) {
         throw new Error("Unexpected search response shape");
       }
-      const items = (payload as GameItem[]).filter(
+      const rawItems = payload as GameItem[];
+      const items = rawItems.filter(
         (game) => !shouldHideFromDiscover(game),
       );
       return {
         items,
-        hasMore: items.length === searchPageSize,
+        hasMore: rawItems.length === searchPageSize,
       };
     },
+    [authToken, normalizedSearchQuery, searchPageSize],
+  );
+
+  const {
+    data: searchData,
+    isPending: searchLoading,
+    isFetching: searchFetching,
+    error,
+  } = useQuery<SearchPageResult, Error>({
+    queryKey: [
+      "discover-search-page",
+      normalizedSearchQuery,
+      searchPage,
+      searchPageSize,
+    ] as const,
+    enabled: normalizedSearchQuery.length >= 1,
+    queryFn: ({ signal }) => fetchDiscoverSearchPage(searchPage, signal),
     staleTime: 60_000,
+    placeholderData: (previousData, previousQuery) => {
+      const previousSearchQuery =
+        Array.isArray(previousQuery?.queryKey) && typeof previousQuery.queryKey[1] === "string"
+          ? previousQuery.queryKey[1]
+          : null;
+      return previousSearchQuery === normalizedSearchQuery ? previousData : undefined;
+    },
   });
 
   const cards = useMemo(() => searchData?.items ?? [], [searchData?.items]);
   const hasMoreSearchResults = Boolean(searchData?.hasMore);
   const isLiveSearching =
-    (isPending || isFetching) && normalizedSearchQuery.length > 0;
+    (searchLoading || searchFetching) && normalizedSearchQuery.length > 0;
+  useEffect(() => {
+    if (
+      normalizedSearchQuery.length < 1 ||
+      !hasMoreSearchResults ||
+      searchLoading ||
+      searchFetching
+    ) {
+      return;
+    }
+    const nextPage = searchPage + 1;
+    void queryClient.prefetchQuery({
+      queryKey: [
+        "discover-search-page",
+        normalizedSearchQuery,
+        nextPage,
+        searchPageSize,
+      ] as const,
+      queryFn: ({ signal }) => fetchDiscoverSearchPage(nextPage, signal),
+      staleTime: 60_000,
+    });
+  }, [
+    fetchDiscoverSearchPage,
+    hasMoreSearchResults,
+    normalizedSearchQuery,
+    queryClient,
+    searchFetching,
+    searchLoading,
+    searchPage,
+    searchPageSize,
+  ]);
   const normalizedFavoriteSearchInput = collapseWhitespace(debouncedFavoriteSearchInput);
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -1096,14 +1141,19 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     setFavoriteGameIds((prev) => prev.filter((id) => allowedIds.has(id)));
   }, [favoriteGameIds.length, favoriteSelectedGames, favoriteSelectedGamesLoading]);
   const handleSearchSubmit = useCallback(() => {
-    setSearchPage(1);
-    setSearchQuery(collapseWhitespace(searchInput));
+    const nextQuery = collapseWhitespace(searchInput);
+    startTransition(() => {
+      setSearchPage(1);
+      setSearchQuery(nextQuery);
+    });
   }, [searchInput]);
 
   const clearSearch = useCallback(() => {
     setSearchInput("");
-    setSearchQuery("");
-    setSearchPage(1);
+    startTransition(() => {
+      setSearchQuery("");
+      setSearchPage(1);
+    });
     navigate("/discover");
   }, [navigate]);
   const addFavoriteGame = useCallback((game: GameItem) => {
@@ -2159,13 +2209,18 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     ],
   );
 
-  const handlePreviousSearchPage = useCallback(() => {
-    setSearchPage((current) => Math.max(1, current - 1));
+  const goToPreviousSearchPage = useCallback(() => {
+    startTransition(() => {
+      setSearchPage((current) => Math.max(1, current - 1));
+    });
   }, []);
 
-  const handleNextSearchPage = useCallback(() => {
-    setSearchPage((current) => current + 1);
-  }, []);
+  const goToNextSearchPage = useCallback(() => {
+    if (!hasMoreSearchResults || searchLoading || searchFetching) return;
+    startTransition(() => {
+      setSearchPage((current) => current + 1);
+    });
+  }, [hasMoreSearchResults, searchFetching, searchLoading]);
 
   return (
     <div className="search-page">
@@ -2353,7 +2408,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                       <button
                         type="button"
                         className="games-pagination__button"
-                        onClick={handlePreviousSearchPage}
+                        onClick={goToPreviousSearchPage}
                         disabled={searchPage <= 1}
                       >
                         Previous
@@ -2364,8 +2419,8 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                       <button
                         type="button"
                         className="games-pagination__button"
-                        onClick={handleNextSearchPage}
-                        disabled={!hasMoreSearchResults || isLiveSearching}
+                        onClick={goToNextSearchPage}
+                        disabled={!hasMoreSearchResults || searchLoading || searchFetching}
                       >
                         Next
                       </button>

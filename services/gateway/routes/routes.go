@@ -35,6 +35,7 @@ func SetUpRoutes(app *fiber.App) {
 
 		securedUsers.Get("/", handlers.GetUserByID)
 		securedUsers.Put("/", handlers.UpdateUser)
+		securedUsers.Patch("/password", handlers.ChangePassword)
 		securedUsers.Delete("/", handlers.DeleteUser)
 
 		securedUsers.Get("/interactions", handlers.GetUserInteraction)

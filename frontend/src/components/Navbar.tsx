@@ -18,11 +18,11 @@ const Navbar = () => {
     ? '/games'
     : location.pathname.startsWith('/discover')
       ? '/discover'
-    : location.pathname.startsWith('/user')
-      ? '/user'
-      : location.pathname.startsWith('/health')
-        ? '/health'
-        : '/games';
+      : location.pathname.startsWith('/user')
+        ? '/user'
+        : location.pathname.startsWith('/health')
+          ? '/health'
+          : '/games';
 
   return (
     <StyledWrapper>
@@ -46,7 +46,7 @@ const Navbar = () => {
       </div>
     </StyledWrapper>
   );
-}
+};
 
 const StyledWrapper = styled.div`
   .nav {
@@ -63,7 +63,7 @@ const StyledWrapper = styled.div`
     min-height: 56px;
     background:
       radial-gradient(circle at top, rgba(140, 243, 122, 0.06), transparent 58%),
-      linear-gradient(145deg, rgba(8, 28, 44, 0.86), rgba(8, 22, 35, 0.74));
+      var(--games-nav-bg, linear-gradient(145deg, rgba(8, 28, 44, 0.86), rgba(8, 22, 35, 0.74)));
     display: flex;
     flex-direction: row;
     justify-content: space-between;
@@ -74,9 +74,7 @@ const StyledWrapper = styled.div`
     padding: 0.4em 0.6em;
     border-radius: 999px;
     border: 1px solid var(--games-border, rgba(140, 243, 122, 0.3));
-    box-shadow:
-      0 16px 26px rgba(0, 0, 0, 0.28),
-      inset 0 0 0 1px rgba(140, 243, 122, 0.08);
+    box-shadow: var(--games-nav-shadow, 0 16px 26px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(140, 243, 122, 0.08));
     box-sizing: border-box;
     max-width: 100%;
   }
@@ -110,17 +108,15 @@ const StyledWrapper = styled.div`
   }
 
   .btn:hover {
-    background: rgba(140, 243, 122, 0.16);
+    background: var(--games-hover-surface, rgba(140, 243, 122, 0.16));
     color: var(--games-text, #e2f2ff);
-    box-shadow:
-      0 8px 16px rgba(0, 0, 0, 0.22),
-      inset 0 0 0 1px rgba(140, 243, 122, 0.15);
+    box-shadow: var(--games-hover-shadow, 0 8px 16px rgba(0, 0, 0, 0.22), inset 0 0 0 1px rgba(140, 243, 122, 0.15));
   }
 
   .btn.is-active {
     background: linear-gradient(135deg, var(--games-accent, #8cf37a), var(--games-accent-strong, #c7f000));
-    color: #0b141a;
-    box-shadow: 0 6px 14px rgba(140, 243, 122, 0.38);
+    color: var(--games-active-text, #0b141a);
+    box-shadow: var(--games-active-shadow, 0 6px 14px rgba(140, 243, 122, 0.38));
   }
 
   .btn:focus {
@@ -203,6 +199,7 @@ const StyledWrapper = styled.div`
       padding: 0.3em 0.56em;
       font-size: 0.7rem;
     }
-  }`;
+  }
+`;
 
 export default Navbar;

@@ -1,13 +1,44 @@
+import { useId } from 'react';
 import styled from 'styled-components';
 
-const Checkbox = () => {
+type MinecraftTorchProps = {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled?: boolean;
+  id?: string;
+  label?: string;
+  onLabel?: string;
+  offLabel?: string;
+};
+
+const MinecraftTorch = ({
+  checked,
+  onChange,
+  disabled = false,
+  id,
+  label = 'Toggle theme',
+  onLabel = 'Dark mode',
+  offLabel = 'Light mode',
+}: MinecraftTorchProps) => {
+  const generatedId = useId();
+  const inputId = id ?? generatedId;
+
   return (
-    <StyledWrapper>
-      <label className="container">
-        <div className="simple-text">Click me!</div>
-        <input id="torch-toggle" name="torch_toggle" defaultChecked={true} type="checkbox" />
-        <div className="checkmark" />
-        <div className="torch">
+    <StyledWrapper $checked={checked} $disabled={disabled}>
+      <label className="container" htmlFor={inputId}>
+        <div className="simple-text" aria-live="polite">
+          {checked ? onLabel : offLabel}
+        </div>
+        <input
+          id={inputId}
+          name={inputId}
+          type="checkbox"
+          checked={checked}
+          onChange={(event) => onChange(event.target.checked)}
+          disabled={disabled}
+          aria-label={label}
+        />
+        <div className="torch" aria-hidden="true">
           <div className="head">
             <div className="face top">
               <div />
@@ -70,9 +101,9 @@ const Checkbox = () => {
       </label>
     </StyledWrapper>
   );
-}
+};
 
-const StyledWrapper = styled.div`
+const StyledWrapper = styled.div<{ $checked: boolean; $disabled: boolean }>`
   .container input {
     position: absolute;
     opacity: 0;
@@ -86,25 +117,37 @@ const StyledWrapper = styled.div`
     flex-direction: column;
     align-items: center;
     position: relative;
-    cursor: pointer;
+    cursor: ${({ $disabled }) => ($disabled ? 'not-allowed' : 'pointer')};
     user-select: none;
+    opacity: ${({ $disabled }) => ($disabled ? 0.55 : 1)};
+    transition: opacity 180ms ease, transform 180ms ease;
+  }
+
+  .container:hover {
+    transform: ${({ $disabled }) => ($disabled ? 'none' : 'translateY(-2px)')};
   }
 
   .simple-text {
     position: absolute;
-    bottom: -40px;
-    width: 120px;
+    bottom: -48px;
+    width: 150px;
     text-align: center;
-    color: white;
-    font-size: 16pt;
+    color: ${({ $checked }) => ($checked ? '#fff1ac' : 'rgba(226, 242, 255, 0.88)')};
+    text-shadow: ${({ $checked }) =>
+      $checked ? '0 0 12px rgba(255, 216, 0, 0.45)' : '0 0 10px rgba(14, 165, 233, 0.18)'};
+    font-size: 13px;
     font-weight: 800;
     font-family: monospace;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
   }
 
   .torch {
     display: flex;
     justify-content: center;
     height: 150px;
+    filter: ${({ $checked }) => ($checked ? 'saturate(1)' : 'saturate(0.88) brightness(0.96)')};
+    transition: filter 220ms ease;
   }
 
   .head,
@@ -129,6 +172,7 @@ const StyledWrapper = styled.div`
     grid-template-columns: 50% 50%;
     grid-template-rows: 50% 50%;
     background-color: #000000;
+    transition: filter 220ms ease, background-color 220ms ease;
   }
 
   .top {
@@ -148,6 +192,7 @@ const StyledWrapper = styled.div`
   .right div {
     width: 102%;
     height: 102%;
+    transition: background-color 220ms ease;
   }
 
   .top div:nth-child(1),
@@ -181,7 +226,6 @@ const StyledWrapper = styled.div`
     display: grid;
     grid-template-columns: 50% 50%;
     grid-template-rows: repeat(8, 12.5%);
-    cursor: pointer;
     translate: 0 12px;
   }
 
@@ -197,6 +241,7 @@ const StyledWrapper = styled.div`
   .side-right div {
     width: 103%;
     height: 103%;
+    transition: background-color 220ms ease;
   }
 
   .side div:nth-child(1) {
@@ -253,6 +298,12 @@ const StyledWrapper = styled.div`
 
   .side div:nth-child(16) {
     background-color: #271e10;
+  }
+
+  .container input:focus-visible ~ .torch {
+    outline: 2px solid rgba(140, 243, 122, 0.6);
+    outline-offset: 10px;
+    border-radius: 18px;
   }
 
   .container input:checked ~ .torch .face {
@@ -339,6 +390,7 @@ const StyledWrapper = styled.div`
 
   .container input:checked ~ .torch .side div:nth-child(16) {
     background-color: #372a17;
-  }`;
+  }
+`;
 
-export default Checkbox;
+export default MinecraftTorch;

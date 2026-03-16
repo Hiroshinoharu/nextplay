@@ -21,12 +21,12 @@ func (e *HTTPError) Error() string {
 var HttpClient = &http.Client{}
 
 var (
-	UserServiceURL string
-	GameServiceURL string
+	UserServiceURL        string
+	GameServiceURL        string
 	RecommenderServiceURL string
 )
 
-// Base URLs for different services 
+// Base URLs for different services
 func doGet(url string, headers map[string]string) (interface{}, error) {
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -58,7 +58,7 @@ func doGet(url string, headers map[string]string) (interface{}, error) {
 	return data, nil
 }
 
-// Helper function to perform POST requests 
+// Helper function to perform POST requests
 func doPost(url string, body []byte, headers map[string]string) (interface{}, error) {
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
@@ -96,6 +96,31 @@ func doPost(url string, body []byte, headers map[string]string) (interface{}, er
 // Helper function to perform PUT requests
 func doPut(url string, body []byte, headers map[string]string) (interface{}, error) {
 	req, err := http.NewRequest(http.MethodPut, url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+	resp, err := HttpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	raw, _ := io.ReadAll(resp.Body)
+	var data interface{}
+	_ = json.Unmarshal(raw, &data)
+	if resp.StatusCode >= 400 {
+		return nil, &HTTPError{Status: resp.StatusCode, Body: raw}
+	}
+	return data, nil
+}
+
+// Helper function to perform PATCH requests
+func doPatch(url string, body []byte, headers map[string]string) (interface{}, error) {
+	req, err := http.NewRequest(http.MethodPatch, url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}

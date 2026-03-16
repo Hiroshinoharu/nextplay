@@ -16,6 +16,7 @@ func SetUpRoutes(app *fiber.App) {
 	securedUsers := app.Group("/users", middleware.RequireJWT)
 	securedUsers.Get("/:id", handlers.GetUserByID)
 	securedUsers.Put("/:id", handlers.UpdateUser)
+	securedUsers.Patch("/:id/password", handlers.ChangePassword)
 	securedUsers.Delete("/:id", handlers.DeleteUser)
 
 	// ------------------------

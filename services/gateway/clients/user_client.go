@@ -103,6 +103,12 @@ func (c *UserClient) UpdateUser(id string, body []byte) (interface{}, error) {
 	return doPut(url, body, c.headers())
 }
 
+// PATCH /users/:id/password
+func (c *UserClient) ChangePassword(id string, body []byte) (interface{}, error) {
+	url := fmt.Sprintf("%s/users/%s/password", c.BaseURL, id)
+	return doPatch(url, body, c.headers())
+}
+
 // DELETE /users/:id
 func (c *UserClient) DeleteUser(id string) (interface{}, error) {
 	url := fmt.Sprintf("%s/users/%s", c.BaseURL, id)

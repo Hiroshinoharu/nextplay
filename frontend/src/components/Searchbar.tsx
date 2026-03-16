@@ -2,30 +2,24 @@ import { useId } from 'react';
 import styled from 'styled-components';
 
 type SearchbarProps = {
-  // Props can be added here if needed in the future, such as onChange handlers or value for controlled input
   value?: string;
   onValueChange?: (newValue: string) => void;
   onSubmit?: () => void;
 };
 
-// A reusable search input component with an icon and styled container.
 const Input = ({ value, onValueChange, onSubmit }: SearchbarProps) => {
   const inputId = useId();
   return (
     <StyledWrapper>
       <form
         className="search"
-        role ="search"
-        onSubmit={(e) => {
-          e.preventDefault();
+        role="search"
+        onSubmit={(event) => {
+          event.preventDefault();
           onSubmit?.();
         }}
       >
-        <button
-          type="submit"
-          className="iconContainer"
-          aria-label="Search"
-        >
+        <button type="submit" className="iconContainer" aria-label="Search">
           <svg
             viewBox="0 0 512 512"
             height="1em"
@@ -43,14 +37,13 @@ const Input = ({ value, onValueChange, onSubmit }: SearchbarProps) => {
           type="text"
           aria-label="Search games"
           value={value}
-          onChange={(e) => onValueChange?.(e.target.value)}
+          onChange={(event) => onValueChange?.(event.target.value)}
         />
       </form>
     </StyledWrapper>
   );
-}
+};
 
-// Styled component for the search input, defining styles for the search container, input field, and search icon, with responsive adjustments for smaller screens.
 const StyledWrapper = styled.div`
   .search {
     position: relative;
@@ -65,21 +58,17 @@ const StyledWrapper = styled.div`
     border-radius: 15px;
     background:
       radial-gradient(circle at top, rgba(140, 243, 122, 0.06), transparent 58%),
-      linear-gradient(145deg, rgba(8, 28, 44, 0.88), rgba(9, 23, 36, 0.76));
+      var(--games-input-bg, linear-gradient(145deg, rgba(8, 28, 44, 0.88), rgba(9, 23, 36, 0.76)));
     border: 1px solid var(--games-border, rgba(140, 243, 122, 0.33));
-    box-shadow:
-      0 12px 24px rgba(0, 0, 0, 0.28),
-      inset 0 0 0 1px rgba(140, 243, 122, 0.08);
+    box-shadow: var(--games-input-shadow, 0 12px 24px rgba(0, 0, 0, 0.28), inset 0 0 0 1px rgba(140, 243, 122, 0.08));
     transition:
       border-color 220ms ease,
       box-shadow 220ms ease;
   }
 
   .search:focus-within {
-    border-color: rgba(140, 243, 122, 0.62);
-    box-shadow:
-      0 14px 26px rgba(0, 0, 0, 0.3),
-      0 0 0 3px rgba(140, 243, 122, 0.14);
+    border-color: var(--games-border-active, rgba(140, 243, 122, 0.62));
+    box-shadow: var(--games-input-focus-shadow, 0 14px 26px rgba(0, 0, 0, 0.3), 0 0 0 3px rgba(140, 243, 122, 0.14));
   }
 
   .search_input {
@@ -99,7 +88,7 @@ const StyledWrapper = styled.div`
   }
 
   .search_input::placeholder {
-    color: rgba(226, 242, 255, 0.62);
+    color: var(--games-placeholder, rgba(226, 242, 255, 0.62));
   }
 
   .iconContainer {
@@ -121,15 +110,15 @@ const StyledWrapper = styled.div`
   }
 
   .iconContainer:hover {
-    background: rgba(140, 243, 122, 0.12);
+    background: var(--games-hover-surface, rgba(140, 243, 122, 0.12));
   }
 
   .iconContainer:active {
-    background: rgba(140, 243, 122, 0.18);
+    background: var(--games-hover-surface-strong, rgba(140, 243, 122, 0.18));
   }
 
   .iconContainer:focus-visible {
-    outline: 2px solid rgba(140, 243, 122, 0.65);
+    outline: 2px solid var(--games-accent, #8cf37a);
     outline-offset: 2px;
   }
 

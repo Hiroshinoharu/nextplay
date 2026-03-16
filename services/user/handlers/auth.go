@@ -85,7 +85,7 @@ func Login(c *fiber.Ctx) error {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
-	
+
 	// Parse and validate input
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON"})
@@ -157,4 +157,76 @@ func Login(c *fiber.Ctx) error {
 		"steam_linked": user.SteamLinked,
 		"token":        token,
 	})
+}
+
+// ChangePassword handles PATCH /users/:id/password requests.
+func ChangePassword(c *fiber.Ctx) error {
+	id := strings.TrimSpace(c.Params("id"))
+
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid JSON"})
+	}
+
+	req.CurrentPassword = strings.TrimSpace(req.CurrentPassword)
+	req.NewPassword = strings.TrimSpace(req.NewPassword)
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "current_password and new_password are required"})
+	}
+	if req.CurrentPassword == req.NewPassword {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "new password must be different from current password"})
+	}
+	if err := auth.ValidatePasswordPolicy(req.NewPassword); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	if db.DB == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database not initialized"})
+	}
+
+	var storedPassword string
+	err := db.DB.QueryRow(
+		"SELECT password FROM app_user WHERE user_id = $1",
+		id,
+	).Scan(&storedPassword)
+	if err == sql.ErrNoRows {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
+	}
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to look up user"})
+	}
+
+	ok, _, err := auth.VerifyPassword(req.CurrentPassword, storedPassword)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to authenticate user"})
+	}
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "current password is incorrect"})
+	}
+
+	hashedPassword, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to secure password"})
+	}
+
+	result, err := db.DB.Exec(
+		"UPDATE app_user SET password = $1 WHERE user_id = $2",
+		hashedPassword,
+		id,
+	)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update password"})
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to confirm password update"})
+	}
+	if rowsAffected == 0 {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Password updated successfully"})
 }

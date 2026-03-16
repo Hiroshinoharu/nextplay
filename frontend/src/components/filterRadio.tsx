@@ -53,10 +53,10 @@ const StyledWrapper = styled.div`
   }
 
   .filter-radio__item {
-    border: 1px solid rgba(140, 243, 122, 0.3);
+    border: 1px solid var(--games-border, rgba(140, 243, 122, 0.3));
     border-radius: 999px;
-    background: rgba(10, 30, 48, 0.62);
-    color: rgba(226, 242, 255, 0.88);
+    background: var(--games-surface, rgba(10, 30, 48, 0.62));
+    color: var(--games-text, rgba(226, 242, 255, 0.88));
     font-size: 11px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -69,23 +69,24 @@ const StyledWrapper = styled.div`
   }
 
   .filter-radio__item:hover {
-    border-color: rgba(199, 240, 0, 0.62);
+    border-color: var(--games-border-active, rgba(199, 240, 0, 0.62));
     transform: translateY(-1px);
   }
 
   .filter-radio__item.is-active {
-    border-color: rgba(199, 240, 0, 0.72);
-    background: rgba(140, 243, 122, 0.2);
-    color: rgba(220, 255, 116, 0.96);
-    box-shadow: inset 0 0 0 1px rgba(199, 240, 0, 0.22);
+    border-color: var(--games-border-active, rgba(199, 240, 0, 0.72));
+    background: var(--games-accent-surface, rgba(140, 243, 122, 0.2));
+    color: var(--games-accent-strong, rgba(220, 255, 116, 0.96));
+    box-shadow: inset 0 0 0 1px var(--games-accent-outline, rgba(199, 240, 0, 0.22));
   }
 
   .filter-radio__count {
     border-radius: 999px;
-    border: 1px solid rgba(140, 243, 122, 0.35);
+    border: 1px solid var(--games-border, rgba(140, 243, 122, 0.35));
+    background: var(--games-chip-bg, transparent);
     padding: 1px 6px;
     font-size: 10px;
-    color: rgba(226, 242, 255, 0.85);
+    color: var(--games-text, rgba(226, 242, 255, 0.85));
   }
 `;
 

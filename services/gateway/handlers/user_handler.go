@@ -32,6 +32,14 @@ func UpdateUser(c *fiber.Ctx) error {
 	return sendProxyJSON(c, resp, err)
 }
 
+// ChangePassword handles PATCH /api/users/:id/password
+func ChangePassword(c *fiber.Ctx) error {
+	id := c.Params("id")
+	userClient := userClientFromCtx(c)
+	resp, err := userClient.ChangePassword(id, c.Body())
+	return sendProxyJSON(c, resp, err)
+}
+
 // DeleteUser handles DELETE /api/users/:id
 func DeleteUser(c *fiber.Ctx) error {
 	id := c.Params("id")
