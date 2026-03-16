@@ -8,6 +8,7 @@ import Navbar from "./components/Navbar";
 import Searchbar from "./components/Searchbar";
 import SiteFooter from "./components/SiteFooter";
 import Loader from "./components/Loader";
+import LoadingScreen from "./components/LoadingScreen";
 import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
 import {
@@ -280,6 +281,10 @@ const pickPseudoRandomIndex = (length: number, seedKey: string) => {
   return Math.floor(nextRandom() * length);
 };
 
+const FEATURED_ROTATION_WINDOW_MS = 1000 * 60 * 45;
+const getFeaturedRotationBucket = () =>
+  Math.floor(Date.now() / FEATURED_ROTATION_WINDOW_MS);
+
 // Main Games component handling game list view
 function Games({ authUser }: GamesProps) {
   // Router and state hooks
@@ -290,6 +295,9 @@ function Games({ authUser }: GamesProps) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [featuredGameId, setFeaturedGameId] = useState<number | null>(null);
   const [featuredDetail, setFeaturedDetail] = useState<GameItem | null>(null);
+  const [featuredRotationBucket, setFeaturedRotationBucket] = useState<number>(() =>
+    getFeaturedRotationBucket(),
+  );
   const [landscapeByUrl, setLandscapeByUrl] = useState<Record<string, boolean>>(
     {},
   );
@@ -638,7 +646,6 @@ function Games({ authUser }: GamesProps) {
     searchQueryError?.message ??
     null;
   const hasMoreUpcoming = Boolean(hasMoreUpcomingGames);
-
   // Callback function for loading more upcoming games, with checks to prevent multiple simultaneous fetches and to ensure that there are more pages to load before attempting to fetch additional data, providing a smooth and responsive experience for users as they explore the upcoming game library and discover new content without encountering issues related to excessive or redundant API calls
   const loadMoreUpcomingGames = useCallback(async () => {
     if (!hasMoreUpcoming || upcomingLoadingMore || upcomingLoading) return;
@@ -684,28 +691,55 @@ function Games({ authUser }: GamesProps) {
     () => featuredCandidates.map((game) => String(game.id)).join("|"),
     [featuredCandidates],
   );
+  const featuredSelectionSignature = useMemo(
+    () => `${featuredCandidatesKey}:${featuredRotationBucket}`,
+    [featuredCandidatesKey, featuredRotationBucket],
+  );
+  const lastFeaturedSelectionSignatureRef = useRef<string | null>(null);
 
-  // useEffect for selecting a featured game when the list of featured candidates changes, with logic to maintain the current featured game if it is still in the list of candidates or to randomly select a new featured game if the current one is no longer available, ensuring that the hero section of the page remains dynamic and engaging while also providing consistency for users as they explore the game library
   useEffect(() => {
-    // Scroll to top when the featured game changes
+    const interval = window.setInterval(() => {
+      const nextBucket = getFeaturedRotationBucket();
+      setFeaturedRotationBucket((current) =>
+        current === nextBucket ? current : nextBucket,
+      );
+    }, 60_000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  // Keep the featured hero stable within a rotation window, but rotate it over
+  // time so the same title does not stay pinned indefinitely.
+  useEffect(() => {
     if (!featuredCandidates.length) {
+      lastFeaturedSelectionSignatureRef.current = null;
       setFeaturedGameId(null);
       setFeaturedDetail(null);
       return;
     }
 
-    // If the current featured game is still in the list of candidates, keep it as the featured game. Otherwise, randomly select a new featured game from the candidates. This logic ensures that the featured game remains consistent for users as long as it is still relevant, while also allowing for dynamic updates to the hero section when the list of candidates changes due to new data being fetched or other factors.
     setFeaturedGameId((prevId) => {
-      if (prevId && featuredCandidates.some((game) => game.id === prevId)) {
+      const signatureChanged =
+        lastFeaturedSelectionSignatureRef.current !== featuredSelectionSignature;
+      lastFeaturedSelectionSignatureRef.current = featuredSelectionSignature;
+
+      if (!signatureChanged && prevId && featuredCandidates.some((game) => game.id === prevId)) {
         return prevId;
       }
+
       const nextIndex = pickPseudoRandomIndex(
         featuredCandidates.length,
-        `featured:${featuredCandidatesKey}`,
+        `featured:${featuredSelectionSignature}`,
       );
-      return featuredCandidates[nextIndex].id ?? null;
+      const nextId = featuredCandidates[nextIndex].id ?? null;
+      if (featuredCandidates.length > 1 && nextId === prevId) {
+        return featuredCandidates[(nextIndex + 1) % featuredCandidates.length].id ?? nextId;
+      }
+      return nextId;
     });
-  }, [featuredCandidates, featuredCandidatesKey]);
+  }, [featuredCandidates, featuredSelectionSignature]);
 
   // useEffect for fetching detailed information about the featured game when the featuredGameId changes, with logic to handle API requests and responses, update the featuredDetail state, and manage potential errors gracefully, ensuring that users have access to comprehensive information about the featured game while also providing a responsive experience as they explore the hero section of the page
   useEffect(() => {
@@ -754,7 +788,7 @@ function Games({ authUser }: GamesProps) {
       ? featuredCandidates[
           pickPseudoRandomIndex(
             featuredCandidates.length,
-            `featured-fallback:${featuredCandidatesKey}`,
+            `featured-fallback:${featuredSelectionSignature}`,
           )
         ]
       : null;
@@ -777,6 +811,16 @@ function Games({ authUser }: GamesProps) {
     }
     return null;
   }, [featuredDetail, featuredGame, featuredGameId]);
+  const showInitialLibraryLoadingScreen =
+    !normalizedSearchQuery &&
+    !featuredGame &&
+    !gamesError &&
+    games.length === 0 &&
+    upcomingGames.length === 0 &&
+    recentPopularGames.length === 0 &&
+    topAllTimeGames.length === 0 &&
+    (gamesLoading || upcomingLoading || trendingLoading || topGamesLoading);
+
   const heroDescriptionSource = collapseWhitespace(
     heroGame?.description || heroGame?.story,
   );
@@ -1347,6 +1391,19 @@ function Games({ authUser }: GamesProps) {
 
   return (
     <div className="games-page">
+      {showInitialLibraryLoadingScreen ? (
+        <LoadingScreen
+          fullScreen
+          eyebrow="Game library"
+          title="Loading your library"
+          subtitle="Pulling recent, upcoming, and top-rated games into view."
+          hints={[
+            "Fetching the main game catalog",
+            "Ranking top-rated standouts",
+            "Preparing artwork and hero media",
+          ]}
+        />
+      ) : null}
       <div className="games-shell">
         <header className="games-header">
           <button
@@ -1750,3 +1807,4 @@ function Games({ authUser }: GamesProps) {
 }
 
 export default Games;
+

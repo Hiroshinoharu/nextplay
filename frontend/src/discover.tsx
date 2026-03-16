@@ -7,6 +7,7 @@ import Navbar from "./components/Navbar";
 import Searchbar from "./components/Searchbar";
 import SiteFooter from "./components/SiteFooter";
 import Loader from "./components/Loader";
+import LoadingScreen from "./components/LoadingScreen";
 import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
 import {
@@ -231,14 +232,6 @@ const getGameRating = (game: GameItem) =>
 
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
-
-const normalizeBackendRecommendationScore = (value: number) => {
-  if (!Number.isFinite(value)) return null;
-  const resolved = value <= 1.25
-    ? Math.round(RECOMMENDATION_SCORE_MIN + (clampNumber(value, 0, 1) * RECOMMENDATION_SCORE_SPAN))
-    : Math.round(value);
-  return clampNumber(resolved, RECOMMENDATION_SCORE_MIN, RECOMMENDATION_SCORE_MAX);
-};
 
 const tokenizePreferenceText = (value?: string) => {
   if (!value) return [] as string[];
@@ -584,7 +577,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   const [recommendationStrategy, setRecommendationStrategy] = useState<string | null>(null);
   const [recommendationTrace, setRecommendationTrace] = useState<RecommendationTrace | null>(null);
   const [recommendedGames, setRecommendedGames] = useState<GameItem[]>([]);
-  const [backendRecommendationScores, setBackendRecommendationScores] = useState<Record<number, number>>({});
+  const [, setBackendRecommendationScores] = useState<Record<number, number>>({});
   const [backendRecommendationRanks, setBackendRecommendationRanks] = useState<Record<number, number>>({});
   const [dismissedRecommendationIds, setDismissedRecommendationIds] = useState<number[]>([]);
   const [savedRecommendationIds, setSavedRecommendationIds] = useState<number[]>([]);
@@ -1494,7 +1487,13 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   }, [additionalRecommendedGames, currentResultPage]);
 
   const topRecommendationSummary = useMemo(() => {
-    if (!topRecommendedGame) return "We couldn't load details for the top recommendation yet.";
+    const fallback = "We couldn't load details for the top recommendation yet.";
+    if (!topRecommendedGame) {
+      return {
+        display: fallback,
+        full: fallback,
+      };
+    }
 
     const reasons: string[] = [];
     const releaseLabel = formatReleaseDate(topRecommendedGame.release_date);
@@ -1512,18 +1511,31 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     }
 
     const source = collapseWhitespace(topRecommendedGame.description ?? "");
-    const trimmedDescription = source.length > 150 ? `${source.slice(0, 150).trimEnd()}...` : source;
+    const trimmedDescription = source.length > 260 ? `${source.slice(0, 260).trimEnd()}...` : source;
 
-    if (!reasons.length && !trimmedDescription) {
-      return "Strong overall fit based on your answers, favorite anchors, and current ranking profile.";
+    if (!reasons.length && !source) {
+      return {
+        display: "Strong overall fit based on your answers, favorite anchors, and current ranking profile.",
+        full: "Strong overall fit based on your answers, favorite anchors, and current ranking profile.",
+      };
     }
-    if (!trimmedDescription) {
-      return `${reasons.join(". ")}.`;
+    if (!source) {
+      const summary = `${reasons.join(". ")}.`;
+      return {
+        display: summary,
+        full: summary,
+      };
     }
     if (!reasons.length) {
-      return trimmedDescription;
+      return {
+        display: trimmedDescription,
+        full: source,
+      };
     }
-    return `${reasons.join(". ")}. ${trimmedDescription}`;
+    return {
+      display: `${reasons.join(". ")}. ${trimmedDescription}`,
+      full: `${reasons.join(". ")}. ${source}`,
+    };
   }, [recommendationPositiveReasonChips, topRecommendedGame]);
 
   const answerPreferenceTokens = useMemo(() => {
@@ -1578,15 +1590,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     const minRaw = Math.min(...rows.map((row) => row.raw));
     const maxRaw = Math.max(...rows.map((row) => row.raw));
     const span = maxRaw - minRaw;
-    const sortedByRaw = [...rows].sort((left, right) => right.raw - left.raw);
-    const percentileById = new Map<number, number>();
-    const denom = Math.max(sortedByRaw.length - 1, 1);
-    sortedByRaw.forEach((row, index) => {
-      // Top item gets percentile 1.0; bottom item gets 0.0.
-      percentileById.set(row.id, 1 - (index / denom));
-    });
 
     const scores = new Map<number, number>();
+    let previousScore = RECOMMENDATION_SCORE_MAX;
     for (const row of rows) {
       let rawNormalized: number;
       if (span < 1e-6) {
@@ -1598,36 +1604,39 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       } else {
         rawNormalized = clampNumber((row.raw - minRaw) / span, 0, 1);
       }
-      const percentile = percentileById.get(row.id) ?? rawNormalized;
-      // Percentile weighting guarantees visible separation between neighbors.
-      const blended = clampNumber((percentile * 0.7) + (rawNormalized * 0.3), 0, 1);
+      const rankPercentile = clampNumber(
+        1 - ((row.rank - 1) / Math.max(rows.length - 1, 1)),
+        0,
+        1,
+      );
+      // Keep the visible score anchored to the displayed order, then let the
+      // content signal shape the gaps within that order.
+      const blended = clampNumber((rankPercentile * 0.76) + (rawNormalized * 0.24), 0, 1);
       const eased = Math.pow(blended, 0.88);
-      const displayScore = Math.round(RECOMMENDATION_SCORE_MIN + (eased * RECOMMENDATION_SCORE_SPAN));
-      scores.set(row.id, displayScore);
+      const displayScore = Math.round(
+        RECOMMENDATION_SCORE_MIN + (eased * RECOMMENDATION_SCORE_SPAN),
+      );
+      const monotonicScore =
+        row.rank === 1
+          ? displayScore
+          : clampNumber(
+              Math.min(previousScore - 1, displayScore),
+              RECOMMENDATION_SCORE_MIN,
+              RECOMMENDATION_SCORE_MAX,
+            );
+      scores.set(row.id, monotonicScore);
+      previousScore = monotonicScore;
     }
     return scores;
   }, [getPersonalizationSignal, rankedRecommendedGames]);
 
   const effectiveRecommendationScores = useMemo(() => {
-    const scores = new Map<number, number>();
-    const hasBackendScores = Object.keys(backendRecommendationScores).length > 0;
-    let previousScore = 99;
-    for (const game of rankedRecommendedGames) {
-      const backendScore = backendRecommendationScores[game.id];
-      if (hasBackendScores) {
-        const resolved = Number.isFinite(backendScore)
-          ? normalizeBackendRecommendationScore(backendScore) ?? clampNumber(previousScore - 1, RECOMMENDATION_SCORE_MIN, RECOMMENDATION_SCORE_MAX)
-          : clampNumber(previousScore - 1, RECOMMENDATION_SCORE_MIN, RECOMMENDATION_SCORE_MAX);
-        const monotonic = Math.min(previousScore, resolved);
-        scores.set(game.id, monotonic);
-        previousScore = monotonic;
-        continue;
-      }
-      const fallbackScore = recommendationDisplayScores.get(game.id) ?? RECOMMENDATION_SCORE_MIN;
-      scores.set(game.id, fallbackScore);
-    }
-    return scores;
-  }, [backendRecommendationScores, rankedRecommendedGames, recommendationDisplayScores]);
+    // User-facing scores should reflect the visible recommendation stack after
+    // filters, dismissals, and top-ups have been applied. Backend scores stay in
+    // state for analytics and traceability, but the UI percentage is derived
+    // from the current visible order so it remains stable and well-spread.
+    return recommendationDisplayScores;
+  }, [recommendationDisplayScores]);
 
 
   const getRecommendationRank = useCallback(
@@ -2367,10 +2376,16 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
               {!normalizedSearchQuery ? (
                 <div ref={randomLanesSectionRef} className="discover-random">
                   {randomPoolLoading && visibleDisplayedDiscoverCarousels.length === 0 ? (
-                    <Loader
+                    <LoadingScreen
                       fullScreen
+                      eyebrow="Discover feed"
                       title="Building discover lanes"
-                      subtitle="Mixing random, genre, and momentum picks..."
+                      subtitle="Mixing random, genre, and momentum picks."
+                      hints={[
+                        "Assembling fresh browse lanes",
+                        "Balancing genre and momentum rows",
+                        "Preparing recommendation hooks",
+                      ]}
                     />
                   ) : null}
                   {questionnaireComplete ? (
@@ -2444,7 +2459,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                             <div className="games-result__content">
                               <span className="games-result__list-item-rank">#1</span>
                               <h3>{topRecommendedGame.name || "Top recommendation"}</h3>
-                              <p>{topRecommendationSummary}</p>
+                              <p className="games-result__summary" title={topRecommendationSummary.full}>{topRecommendationSummary.display}</p>
                               <div className="games-result__meta">
                                 <span>
                                   {formatReleaseDate(topRecommendedGame.release_date)
@@ -2478,9 +2493,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                               </div>
                               <div className="games-result__list-grid">
                                 {pagedAdditionalRecommendations.map((game, index) => {
-                                  const rank = 2 + ((currentResultPage - 1) * RESULT_PAGE_SIZE) + index;
+                                  const visibleRank = 2 + ((currentResultPage - 1) * RESULT_PAGE_SIZE) + index;
                                   const coverUrl = getPreferredCoverImage(game);
-                                  const resolvedRank = getRecommendationRank(game.id, rank);
+                                  const modelRank = getRecommendationRank(game.id, visibleRank);
                                   const isSaved = savedRecommendationIds.includes(game.id);
                                   return (
                                     <article
@@ -2493,7 +2508,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                                         onClick={() =>
                                           openGameDetail(game.id, {
                                             fromRecommendation: true,
-                                            rank: resolvedRank,
+                                            rank: modelRank,
                                           })
                                         }
                                       >
@@ -2509,7 +2524,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                                           )}
                                         </span>
                                         <span className="games-result__list-item-body">
-                                        <span className="games-result__list-item-rank">{`#${resolvedRank}`}</span>
+                                        <span className="games-result__list-item-rank">{`#${visibleRank}`}</span>
                                         <span className="games-result__list-item-title">{game.name || "Untitled game"}</span>
                                         <span className="games-result__list-item-meta">
                                           {formatReleaseDate(game.release_date)
@@ -2525,14 +2540,14 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                                         <button
                                           type="button"
                                           className="games-result__chip"
-                                          onClick={() => void handleRecommendationFavorite(game.id, resolvedRank)}
+                                          onClick={() => void handleRecommendationFavorite(game.id, modelRank)}
                                         >
                                           {isSaved ? "Saved" : "Save"}
                                         </button>
                                         <button
                                           type="button"
                                           className="games-result__chip games-result__chip--ghost"
-                                          onClick={() => void handleRecommendationDismiss(game.id, resolvedRank)}
+                                          onClick={() => void handleRecommendationDismiss(game.id, modelRank)}
                                         >
                                           Hide
                                         </button>
@@ -2988,7 +3003,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                 <div className="games-result__content">
                   <span className="games-result__list-item-rank">#1</span>
                   <h3>{topRecommendedGame.name || "Top recommendation"}</h3>
-                  <p>{topRecommendationSummary}</p>
+                  <p className="games-result__summary" title={topRecommendationSummary.full}>{topRecommendationSummary.display}</p>
                   <div className="games-result__meta">
                     <span>
                       {formatReleaseDate(topRecommendedGame.release_date)

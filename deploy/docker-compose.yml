@@ -104,7 +104,7 @@ services:
       context: .. # Build from the root directory
       dockerfile: services/recommender/Dockerfile # Specify recommender Dockerfile 
     ports:
-      - "8082:8082"
+      - "18082:8082"
     env_file:
       - env/recommender.env
     environment:
@@ -146,7 +146,7 @@ services:
       context: ..
       dockerfile: services/gateway/Dockerfile # Build gateway from its Dockerfile
     ports:
-      - "8084:8084" # Main entry point for frontend <-> backend API
+      - "18084:8084" # Main entry point for host <-> backend API
     env_file:
       - env/gateway.env
     environment:      

@@ -1041,6 +1041,10 @@
   text-wrap: pretty;
 }
 
+.games-result__summary {
+  cursor: help;
+}
+
 .games-result__meta {
   display: flex;
   flex-wrap: wrap;

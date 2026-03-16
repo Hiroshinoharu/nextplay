@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Route, Routes, useLocation ,useNavigate, Navigate } from "react-router-dom";
 import "./App.css";
 import "./health.css";
@@ -12,6 +12,7 @@ import UserPage from "./user";
 import Login from "./login";
 import { type AuthUser } from "./utils/authUser";
 import Loader from "./components/Loader";
+import LoadingScreen from "./components/LoadingScreen";
 
 // Types for health check statuses
 type HealthStatus = "idle" | "loading" | "ok" | "error";
@@ -99,11 +100,18 @@ const shouldIgnoreVerticalSwipe = (target: EventTarget | null) => {
 };
 
 type RouteTransitionLoaderProps = {
+  eyebrow?: string;
   title: string;
   subtitle: string;
+  hints?: string[];
 };
 
-const RouteTransitionLoader = ({ title, subtitle }: RouteTransitionLoaderProps) => {
+const RouteTransitionLoader = ({
+  eyebrow,
+  title,
+  subtitle,
+  hints,
+}: RouteTransitionLoaderProps) => {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
@@ -122,7 +130,15 @@ const RouteTransitionLoader = ({ title, subtitle }: RouteTransitionLoaderProps) 
 
   if (!visible) return null;
 
-  return <Loader fullScreen title={title} subtitle={subtitle} />;
+  return (
+    <LoadingScreen
+      fullScreen
+      eyebrow={eyebrow}
+      title={title}
+      subtitle={subtitle}
+      hints={hints}
+    />
+  );
 };
 
 // Coerce unknown payload into AuthUser or null
@@ -561,6 +577,9 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const unauthorizedRedirectingRef = useRef(false);
+  const previousPathRef = useRef(location.pathname);
+  const [showBootLoadingScreen, setShowBootLoadingScreen] = useState(true);
+  const [routeLoaderTick, setRouteLoaderTick] = useState(0);
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
     if (typeof window === "undefined") return null;
     try {
@@ -592,6 +611,49 @@ function App() {
     }
   }, []);
 
+  const sessionUser = useMemo(() => {
+    const token = authUser?.token?.trim();
+    return token ? { ...authUser, token } : null;
+  }, [authUser]);
+
+  useEffect(() => {
+    let ready = typeof document !== "undefined" && document.readyState === "complete";
+    let minimumElapsed = false;
+
+    const finishIfReady = () => {
+      if (ready && minimumElapsed) {
+        setShowBootLoadingScreen(false);
+      }
+    };
+
+    const handleReady = () => {
+      ready = true;
+      finishIfReady();
+    };
+
+    const minimumTimer = window.setTimeout(() => {
+      minimumElapsed = true;
+      finishIfReady();
+    }, 850);
+
+    const fallbackTimer = window.setTimeout(() => {
+      ready = true;
+      finishIfReady();
+    }, 1800);
+
+    if (!ready) {
+      window.addEventListener("load", handleReady, { once: true });
+    } else {
+      handleReady();
+    }
+
+    return () => {
+      window.clearTimeout(minimumTimer);
+      window.clearTimeout(fallbackTimer);
+      window.removeEventListener("load", handleReady);
+    };
+  }, []);
+
   useEffect(() => {
     const originalFetch = window.fetch;
     window.fetch = (async (
@@ -600,7 +662,7 @@ function App() {
       const response = await originalFetch(...args);
       if (
         response.status === 401 &&
-        authUser &&
+        sessionUser &&
         !unauthorizedRedirectingRef.current
       ) {
         unauthorizedRedirectingRef.current = true;
@@ -613,7 +675,19 @@ function App() {
     return () => {
       window.fetch = originalFetch;
     };
-  }, [authUser, handleSignOut, navigate]);
+  }, [handleSignOut, navigate, sessionUser]);
+
+  useEffect(() => {
+    if (showBootLoadingScreen) {
+      previousPathRef.current = location.pathname;
+      return;
+    }
+
+    if (previousPathRef.current !== location.pathname) {
+      previousPathRef.current = location.pathname;
+      setRouteLoaderTick((current) => current + 1);
+    }
+  }, [location.pathname, showBootLoadingScreen]);
 
   useEffect(() => {
     let startX = 0;
@@ -664,16 +738,70 @@ function App() {
     };
   }, []);
 
-  const loaderTitle =
-    location.pathname === "/"
-      ? "Booting NextPlay"
-      : location.pathname === "/discover"
-        ? "Scanning game worlds"
-        : location.pathname === "/games"
-          ? "Loading your library"
-          : location.pathname === "/login"
-            ? "Preparing secure sign-in"
-            : "Loading your next screen";
+  const routeLoaderConfig = useMemo(() => {
+    if (location.pathname === "/") {
+      return {
+        eyebrow: "Landing page",
+        title: "Setting up the landing view",
+        subtitle: "Curating a clean handoff into your next session.",
+        hints: [
+          "Checking live service status",
+          "Staging the featured 2026 shelf",
+          "Polishing the landing carousel",
+        ],
+      };
+    }
+
+    if (location.pathname === "/discover") {
+      return {
+        eyebrow: "Discover",
+        title: "Scanning game worlds",
+        subtitle: "Mixing profile signals, live lanes, and recommendation context.",
+        hints: [
+          "Loading your discover lanes",
+          "Warming recommendation context",
+          "Saving your questionnaire state",
+        ],
+      };
+    }
+
+    if (location.pathname === "/games") {
+      return {
+        eyebrow: "Library",
+        title: "Loading your library",
+        subtitle: "Pulling recent releases, top-rated games, and hero media into place.",
+        hints: [
+          "Fetching the main catalog",
+          "Ranking top-rated standouts",
+          "Preparing screenshots and cover art",
+        ],
+      };
+    }
+
+    if (location.pathname === "/login") {
+      return {
+        eyebrow: "Sign in",
+        title: "Preparing secure sign-in",
+        subtitle: "Verifying the session shell before you step in.",
+        hints: [
+          "Restoring saved session state",
+          "Locking protected routes",
+          "Preparing account actions",
+        ],
+      };
+    }
+
+    return {
+      eyebrow: "NextPlay",
+      title: "Loading your next screen",
+      subtitle: "Polishing data, visuals, and recommendations.",
+      hints: [
+        "Syncing live data",
+        "Staging page visuals",
+        "Getting interactions ready",
+      ],
+    };
+  }, [location.pathname]);
 
   return (
     <>
@@ -681,42 +809,42 @@ function App() {
         <Route
           path="/"
           element={
-            authUser ? (
+            sessionUser ? (
               <Navigate to="/games" replace />
             ) : (
-              <Home authUser={authUser} onSignOut={handleSignOut} />
+              <Home authUser={sessionUser} onSignOut={handleSignOut} />
             )
           }
         />
         <Route
           path="/games"
-          element={authUser ? <Games authUser={authUser} /> : <Navigate to="/login" replace />}
+          element={sessionUser ? <Games authUser={sessionUser} /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/discover"
-          element={authUser ? <SearchPage authUser={authUser} /> : <Navigate to="/login" replace />}
+          element={sessionUser ? <SearchPage authUser={sessionUser} /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/games/:gameId"
-          element={authUser ? <Game authUser={authUser} /> : <Navigate to="/login" replace />}
+          element={sessionUser ? <Game authUser={sessionUser} /> : <Navigate to="/login" replace />}
         />
         <Route
           path="/login"
           element={
-            <Login apiBaseUrl={API_ROOT} authUser={authUser} onAuthSuccess={handleAuthSuccess} />
+            <Login apiBaseUrl={API_ROOT} authUser={sessionUser} onAuthSuccess={handleAuthSuccess} />
           }
         />
         <Route
           path="/user"
           element={
-            <UserPage authUser={authUser} onSignOut={handleSignOut} />
+            <UserPage authUser={sessionUser} onSignOut={handleSignOut} />
           }
         />
         <Route path="/health" element={<HealthPage />} />
         <Route
           path="*"
           element={
-            authUser ? (
+            sessionUser ? (
               <Navigate to="/games" replace />
             ) : (
               <Navigate to="/" replace />
@@ -724,11 +852,28 @@ function App() {
           }
         />
       </Routes>
-      <RouteTransitionLoader
-        key={location.pathname}
-        title={loaderTitle}
-        subtitle="Polishing data, visuals, and recommendations..."
-      />
+      {showBootLoadingScreen ? (
+        <LoadingScreen
+          fullScreen
+          eyebrow="Launching NextPlay"
+          title="Booting your play space"
+          subtitle="Loading routes, session state, and the first view."
+          hints={[
+            "Checking your saved session",
+            "Connecting to live services",
+            "Warming up the game feed",
+          ]}
+        />
+      ) : null}
+      {!showBootLoadingScreen && routeLoaderTick > 0 ? (
+        <RouteTransitionLoader
+          key={`${location.pathname}-${routeLoaderTick}`}
+          eyebrow={routeLoaderConfig.eyebrow}
+          title={routeLoaderConfig.title}
+          subtitle={routeLoaderConfig.subtitle}
+          hints={routeLoaderConfig.hints}
+        />
+      ) : null}
     </>
   );
 }
