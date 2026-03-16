@@ -204,7 +204,9 @@
 }
 
 .discover-algorithm-verdict .games-result__content {
+  min-width: 0;
   padding: 14px 16px;
+  align-items: flex-start;
   gap: 10px;
 }
 
@@ -215,9 +217,16 @@
 }
 
 .discover-algorithm-verdict .games-result__content p {
+  width: 100%;
+  max-width: none;
   color: rgba(226, 242, 255, 0.82);
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.55;
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-wrap: pretty;
 }
 
 .discover-algorithm-verdict .games-result__meta {
@@ -626,5 +635,347 @@
     height: 38px;
     flex-basis: 38px;
     border-radius: 8px;
+  }
+}
+
+
+.discover-algorithm-verdict .games-result__list-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.discover-algorithm-verdict .games-result__list-item-main {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.discover-algorithm-verdict .games-result__list-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.discover-algorithm-verdict .games-result__chip {
+  border: 1px solid rgba(140, 243, 122, 0.32);
+  background: rgba(140, 243, 122, 0.12);
+  color: var(--games-accent-strong);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.discover-algorithm-verdict .games-result__chip--ghost {
+  background: rgba(14, 165, 233, 0.1);
+  border-color: rgba(14, 165, 233, 0.3);
+}
+
+
+.discover-questionnaire-status {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.discover-questionnaire-status__card {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(140, 243, 122, 0.24);
+  background: linear-gradient(150deg, rgba(10, 31, 48, 0.82), rgba(7, 21, 33, 0.68));
+}
+
+.discover-questionnaire-status__value {
+  font-size: clamp(18px, 2.4vw, 28px);
+  font-weight: 800;
+  color: var(--games-accent-strong);
+}
+
+.discover-questionnaire-status__label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--games-subtle);
+}
+
+.discover-questionnaire-question__header {
+  display: grid;
+  gap: 8px;
+}
+
+.discover-questionnaire-question__step,
+.discover-questionnaire-selection__label {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--games-subtle);
+}
+
+.discover-questionnaire-selection {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(140, 243, 122, 0.12);
+}
+
+.discover-questionnaire-selection__chips,
+.discover-result-summary__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.discover-questionnaire-selection__chip--muted {
+  border-color: rgba(14, 165, 233, 0.24);
+  background: rgba(14, 165, 233, 0.1);
+}
+
+.discover-result-summary {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border-top: 1px solid rgba(140, 243, 122, 0.14);
+  border-bottom: 1px solid rgba(140, 243, 122, 0.14);
+  background: linear-gradient(160deg, rgba(7, 21, 33, 0.82), rgba(10, 28, 44, 0.76));
+}
+
+.discover-result-summary--dialog {
+  border-top: none;
+}
+
+.discover-result-summary__stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.discover-result-summary__stat {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(140, 243, 122, 0.18);
+  background: rgba(9, 28, 43, 0.68);
+}
+
+.discover-result-summary__stat-value {
+  color: var(--games-accent-strong);
+  font-size: clamp(18px, 2.2vw, 26px);
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.discover-result-summary__stat-label {
+  color: var(--games-subtle);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.discover-result-summary__groups {
+  display: grid;
+  gap: 10px;
+}
+
+.discover-result-summary__group {
+  display: grid;
+  gap: 6px;
+}
+
+.discover-result-summary__group-label {
+  color: var(--games-subtle);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.discover-result-summary__chip {
+  border: 1px solid rgba(140, 243, 122, 0.28);
+  background: rgba(140, 243, 122, 0.1);
+  color: var(--games-text);
+  border-radius: 999px;
+  padding: 7px 11px;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.discover-result-summary__chip--avoid {
+  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.discover-result-summary__chip--favorite {
+  border-color: rgba(14, 165, 233, 0.28);
+  background: rgba(14, 165, 233, 0.12);
+}
+
+@media (max-width: 640px) {
+  .discover-questionnaire-status,
+  .discover-result-summary__stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.discover-questionnaire-status,
+.discover-questionnaire-panel,
+.games-questionnaire__question,
+.discover-result-summary,
+.discover-algorithm-verdict .games-result__card,
+.discover-algorithm-verdict .games-result__list-item {
+  animation: discover-rise-in 420ms ease both;
+}
+
+.discover-questionnaire-status__card:nth-child(2),
+.discover-questionnaire-panel:nth-child(2),
+.discover-result-summary__stat:nth-child(2),
+.discover-algorithm-verdict .games-result__list-item:nth-child(2) {
+  animation-delay: 60ms;
+}
+
+.discover-questionnaire-status__card:nth-child(3),
+.discover-result-summary__stat:nth-child(3),
+.discover-algorithm-verdict .games-result__list-item:nth-child(3) {
+  animation-delay: 110ms;
+}
+
+.discover-questionnaire-panel__chip,
+.discover-questionnaire-selection__chip,
+.discover-result-summary__chip,
+.games-questionnaire__option,
+.discover-algorithm-verdict .games-result__chip {
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.discover-questionnaire-panel__chip:hover,
+.discover-questionnaire-selection__chip:hover,
+.discover-result-summary__chip:hover,
+.games-questionnaire__option:hover,
+.discover-algorithm-verdict .games-result__chip:hover {
+  transform: translateY(-1px);
+}
+
+.discover-algorithm-verdict .games-result__card,
+.discover-algorithm-verdict .games-result__list-item,
+.games-questionnaire__question,
+.discover-questionnaire-panel,
+.discover-questionnaire-status__card,
+.discover-result-summary__stat {
+  will-change: transform, opacity;
+}
+
+@keyframes discover-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .discover-questionnaire-status,
+  .discover-questionnaire-panel,
+  .games-questionnaire__question,
+  .discover-result-summary,
+  .discover-algorithm-verdict .games-result__card,
+  .discover-algorithm-verdict .games-result__list-item {
+    animation: none;
+  }
+
+  .discover-questionnaire-panel__chip,
+  .discover-questionnaire-selection__chip,
+  .discover-result-summary__chip,
+  .games-questionnaire__option,
+  .discover-algorithm-verdict .games-result__chip {
+    transition: none;
+  }
+}
+
+
+.discover-questionnaire-compact {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.9fr) minmax(0, 1.6fr);
+  gap: 10px;
+}
+
+.discover-questionnaire-compact__card {
+  border: 1px solid rgba(140, 243, 122, 0.18);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(8, 24, 38, 0.56);
+}
+
+.discover-questionnaire-compact__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--games-subtle);
+}
+
+.discover-questionnaire-compact__value {
+  margin: 0;
+  color: var(--games-text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.discover-questionnaire-compact__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.discover-questionnaire-compact__chip {
+  border-radius: 999px;
+  border: 1px solid rgba(140, 243, 122, 0.24);
+  background: rgba(140, 243, 122, 0.08);
+  color: var(--games-text);
+  padding: 5px 9px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.discover-questionnaire-compact__empty {
+  color: var(--games-subtle);
+  font-size: 12px;
+}
+
+.discover-questionnaire-body {
+  display: block;
+}
+
+.discover-questionnaire-card {
+  padding: 12px;
+}
+
+.discover-questionnaire-question__header {
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .discover-questionnaire-compact {
+    grid-template-columns: 1fr;
   }
 }

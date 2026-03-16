@@ -16,6 +16,7 @@ from services.recommender.models.model_loader import (
     load_model,
     load_popularity_prior_map,
 )
+from services.recommender.models.ranking_profiles import ACTIVE_RANKING_PROFILE
 from services.recommender.routes.routes import register_routes
 
 logger = logging.getLogger(__name__)
@@ -182,6 +183,8 @@ async def lifespan(app: FastAPI):
         app.state.candidate_index_map,
         app.state.popularity_prior_map,
     )
+    app.state.ranking_profile = ACTIVE_RANKING_PROFILE.name
+    app.state.ranking_profile_config = ACTIVE_RANKING_PROFILE.to_dict()
     app.state.fallback_inference = build_inference_service(None)
     app.state.inference = app.state.inference_service
 
@@ -200,6 +203,11 @@ async def lifespan(app: FastAPI):
         "recommend_fallback_reason_inference_exception_total": 0,
         "recommend_fallback_reason_empty_candidates_total": 0,
         "recommend_fallback_reason_fallback_inference_exception_total": 0,
+        "recommend_model_loaded_total": 0,
+        "recommend_model_unloaded_total": 0,
+        "recommend_empty_result_total": 0,
+        "recommend_short_result_total": 0,
+        "recommend_repeated_result_total": 0,
     }
 
     session = requests.Session()
@@ -262,3 +270,4 @@ register_routes(app)
 
 if __name__ == "__main__":
     uvicorn.run("services.recommender.main:app", host="0.0.0.0", port=8082)
+

@@ -3,6 +3,7 @@ import pytest
 
 from services.recommender.main import app
 from services.recommender.handlers.recommend import (
+    _build_personalized_recommendation_ids,
     _extract_release_year_preference,
     _is_strict_release_year_preference,
     _release_era_alignment_score,
@@ -125,11 +126,12 @@ def test_existing_recommend_item_and_recommend_routes_still_respond_as_expected(
     assert recommend_body["user_id"] == 1
     assert recommend_body["recommended_games"] == [901, 902, 903]
     assert recommend_body["strategy"] == "keras_inference_v1"
-    assert recommend_body["scored_recommendations"] == [
-        {"game_id": 901, "rank": 1, "score": 0.95},
-        {"game_id": 902, "rank": 2, "score": 0.9},
-        {"game_id": 903, "rank": 3, "score": 0.85},
-    ]
+    scored = recommend_body["scored_recommendations"]
+    assert [row["game_id"] for row in scored] == [901, 902, 903]
+    assert [row["rank"] for row in scored] == [1, 2, 3]
+    assert scored[0]["score"] == 99.0
+    assert scored[-1]["score"] == 40.0
+    assert scored[0]["score"] > scored[1]["score"] > scored[2]["score"]
     
     similar_post_response = client.post('/recommend/item', json={'item_id': 11, 'top_k': 5})
     assert similar_post_response.status_code == 200
@@ -185,45 +187,50 @@ def test_recommend_route_calls_inference_service_when_available():
     delattr(app.state, 'inference')
     delattr(app.state, 'model')
 
-def test_recommend_for_user_live_dependencies_and_ranks_candidates():
-    """
-    This will test the recommend for user route 
-    with live dependencies by mocking the HTTP responses 
-    from the user and game services, and then asserting 
-    that the response contains the expected recommended games 
-    in the correct order based on keyword and platform overlap, and popularity as a tiebreaker.
-    """
+def test_recommend_for_user_live_dependencies_and_ranks_candidates(monkeypatch):
+    """Recommend-for-user should personalize from positive interaction history only."""
     app.state.service_urls = {
         "user": "http://user",
         "game": "http://game",
     }
     app.state.http = _HTTP(
         {
-            "http://user/users/9/keywords": _Resp(200, [{"keyword_id": 4}, {"keyword_id": "bad"}]),
-            "http://user/users/9/platforms": _Resp(200, [{"platform_id": 10}]),
-            "http://user/users/9/interactions": _Resp(200, []),
+            "http://user/users/9/interactions": _Resp(
+                200,
+                [
+                    {"game_id": 11, "favorited": True, "liked": True},
+                    {"game_id": 12, "favorited": False, "liked": False},
+                ],
+            ),
             "http://game/games/top?limit=200": _Resp(
                 200,
                 [
-                    {"id": 200, "keywords": [4], "platforms": [10], "popularity": 999.0},
-                    {"id": 101, "keywords": [4], "platforms": [10], "popularity": 1.0},
-                    {"id": 102, "keywords": [4], "platforms": [], "popularity": 10.0},
-                    {"id": 103, "keywords": [], "platforms": [10], "popularity": 20.0},
-                    {"id": 104, "keywords": [4], "platforms": [], "popularity": 10.0},
+                    {"id": 200, "genre": "Action", "description": "space tactics", "popularity": 999.0, "aggregated_rating": 91.0},
+                    {"id": 101, "genre": "Action", "description": "space tactics", "popularity": 800.0, "aggregated_rating": 89.0},
+                    {"id": 103, "genre": "RPG", "description": "party story", "popularity": 600.0, "aggregated_rating": 88.0},
                 ],
             ),
+            "http://game/games/11": _Resp(200, {"id": 11, "genre": "Action", "keywords": [4], "platforms": [10], "description": "space tactics"}),
+            "http://game/games/11/related-content?limit=20": _Resp(200, [{"id": 200}, {"id": 101}]),
+            "http://game/games/search?q=&mode=contains&limit=120": _Resp(404, {"error": "not found"}),
         }
     )
-    
+    monkeypatch.setattr(
+        "services.recommender.handlers.recommend._build_favorite_profile",
+        lambda request, favorite_game_ids: ({4}, {10}, {"action"}, [{"space", "tactics"}]),
+    )
+
     response = client.get("/recommend/user/9")
-    
+
     assert response.status_code == 200
     body = response.json()
     assert body["user_id"] == 9
-    assert body["recommended_games"] == [200, 101, 102, 104, 103]
-    assert body["strategy"] == "keyword_platform_overlap_v1"
-    assert body.get("scored_recommendations") == []
-    
+    assert 200 in body["recommended_games"]
+    assert 101 in body["recommended_games"]
+    assert 12 not in body["recommended_games"]
+    assert body["strategy"] == "interaction_history_hybrid_v1"
+    assert body["scored_recommendations"][0]["game_id"] == body["recommended_games"][0]
+
     for attr in ("service_urls", "http", "request_timeout"):
         if hasattr(app.state, attr):
             delattr(app.state, attr)
@@ -537,3 +544,93 @@ def test_release_year_preference_keeps_soft_latest_choice_but_penalizes_older_ti
     assert _is_strict_release_year_preference(preference) is False
     assert _release_era_alignment_score(2022, preference) > _release_era_alignment_score(2018, preference)
     assert _release_era_alignment_score(2018, preference) > _release_era_alignment_score(2012, preference)
+
+
+def test_recommend_route_returns_trace_metadata_for_feedback_capture():
+    class _StubInference:
+        def infer(self, payload):
+            return ModelOutputSchema(
+                user_id=payload.user_id,
+                strategy="test_trace_v1",
+                candidates=[ModelCandidateScore(game_id=501, score=0.91, rank=1)],
+            )
+
+    app.state.inference_service = _StubInference()
+    app.state.model = object()
+    app.state.model_version = "trace-model-v1"
+
+    response = client.post(
+        "/recommend",
+        json={
+            "user_id": 7,
+            "liked_keywords": [1],
+            "liked_platforms": [2],
+            "disliked_platforms": [],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["request_id"]
+    assert body["model_version"] == "trace-model-v1"
+    assert body["ranking_profile"] == "balanced_v1"
+    assert body["outcome"] == "model_inference_success"
+
+    delattr(app.state, "inference_service")
+    delattr(app.state, "model")
+    delattr(app.state, "model_version")
+
+
+def test_personalized_ranking_applies_diversity_and_recent_exposure_penalty(monkeypatch):
+    request = type("Req", (), {})()
+    request.app = type("App", (), {})()
+    request.app.state = type("State", (), {})()
+
+    monkeypatch.setattr(
+        "services.recommender.handlers.recommend._fetch_candidate_games_for_user",
+        lambda request, limit=200: [
+            {"id": 1, "name": "Alpha Strike", "genre": "Action", "description": "squad tactics", "popularity": 2000.0, "aggregated_rating": 88.0},
+            {"id": 2, "name": "Alpha Strike", "genre": "Action", "description": "squad tactics", "popularity": 1900.0, "aggregated_rating": 87.0},
+            {"id": 3, "name": "Rune Atlas", "genre": "RPG", "description": "party tactics", "popularity": 1200.0, "aggregated_rating": 90.0},
+            {"id": 4, "name": "Puzzle Harbor", "genre": "Puzzle", "description": "calm logic", "popularity": 900.0, "aggregated_rating": 86.0},
+        ],
+    )
+    monkeypatch.setattr(
+        "services.recommender.handlers.recommend._build_favorite_profile",
+        lambda request, favorite_game_ids: (set(), set(), set(), []),
+    )
+
+    first_ids, _ = _build_personalized_recommendation_ids(
+        request,
+        liked_keyword_ids=set(),
+        liked_platform_ids=set(),
+        disliked_keyword_ids=set(),
+        disliked_platform_ids=set(),
+        favorite_game_ids=[],
+        answer_token_weights={},
+        favorite_seed_ids=[],
+        model_seed_ids=[],
+        release_year_preference="",
+        top_n=3,
+        ranking_seed="fixed-seed",
+        recently_shown_game_ids={1},
+    )
+    second_ids, _ = _build_personalized_recommendation_ids(
+        request,
+        liked_keyword_ids=set(),
+        liked_platform_ids=set(),
+        disliked_keyword_ids=set(),
+        disliked_platform_ids=set(),
+        favorite_game_ids=[],
+        answer_token_weights={},
+        favorite_seed_ids=[],
+        model_seed_ids=[],
+        release_year_preference="",
+        top_n=3,
+        ranking_seed="fixed-seed",
+        recently_shown_game_ids={1},
+    )
+
+    assert first_ids == second_ids
+    assert len(set(first_ids)) == len(first_ids)
+    assert first_ids[0] != 1

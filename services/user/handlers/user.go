@@ -88,11 +88,8 @@ func DeleteUser(c *fiber.Ctx) error {
 		`WITH deleted_interactions AS (
 			DELETE FROM user_interactions WHERE user_id = $1
 		),
-		deleted_keywords AS (
-			DELETE FROM user_keyword_preferences WHERE user_id = $1
-		),
-		deleted_platforms AS (
-			DELETE FROM user_platform_preferences WHERE user_id = $1
+		deleted_events AS (
+			DELETE FROM recommendation_events WHERE user_id = $1
 		),
 		deleted_user AS (
 			DELETE FROM app_user WHERE user_id = $1

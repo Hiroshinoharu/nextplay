@@ -18,6 +18,11 @@ class UserRecommendResponse(BaseModel):
     user_id: int
     recommended_games: List[int]
     strategy: str
+    request_id: str = "unknown"
+    model_version: str = "unknown"
+    ranking_profile: str = "balanced_v1"
+    outcome: str = "unknown"
+    fallback_reason: str | None = None
     scored_recommendations: List[ScoredRecommendation] = Field(default_factory=list)
 
 
@@ -32,3 +37,4 @@ class SimilarResponse(BaseModel):
     similar_items: List[int]
     top_k: int | None = None
     filters: Dict[str, Any] | None = None
+

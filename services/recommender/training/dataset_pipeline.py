@@ -22,6 +22,9 @@ class DatasetQualityConfig:
     min_train_rows: int = 30
     min_validation_rows: int = 5
     min_test_rows: int = 5
+    min_validation_positive_rows: int = 1
+    min_test_positive_rows: int = 1
+    min_test_users_with_positive: int = 1
     min_positive_ratio: float = 0.15
     max_positive_ratio: float = 0.85
 
@@ -330,6 +333,17 @@ def build_dataset_profile(
     validation_rows = _collect_labeled_rows(validation_csv)
     test_rows = _collect_labeled_rows(test_csv)
 
+    split_positive_rows = {
+        "train": sum(1 for row in train_rows if (row.get("label") or "").strip() == "1"),
+        "validation": sum(1 for row in validation_rows if (row.get("label") or "").strip() == "1"),
+        "test": sum(1 for row in test_rows if (row.get("label") or "").strip() == "1"),
+    }
+    split_users_with_positive = {
+        "train": len({(row.get("user_id") or "").strip() for row in train_rows if (row.get("label") or "").strip() == "1" and (row.get("user_id") or "").strip()}),
+        "validation": len({(row.get("user_id") or "").strip() for row in validation_rows if (row.get("label") or "").strip() == "1" and (row.get("user_id") or "").strip()}),
+        "test": len({(row.get("user_id") or "").strip() for row in test_rows if (row.get("label") or "").strip() == "1" and (row.get("user_id") or "").strip()}),
+    }
+
     user_counts: dict[str, int] = {}
     users_with_positive: set[str] = set()
     unique_games: set[str] = set()
@@ -361,6 +375,8 @@ def build_dataset_profile(
             "validation": len(validation_rows),
             "test": len(test_rows),
         },
+        "split_positive_rows": split_positive_rows,
+        "split_users_with_positive": split_users_with_positive,
         "unique_users": len(user_counts),
         "unique_games": len(unique_games),
         "users_with_positive": len(users_with_positive),
@@ -405,6 +421,21 @@ def evaluate_dataset_quality(
             "min_positive_rows",
             float(profile.get("positive_rows", 0)),
             float(config.min_positive_rows),
+        ),
+        (
+            "min_validation_positive_rows",
+            float((profile.get("split_positive_rows") or {}).get("validation", 0)),
+            float(config.min_validation_positive_rows),
+        ),
+        (
+            "min_test_positive_rows",
+            float((profile.get("split_positive_rows") or {}).get("test", 0)),
+            float(config.min_test_positive_rows),
+        ),
+        (
+            "min_test_users_with_positive",
+            float((profile.get("split_users_with_positive") or {}).get("test", 0)),
+            float(config.min_test_users_with_positive),
         ),
         (
             "min_negative_rows",

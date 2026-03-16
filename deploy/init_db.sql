@@ -11,8 +11,6 @@ DROP TABLE IF EXISTS game_keywords CASCADE;
 DROP TABLE IF EXISTS game_franchise CASCADE;
 DROP TABLE IF EXISTS game_platform CASCADE;
 DROP TABLE IF EXISTS game_companies CASCADE;
-DROP TABLE IF EXISTS user_platform_preferences CASCADE;
-DROP TABLE IF EXISTS user_keyword_preferences CASCADE;
 DROP TABLE IF EXISTS user_interactions CASCADE;
 DROP TABLE IF EXISTS app_user CASCADE;
 DROP TABLE IF EXISTS keyword CASCADE;
@@ -147,128 +145,33 @@ CREATE TABLE user_interactions (
     FOREIGN KEY (game_id) REFERENCES games(game_id)
 );
 
--- ============================================================
--- TABLE: user_keyword_preferences
--- Purpose: Personalized keyword affinity scores
--- ============================================================
-CREATE TABLE user_keyword_preferences (
-    user_id          INT NOT NULL,
-    keyword_id       INT NOT NULL,
-    preference_score INT NOT NULL,   -- could be -10 → +10 or 0 → 100
 
-    PRIMARY KEY (user_id, keyword_id),
+-- ============================================================
+-- TABLE: recommendation_events
+-- Purpose: Stores recommendation exposures and feedback events for tuning
+-- ============================================================
+CREATE TABLE recommendation_events (
+    event_id             SERIAL PRIMARY KEY,
+    user_id              INT NOT NULL,
+    game_id              INT NOT NULL,
+    request_id           TEXT NOT NULL DEFAULT '',
+    event_type           TEXT NOT NULL,
+    model_version        TEXT,
+    ranking_profile      TEXT,
+    strategy             TEXT,
+    outcome              TEXT,
+    recommendation_rank  INT,
+    metadata             JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
     FOREIGN KEY (user_id) REFERENCES app_user(user_id),
-    FOREIGN KEY (keyword_id) REFERENCES keyword(keyword_id)
-);
-
--- ============================================================
--- TABLE: user_platform_preferences
--- Purpose: User preference for certain platforms
--- ============================================================
-CREATE TABLE user_platform_preferences (
-    user_id          INT NOT NULL,
-    platform_id      INT NOT NULL,
-    preference_score INT NOT NULL,
-
-    PRIMARY KEY (user_id, platform_id),
-    FOREIGN KEY (user_id) REFERENCES app_user(user_id),
-    FOREIGN KEY (platform_id) REFERENCES platform(platform_id)
-);
-
--- ============================================================
--- TABLE: game_companies
--- Purpose: Connects games to developers/publishers & roles
--- ============================================================
-CREATE TABLE game_companies (
-    game_id    INT NOT NULL,
-    company_id INT NOT NULL,
-
-    is_developer            BOOLEAN DEFAULT FALSE,
-    is_publisher            BOOLEAN DEFAULT FALSE,
-    is_supporting_developer BOOLEAN DEFAULT FALSE,
-    is_porting_developer    BOOLEAN DEFAULT FALSE,
-
-    PRIMARY KEY (game_id, company_id),
-    FOREIGN KEY (game_id) REFERENCES games(game_id),
-    FOREIGN KEY (company_id) REFERENCES company(company_id)
-);
-
--- ============================================================
--- TABLE: game_platform
--- Purpose: Many-to-many table linking games and platforms
--- ============================================================
-CREATE TABLE game_platform (
-    game_id     INT NOT NULL,
-    platform_id INT NOT NULL,
-
-    PRIMARY KEY (game_id, platform_id),
-    FOREIGN KEY (game_id) REFERENCES games(game_id),
-    FOREIGN KEY (platform_id) REFERENCES platform(platform_id)
-);
-
--- ============================================================
--- TABLE: game_genre
--- Purpose: Many-to-many table linking games and genres
--- ============================================================
-CREATE TABLE game_genre (
-    game_id  INT NOT NULL,
-    genre_id INT NOT NULL,
-
-    PRIMARY KEY (game_id, genre_id),
-    FOREIGN KEY (game_id) REFERENCES games(game_id),
-    FOREIGN KEY (genre_id) REFERENCES genre(genre_id)
-);
-
--- ============================================================
--- TABLE: game_franchise
--- Purpose: Many-to-many table linking games to franchises
--- ============================================================
-CREATE TABLE game_franchise (
-    franchise_id INT NOT NULL,
-    game_id      INT NOT NULL,
-
-    PRIMARY KEY (franchise_id, game_id),
-    FOREIGN KEY (franchise_id) REFERENCES franchise(franchise_id),
     FOREIGN KEY (game_id) REFERENCES games(game_id)
 );
 
--- ============================================================
--- TABLE: game_keywords
--- Purpose: Many-to-many table between games and keywords
--- ============================================================
-CREATE TABLE game_keywords (
-    game_id    INT NOT NULL,
-    keyword_id INT NOT NULL,
+CREATE INDEX recommendation_events_user_created_idx
+    ON recommendation_events (user_id, created_at DESC);
 
-    PRIMARY KEY (game_id, keyword_id),
-    FOREIGN KEY (game_id) REFERENCES games(game_id),
-    FOREIGN KEY (keyword_id) REFERENCES keyword(keyword_id)
-);
+CREATE INDEX recommendation_events_request_idx
+    ON recommendation_events (request_id);
 
 -- ============================================================
--- TABLE: game_media
--- Purpose: Stores screenshots, artworks, trailers, etc.
--- ============================================================
-CREATE TABLE game_media (
-    media_id   SERIAL PRIMARY KEY,
-    game_id    INT NOT NULL,
-    igdb_id    INT,
-    media_type TEXT NOT NULL, -- screenshot | artwork | trailer
-    url        TEXT NOT NULL,
-    sort_order INT,
-
-    FOREIGN KEY (game_id) REFERENCES games(game_id)
-);
-
--- ============================================================
--- TABLE: game_series
--- Purpose: Many-to-many linking games to multi-title game series
--- ============================================================
-CREATE TABLE game_series (
-    series_id INT NOT NULL,
-    game_id   INT NOT NULL,
-
-    PRIMARY KEY (series_id, game_id),
-    FOREIGN KEY (series_id) REFERENCES series(series_id),
-    FOREIGN KEY (game_id) REFERENCES games(game_id)
-);

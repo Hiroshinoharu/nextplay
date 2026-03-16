@@ -13,6 +13,7 @@ import {
   QUESTIONNAIRE_V1,
   buildRecommendRequestFromQuestionnaire,
   createEmptyQuestionnaireAnswers,
+  getRecommendationEraPreference,
   isQuestionnaireComplete,
   normalizeStoredQuestionnaireAnswers,
   type QuestionnaireAnswers,
@@ -66,6 +67,11 @@ type RecommendResponse = {
   user_id: number;
   recommended_games: number[];
   strategy?: string;
+  request_id?: string;
+  model_version?: string;
+  ranking_profile?: string;
+  outcome?: string;
+  fallback_reason?: string | null;
   scored_recommendations?: Array<{
     game_id: number;
     rank?: number;
@@ -73,10 +79,35 @@ type RecommendResponse = {
   }>;
 };
 
+type RecommendationTrace = {
+  requestId: string;
+  modelVersion: string;
+  rankingProfile: string;
+  outcome: string;
+  fallbackReason: string | null;
+  strategy: string | null;
+};
+
+type RecommendationEventType =
+  | "recommendation_exposure"
+  | "recommendation_open"
+  | "recommendation_favorite"
+  | "recommendation_dismiss";
+
+type RecommendationReasonGroup = {
+  key: string;
+  label: string;
+  chips: string[];
+  tone?: "default" | "avoid" | "favorite";
+};
+
 const QUESTIONNAIRE_STORAGE_PREFIX = "nextplay_questionnaire_v1";
 const RESULT_PAGE_SIZE = 10;
 const RECOMMENDATION_TARGET_SIZE = 30;
 const FAVORITE_GAMES_TARGET = 3;
+const RECOMMENDATION_SCORE_MIN = 40;
+const RECOMMENDATION_SCORE_MAX = 99;
+const RECOMMENDATION_SCORE_SPAN = RECOMMENDATION_SCORE_MAX - RECOMMENDATION_SCORE_MIN;
 const FAVORITE_SEARCH_PAGE_SIZE = 8;
 const FAVORITE_SEARCH_MIN_RATING = 65;
 const FAVORITE_SEARCH_MIN_VOTES = 100;
@@ -153,6 +184,38 @@ const isReleasedGame = (game: GameItem, now: Date = new Date()) => {
   return parsed <= now;
 };
 
+const extractReleaseYear = (value?: string) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.getFullYear();
+  }
+  const year = Number.parseInt(value.slice(0, 4), 10);
+  return Number.isFinite(year) ? year : null;
+};
+
+const matchesEraPreference = (game: GameItem, preference: string) => {
+  if (!preference || preference === "no_preference" || preference === "no_era_preference") {
+    return true;
+  }
+  const releaseYear = extractReleaseYear(game.release_date);
+  if (releaseYear === null) return false;
+
+  if (["latest_2020_plus", "latest_2020_plus_only", "strict_latest_2020_plus"].includes(preference)) {
+    return releaseYear >= 2020;
+  }
+  if (["modern_2015_plus", "modern_2015_plus_only", "strict_modern_2015_plus"].includes(preference)) {
+    return releaseYear >= 2015;
+  }
+  if (preference === "classics_90s_00s") {
+    return releaseYear <= 2009;
+  }
+  if (preference === "older_2000s_early_2010s") {
+    return releaseYear >= 2000 && releaseYear <= 2014;
+  }
+  return true;
+};
+
 const getGameVoteCount = (game: GameItem) =>
   Math.max(
     game.aggregated_rating_count ?? 0,
@@ -168,6 +231,14 @@ const getGameRating = (game: GameItem) =>
 
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
+
+const normalizeBackendRecommendationScore = (value: number) => {
+  if (!Number.isFinite(value)) return null;
+  const resolved = value <= 1.25
+    ? Math.round(RECOMMENDATION_SCORE_MIN + (clampNumber(value, 0, 1) * RECOMMENDATION_SCORE_SPAN))
+    : Math.round(value);
+  return clampNumber(resolved, RECOMMENDATION_SCORE_MIN, RECOMMENDATION_SCORE_MAX);
+};
 
 const tokenizePreferenceText = (value?: string) => {
   if (!value) return [] as string[];
@@ -277,6 +348,13 @@ const parseGenres = (value?: string) => {
     .forEach((part) => unique.add(part));
   return Array.from(unique);
 };
+
+const sentenceCase = (value: string) =>
+  value
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^\w/, (char) => char.toUpperCase());
 
 const NSFW_TERMS = [
   "nsfw",
@@ -406,6 +484,7 @@ const fetchTopUpRecommendationGames = async (
   existingIds: Set<number>,
   excludedIds: Set<number>,
   authToken: string,
+  eraPreference: string,
 ): Promise<GameItem[]> => {
   if (needed <= 0) return [];
 
@@ -418,6 +497,7 @@ const fetchTopUpRecommendationGames = async (
     if (existingIds.has(game.id)) return;
     if (excludedIds.has(game.id)) return;
     if (shouldHideFromDiscover(game)) return;
+    if (!matchesEraPreference(game, eraPreference)) return;
     existingIds.add(game.id);
     topUp.push(game);
   };
@@ -502,8 +582,12 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   const [recommendationLoading, setRecommendationLoading] = useState<boolean>(false);
   const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [recommendationStrategy, setRecommendationStrategy] = useState<string | null>(null);
+  const [recommendationTrace, setRecommendationTrace] = useState<RecommendationTrace | null>(null);
   const [recommendedGames, setRecommendedGames] = useState<GameItem[]>([]);
   const [backendRecommendationScores, setBackendRecommendationScores] = useState<Record<number, number>>({});
+  const [backendRecommendationRanks, setBackendRecommendationRanks] = useState<Record<number, number>>({});
+  const [dismissedRecommendationIds, setDismissedRecommendationIds] = useState<number[]>([]);
+  const [savedRecommendationIds, setSavedRecommendationIds] = useState<number[]>([]);
   const [favoriteGameIds, setFavoriteGameIds] = useState<number[]>([]);
   const [favoriteSearchInput, setFavoriteSearchInput] = useState<string>("");
   const [favoriteSearchPage, setFavoriteSearchPage] = useState<number>(1);
@@ -514,6 +598,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   const authToken = authUser?.token?.trim() ?? "";
   const randomPoolFetchPromiseRef = useRef<Promise<unknown> | null>(null);
   const recommendationRunIdRef = useRef<number>(0);
+  const loggedRecommendationEventKeysRef = useRef<Set<string>>(new Set());
   const recentBackfillAttemptsRef = useRef<number>(0);
   const searchGridSectionRef = useRef<HTMLElement | null>(null);
   const randomLanesSectionRef = useRef<HTMLDivElement | null>(null);
@@ -536,9 +621,17 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     if (!questionnaireStorageKey) return null;
     return `${questionnaireStorageKey}:favorite_games`;
   }, [questionnaireStorageKey]);
+  const recommendationEventsUrl = useMemo(() => {
+    if (!authUser?.id) return null;
+    return `${API_ROOT}/api/users/${authUser.id}/interactions/events`;
+  }, [authUser?.id]);
   const showQuestionnaireBanner =
     !questionnaireComplete && !dismissedQuestionnaireBanner;
   const questionnaireQuestions = QUESTIONNAIRE_V1.questions;
+  const recommendationEraPreference = useMemo(
+    () => getRecommendationEraPreference(questionnaireAnswers),
+    [questionnaireAnswers],
+  );
   const questionnaireQuestionCount = questionnaireQuestions.length;
   const questionnaireTotal = questionnaireQuestionCount + 1;
   const isFavoriteQuestionStep = questionnaireStep === questionnaireQuestionCount;
@@ -561,7 +654,33 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     if (!questionnaireTotal) return 0;
     return Math.round((completedStepCount / questionnaireTotal) * 100);
   }, [completedStepCount, questionnaireTotal]);
-
+  const remainingQuestionCount = Math.max(0, questionnaireQuestionCount - answeredQuestionCount);
+  const favoritesRemainingCount = Math.max(0, FAVORITE_GAMES_TARGET - favoriteCount);
+  const activeQuestionSelectionLabels = useMemo(() => {
+    if (!activeQuestion) return [] as string[];
+    const optionMap = new Map(activeQuestion.options.map((option) => [option.id, option.label] as const));
+    return activeQuestionSelected
+      .map((selection) => optionMap.get(selection) ?? sentenceCase(selection))
+      .filter(Boolean);
+  }, [activeQuestion, activeQuestionSelected]);
+  const questionnaireSelectionSummary = useMemo(
+    () =>
+      questionnaireQuestions.map((question, index) => {
+        const selected = questionnaireAnswers[question.id] ?? [];
+        const optionMap = new Map(question.options.map((option) => [option.id, option.label] as const));
+        const labels = selected
+          .map((selection) => optionMap.get(selection) ?? sentenceCase(selection))
+          .filter(Boolean);
+        return {
+          id: question.id,
+          step: index + 1,
+          prompt: question.prompt,
+          answered: labels.length > 0,
+          labels,
+        };
+      }),
+    [questionnaireAnswers, questionnaireQuestions],
+  );
   useEffect(() => {
     setDismissedQuestionnaireBanner(false);
   }, [questionnaireStorageKey]);
@@ -877,6 +996,106 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     },
     staleTime: 60_000,
   });
+  const questionnaireSnapshotChips = useMemo(() => {
+    const selectedLabels = questionnaireSelectionSummary.flatMap((entry) => entry.labels);
+    const favoriteLabels = favoriteSelectedGames.map((game) => game.name).filter(Boolean);
+    return [...selectedLabels, ...favoriteLabels].slice(0, 10);
+  }, [favoriteSelectedGames, questionnaireSelectionSummary]);
+  const recommendationReasonGroups = useMemo<RecommendationReasonGroup[]>(() => {
+    const profile: string[] = [];
+    const sessionFit: string[] = [];
+    const avoid: string[] = [];
+
+    for (const entry of questionnaireSelectionSummary) {
+      if (!entry.labels.length) continue;
+      const labels = entry.labels.slice(0, entry.id === "avoid_content" ? 3 : 2);
+
+      if (["preferred_pace", "era_preference", "challenge_preference"].includes(entry.id)) {
+        profile.push(...labels);
+        continue;
+      }
+      if (entry.id === "avoid_content") {
+        avoid.push(...labels);
+        continue;
+      }
+      sessionFit.push(...labels);
+    }
+
+    const groups: RecommendationReasonGroup[] = [];
+    if (profile.length > 0) {
+      groups.push({
+        key: "profile",
+        label: "Profile",
+        chips: profile.slice(0, 4),
+      });
+    }
+    if (sessionFit.length > 0) {
+      groups.push({
+        key: "session_fit",
+        label: "Session fit",
+        chips: sessionFit.slice(0, 4),
+      });
+    }
+    if (avoid.length > 0) {
+      groups.push({
+        key: "avoid",
+        label: "Avoid",
+        chips: avoid.slice(0, 3),
+        tone: "avoid",
+      });
+    }
+
+    const favoriteLabels = favoriteSelectedGames
+      .map((game) => game.name)
+      .filter(Boolean)
+      .slice(0, 3);
+    if (favoriteLabels.length > 0) {
+      groups.push({
+        key: "favorite_anchors",
+        label: "Favorite anchors",
+        chips: favoriteLabels,
+        tone: "favorite",
+      });
+    }
+    return groups;
+  }, [favoriteSelectedGames, questionnaireSelectionSummary]);
+  const recommendationPositiveReasonChips = useMemo(
+    () =>
+      recommendationReasonGroups
+        .filter((group) => group.key !== "avoid")
+        .flatMap((group) => group.chips)
+        .slice(0, 4),
+    [recommendationReasonGroups],
+  );
+  const renderRecommendationReasonGroups = useCallback(
+    (keyPrefix: string, emptyText: string) => {
+      if (!recommendationReasonGroups.length) {
+        return (
+          <span className="discover-result-summary__empty">{emptyText}</span>
+        );
+      }
+      return recommendationReasonGroups.map((group) => (
+        <div
+          key={`${keyPrefix}-${group.key}`}
+          className={`discover-result-summary__group discover-result-summary__group--${group.tone ?? "default"}`}
+        >
+          <span className="discover-result-summary__group-label">{group.label}</span>
+          <div className="discover-result-summary__chips">
+            {group.chips.map((chip) => (
+              <span
+                key={`${keyPrefix}-${group.key}-${chip}`}
+                className={`discover-result-summary__chip discover-result-summary__chip--${group.tone ?? "default"}`}
+              >
+                {chip}
+              </span>
+            ))}
+          </div>
+        </div>
+      ));
+    },
+    [recommendationReasonGroups],
+  );
+
   useEffect(() => {
     if (!favoriteGameIds.length || favoriteSelectedGamesLoading) return;
     const allowedIds = new Set<number>(favoriteSelectedGames.map((game) => game.id));
@@ -922,11 +1141,75 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       .filter(Boolean)
       .join("\n");
   }, []);
+  const postRecommendationEvent = useCallback(
+    async (
+      gameId: number,
+      eventType: RecommendationEventType,
+      rank: number | null,
+      trace: RecommendationTrace | null,
+      metadata?: Record<string, unknown>,
+    ) => {
+      if (!recommendationEventsUrl || !authToken || !trace) return false;
+      try {
+        const response = await fetch(recommendationEventsUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            game_id: gameId,
+            request_id: trace.requestId,
+            event_type: eventType,
+            model_version: trace.modelVersion,
+            ranking_profile: trace.rankingProfile,
+            strategy: trace.strategy,
+            outcome: trace.outcome,
+            recommendation_rank: typeof rank === "number" ? rank : null,
+            metadata: metadata ?? {},
+          }),
+        });
+        return response.ok;
+      } catch {
+        return false;
+      }
+    },
+    [authToken, recommendationEventsUrl],
+  );
+
+  const logRecommendationExposureBatch = useCallback(
+    (games: GameItem[], trace: RecommendationTrace | null, ranks: Record<number, number>) => {
+      if (!trace) return;
+      for (const game of games) {
+        const dedupeKey = `${trace.requestId}:recommendation_exposure:${game.id}`;
+        if (loggedRecommendationEventKeysRef.current.has(dedupeKey)) continue;
+        loggedRecommendationEventKeysRef.current.add(dedupeKey);
+        void postRecommendationEvent(
+          game.id,
+          "recommendation_exposure",
+          ranks[game.id] ?? null,
+          trace,
+          { surface: "discover_results" },
+        );
+      }
+    },
+    [postRecommendationEvent],
+  );
+
   const openGameDetail = useCallback(
-    (targetId: number) => {
+    (targetId: number, options?: { fromRecommendation?: boolean; rank?: number | null }) => {
+      if (options?.fromRecommendation) {
+        void postRecommendationEvent(
+          targetId,
+          "recommendation_open",
+          options.rank ?? null,
+          recommendationTrace,
+          { surface: "discover_results" },
+        );
+      }
       navigate(`/games/${targetId}`);
     },
-    [navigate],
+    [navigate, postRecommendationEvent, recommendationTrace],
   );
 
   const runQuestionnaireRecommendation = useCallback(async () => {
@@ -935,13 +1218,19 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     if (!authUser?.id || !questionnaireComplete) {
       setRecommendedGames([]);
       setBackendRecommendationScores({});
+      setBackendRecommendationRanks({});
       setRecommendationStrategy(null);
+      setRecommendationTrace(null);
+      setDismissedRecommendationIds([]);
       setRecommendationError(null);
       return false;
     }
 
     setRecommendationLoading(true);
     setRecommendationError(null);
+    setDismissedRecommendationIds([]);
+    setSavedRecommendationIds([]);
+    loggedRecommendationEventKeysRef.current = new Set();
     try {
       const payload = buildRecommendRequestFromQuestionnaire(
         authUser.id,
@@ -969,16 +1258,37 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
         ? body.scored_recommendations
         : [];
       const nextBackendScores: Record<number, number> = {};
+      const nextBackendRanks: Record<number, number> = {};
       for (const row of scoredRecommendations) {
         if (!row || typeof row !== "object") continue;
         const gameId = Number(row.game_id);
         const score = Number(row.score);
+        const rank = Number(row.rank);
         if (!Number.isFinite(gameId) || gameId <= 0) continue;
-        if (!Number.isFinite(score)) continue;
-        nextBackendScores[gameId] = score;
+        if (Number.isFinite(score)) {
+          nextBackendScores[gameId] = score;
+        }
+        if (Number.isFinite(rank) && rank > 0) {
+          nextBackendRanks[gameId] = rank;
+        }
       }
+      candidateIds.forEach((gameId, index) => {
+        if (!(gameId in nextBackendRanks)) {
+          nextBackendRanks[gameId] = index + 1;
+        }
+      });
+      const nextTrace: RecommendationTrace = {
+        requestId: typeof body.request_id === "string" ? body.request_id : `discover:${Date.now()}`,
+        modelVersion: typeof body.model_version === "string" ? body.model_version : "unknown",
+        rankingProfile: typeof body.ranking_profile === "string" ? body.ranking_profile : "balanced_v1",
+        outcome: typeof body.outcome === "string" ? body.outcome : "unknown",
+        fallbackReason: typeof body.fallback_reason === "string" ? body.fallback_reason : null,
+        strategy: typeof body.strategy === "string" ? body.strategy : null,
+      };
       setBackendRecommendationScores(nextBackendScores);
+      setBackendRecommendationRanks(nextBackendRanks);
       setRecommendationStrategy(typeof body.strategy === "string" ? body.strategy : null);
+      setRecommendationTrace(nextTrace);
 
       if (!candidateIds.length) {
         setRecommendedGames([]);
@@ -994,10 +1304,15 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       if (recommendationRunIdRef.current !== runId) return false;
       const initialVisibleRecommendations = initialFetched.filter((game): game is GameItem => {
         if (!game) return false;
-        return !shouldHideFromDiscover(game) && !favoriteGameIds.includes(game.id);
+        return (
+          !shouldHideFromDiscover(game) &&
+          !favoriteGameIds.includes(game.id) &&
+          matchesEraPreference(game, recommendationEraPreference)
+        );
       });
 
       setRecommendedGames(initialVisibleRecommendations);
+      logRecommendationExposureBatch(initialVisibleRecommendations, nextTrace, nextBackendRanks);
       setRecommendationLoading(false);
 
       void (async () => {
@@ -1011,7 +1326,8 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
           }),
         ];
         const dedupedRecommendations = fullVisibleRecommendations.filter((game, index, all) =>
-          all.findIndex((candidate) => candidate.id === game.id) === index,
+          all.findIndex((candidate) => candidate.id === game.id) === index &&
+          matchesEraPreference(game, recommendationEraPreference),
         );
         if (dedupedRecommendations.length < RECOMMENDATION_TARGET_SIZE) {
           const existingIds = new Set<number>(
@@ -1022,18 +1338,21 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
             existingIds,
             new Set<number>(favoriteGameIds),
             authToken,
+            recommendationEraPreference,
           );
           dedupedRecommendations.push(...topUp);
         }
         if (recommendationRunIdRef.current !== runId) return;
-        setRecommendedGames(
-          dedupedRecommendations.slice(0, RECOMMENDATION_TARGET_SIZE),
-        );
+        const finalRecommendations = dedupedRecommendations.slice(0, RECOMMENDATION_TARGET_SIZE);
+        setRecommendedGames(finalRecommendations);
+        logRecommendationExposureBatch(finalRecommendations, nextTrace, nextBackendRanks);
       })();
       return true;
     } catch (err) {
       setRecommendedGames([]);
       setBackendRecommendationScores({});
+      setBackendRecommendationRanks({});
+      setRecommendationTrace(null);
       setRecommendationError(err instanceof Error ? err.message : String(err));
       return false;
     } finally {
@@ -1043,6 +1362,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     authToken,
     authUser?.id,
     favoriteGameIds,
+    logRecommendationExposureBatch,
     questionnaireAnswers,
     questionnaireComplete,
   ]);
@@ -1147,8 +1467,8 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   }, [openQuestionnaireFlow]);
 
   const rankedRecommendedGames = useMemo(
-    () => recommendedGames,
-    [recommendedGames],
+    () => recommendedGames.filter((game) => !dismissedRecommendationIds.includes(game.id)),
+    [dismissedRecommendationIds, recommendedGames],
   );
 
   const topRecommendedGame = useMemo(
@@ -1175,10 +1495,36 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
 
   const topRecommendationSummary = useMemo(() => {
     if (!topRecommendedGame) return "We couldn't load details for the top recommendation yet.";
+
+    const reasons: string[] = [];
+    const releaseLabel = formatReleaseDate(topRecommendedGame.release_date);
+    const genreLabels = parseGenres(topRecommendedGame.genre).slice(0, 2);
+    const topSignals = recommendationPositiveReasonChips.slice(0, 3);
+
+    if (genreLabels.length > 0) {
+      reasons.push(`Leans into ${genreLabels.join(" and ").toLowerCase()} picks`);
+    }
+    if (topSignals.length > 0) {
+      reasons.push(`matches your profile around ${topSignals.join(", ")}`);
+    }
+    if (releaseLabel) {
+      reasons.push(`released ${releaseLabel}`);
+    }
+
     const source = collapseWhitespace(topRecommendedGame.description ?? "");
-    if (!source) return "Open this title to view full details and see why it matches your answers.";
-    return source.length > 260 ? `${source.slice(0, 260).trimEnd()}...` : source;
-  }, [topRecommendedGame]);
+    const trimmedDescription = source.length > 150 ? `${source.slice(0, 150).trimEnd()}...` : source;
+
+    if (!reasons.length && !trimmedDescription) {
+      return "Strong overall fit based on your answers, favorite anchors, and current ranking profile.";
+    }
+    if (!trimmedDescription) {
+      return `${reasons.join(". ")}.`;
+    }
+    if (!reasons.length) {
+      return trimmedDescription;
+    }
+    return `${reasons.join(". ")}. ${trimmedDescription}`;
+  }, [recommendationPositiveReasonChips, topRecommendedGame]);
 
   const answerPreferenceTokens = useMemo(() => {
     const tokenSet = new Set<string>();
@@ -1256,7 +1602,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       // Percentile weighting guarantees visible separation between neighbors.
       const blended = clampNumber((percentile * 0.7) + (rawNormalized * 0.3), 0, 1);
       const eased = Math.pow(blended, 0.88);
-      const displayScore = Math.round(40 + (eased * 59));
+      const displayScore = Math.round(RECOMMENDATION_SCORE_MIN + (eased * RECOMMENDATION_SCORE_SPAN));
       scores.set(row.id, displayScore);
     }
     return scores;
@@ -1270,18 +1616,54 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       const backendScore = backendRecommendationScores[game.id];
       if (hasBackendScores) {
         const resolved = Number.isFinite(backendScore)
-          ? clampNumber(Math.round(backendScore), 55, 99)
-          : clampNumber(previousScore - 1, 55, 99);
+          ? normalizeBackendRecommendationScore(backendScore) ?? clampNumber(previousScore - 1, RECOMMENDATION_SCORE_MIN, RECOMMENDATION_SCORE_MAX)
+          : clampNumber(previousScore - 1, RECOMMENDATION_SCORE_MIN, RECOMMENDATION_SCORE_MAX);
         const monotonic = Math.min(previousScore, resolved);
         scores.set(game.id, monotonic);
         previousScore = monotonic;
         continue;
       }
-      const fallbackScore = recommendationDisplayScores.get(game.id) ?? 40;
+      const fallbackScore = recommendationDisplayScores.get(game.id) ?? RECOMMENDATION_SCORE_MIN;
       scores.set(game.id, fallbackScore);
     }
     return scores;
   }, [backendRecommendationScores, rankedRecommendedGames, recommendationDisplayScores]);
+
+
+  const getRecommendationRank = useCallback(
+    (gameId: number, fallbackRank: number) => backendRecommendationRanks[gameId] ?? fallbackRank,
+    [backendRecommendationRanks],
+  );
+
+  const handleRecommendationFavorite = useCallback(
+    async (gameId: number, rank: number) => {
+      const success = await postRecommendationEvent(
+        gameId,
+        "recommendation_favorite",
+        rank,
+        recommendationTrace,
+        { surface: "discover_results" },
+      );
+      if (success) {
+        setSavedRecommendationIds((prev) => (prev.includes(gameId) ? prev : [...prev, gameId]));
+      }
+    },
+    [postRecommendationEvent, recommendationTrace],
+  );
+
+  const handleRecommendationDismiss = useCallback(
+    async (gameId: number, rank: number) => {
+      setDismissedRecommendationIds((prev) => (prev.includes(gameId) ? prev : [...prev, gameId]));
+      await postRecommendationEvent(
+        gameId,
+        "recommendation_dismiss",
+        rank,
+        recommendationTrace,
+        { surface: "discover_results" },
+      );
+    },
+    [postRecommendationEvent, recommendationTrace],
+  );
 
   useEffect(() => {
     setResultPage(1);
@@ -2023,6 +2405,29 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                             </h2>
                           </header>
 
+                          <section className="discover-result-summary" aria-label="Recommendation summary">
+                            <div className="discover-result-summary__stats">
+                              <article className="discover-result-summary__stat">
+                                <span className="discover-result-summary__stat-value">{recommendedGames.length}</span>
+                                <span className="discover-result-summary__stat-label">Picks ready</span>
+                              </article>
+                              <article className="discover-result-summary__stat">
+                                <span className="discover-result-summary__stat-value">{favoriteCount}/{FAVORITE_GAMES_TARGET}</span>
+                                <span className="discover-result-summary__stat-label">Anchor favorites</span>
+                              </article>
+                              <article className="discover-result-summary__stat">
+                                <span className="discover-result-summary__stat-value">{recommendationTrace?.outcome === "fallback_only_mode" ? "Fallback" : "Hybrid"}</span>
+                                <span className="discover-result-summary__stat-label">Engine mode</span>
+                              </article>
+                            </div>
+                            <div className="discover-result-summary__groups">
+                              {renderRecommendationReasonGroups(
+                                "recommend-reason",
+                                "Answer more questions to sharpen the feed.",
+                              )}
+                            </div>
+                          </section>
+
                           <section className="games-result__card">
                             <div className="games-result__poster">
                               {getPreferredCoverImage(topRecommendedGame) ? (
@@ -2050,6 +2455,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                                 {recommendationStrategy ? (
                                   <span>{`Strategy: ${recommendationStrategy}`}</span>
                                 ) : null}
+                                {recommendationTrace?.rankingProfile ? (
+                                  <span>{`Profile: ${recommendationTrace.rankingProfile}`}</span>
+                                ) : null}
                               </div>
                             </div>
 
@@ -2072,37 +2480,64 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                                 {pagedAdditionalRecommendations.map((game, index) => {
                                   const rank = 2 + ((currentResultPage - 1) * RESULT_PAGE_SIZE) + index;
                                   const coverUrl = getPreferredCoverImage(game);
+                                  const resolvedRank = getRecommendationRank(game.id, rank);
+                                  const isSaved = savedRecommendationIds.includes(game.id);
                                   return (
-                                    <button
+                                    <article
                                       key={`discover-result-${game.id}`}
-                                      type="button"
                                       className="games-result__list-item"
-                                      onClick={() => openGameDetail(game.id)}
                                     >
-                                      <span className="games-result__list-item-cover" aria-hidden="true">
-                                        {coverUrl ? (
-                                          <img
-                                            src={coverUrl}
-                                            alt=""
-                                            loading="lazy"
-                                          />
-                                        ) : (
-                                          <span className="games-result__list-item-cover-fallback">No image</span>
-                                        )}
-                                      </span>
-                                      <span className="games-result__list-item-body">
-                                      <span className="games-result__list-item-rank">{`#${rank}`}</span>
-                                      <span className="games-result__list-item-title">{game.name || "Untitled game"}</span>
-                                      <span className="games-result__list-item-meta">
-                                        {formatReleaseDate(game.release_date)
-                                          ? `Release: ${formatReleaseDate(game.release_date)}`
-                                          : "Release: n/a"}
-                                      </span>
-                                      <span className="games-result__list-item-meta">
-                                        {`Score: ${effectiveRecommendationScores.get(game.id) ?? 58}%`}
-                                      </span>
-                                      </span>
-                                    </button>
+                                      <button
+                                        type="button"
+                                        className="games-result__list-item-main"
+                                        onClick={() =>
+                                          openGameDetail(game.id, {
+                                            fromRecommendation: true,
+                                            rank: resolvedRank,
+                                          })
+                                        }
+                                      >
+                                        <span className="games-result__list-item-cover" aria-hidden="true">
+                                          {coverUrl ? (
+                                            <img
+                                              src={coverUrl}
+                                              alt=""
+                                              loading="lazy"
+                                            />
+                                          ) : (
+                                            <span className="games-result__list-item-cover-fallback">No image</span>
+                                          )}
+                                        </span>
+                                        <span className="games-result__list-item-body">
+                                        <span className="games-result__list-item-rank">{`#${resolvedRank}`}</span>
+                                        <span className="games-result__list-item-title">{game.name || "Untitled game"}</span>
+                                        <span className="games-result__list-item-meta">
+                                          {formatReleaseDate(game.release_date)
+                                            ? `Release: ${formatReleaseDate(game.release_date)}`
+                                            : "Release: n/a"}
+                                        </span>
+                                        <span className="games-result__list-item-meta">
+                                          {`Score: ${effectiveRecommendationScores.get(game.id) ?? 58}%`}
+                                        </span>
+                                        </span>
+                                      </button>
+                                      <div className="games-result__list-item-actions">
+                                        <button
+                                          type="button"
+                                          className="games-result__chip"
+                                          onClick={() => void handleRecommendationFavorite(game.id, resolvedRank)}
+                                        >
+                                          {isSaved ? "Saved" : "Save"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="games-result__chip games-result__chip--ghost"
+                                          onClick={() => void handleRecommendationDismiss(game.id, resolvedRank)}
+                                        >
+                                          Hide
+                                        </button>
+                                      </div>
+                                    </article>
                                   );
                                 })}
                               </div>
@@ -2158,7 +2593,21 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                             <button
                               type="button"
                               className="games-result__button games-result__button--ghost"
-                              onClick={() => openGameDetail(topRecommendedGame.id)}
+                              onClick={() => void handleRecommendationFavorite(topRecommendedGame.id, getRecommendationRank(topRecommendedGame.id, 1))}
+                            >
+                              {savedRecommendationIds.includes(topRecommendedGame.id) ? "Saved" : "Save #1"}
+                            </button>
+                            <button
+                              type="button"
+                              className="games-result__button games-result__button--ghost"
+                              onClick={() => void handleRecommendationDismiss(topRecommendedGame.id, getRecommendationRank(topRecommendedGame.id, 1))}
+                            >
+                              Hide #1 pick
+                            </button>
+                            <button
+                              type="button"
+                              className="games-result__button games-result__button--ghost"
+                              onClick={() => openGameDetail(topRecommendedGame.id, { fromRecommendation: true, rank: getRecommendationRank(topRecommendedGame.id, 1) })}
                             >
                               Open #1 pick
                             </button>
@@ -2227,6 +2676,20 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
             <p className="games-questionnaire__subtitle">
               We use this to personalize your discover feed. You can retake anytime.
             </p>
+            <div className="discover-questionnaire-status" aria-label="Questionnaire status overview">
+              <article className="discover-questionnaire-status__card">
+                <span className="discover-questionnaire-status__value">{questionnaireProgressPercent}%</span>
+                <span className="discover-questionnaire-status__label">Profile built</span>
+              </article>
+              <article className="discover-questionnaire-status__card">
+                <span className="discover-questionnaire-status__value">{remainingQuestionCount}</span>
+                <span className="discover-questionnaire-status__label">Questions left</span>
+              </article>
+              <article className="discover-questionnaire-status__card">
+                <span className="discover-questionnaire-status__value">{favoritesRemainingCount}</span>
+                <span className="discover-questionnaire-status__label">Favorites left</span>
+              </article>
+            </div>
             <div className="games-questionnaire__progress" aria-live="polite">
               <p className="games-questionnaire__progress-label">
                 {`Question ${Math.min(questionnaireStep + 1, questionnaireTotal)} of ${questionnaireTotal}`}
@@ -2248,14 +2711,41 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                 style={{ width: `${questionnaireProgressPercent}%` }}
               />
             </div>
-            <div className="games-questionnaire__body">
+            <div className="discover-questionnaire-compact" aria-label="Questionnaire summary">
+              <article className="discover-questionnaire-compact__card">
+                <span className="discover-questionnaire-compact__label">Current focus</span>
+                <p className="discover-questionnaire-compact__value">
+                  {!isFavoriteQuestionStep && activeQuestion
+                    ? activeQuestion.prompt
+                    : `Pick ${FAVORITE_GAMES_TARGET} all-time favorites`}
+                </p>
+              </article>
+              <article className="discover-questionnaire-compact__card">
+                <span className="discover-questionnaire-compact__label">Profile snapshot</span>
+                <div className="discover-questionnaire-compact__chips">
+                  {questionnaireSnapshotChips.length > 0 ? (
+                    questionnaireSnapshotChips.slice(0, 6).map((chip) => (
+                      <span key={`compact-${chip}`} className="discover-questionnaire-compact__chip">
+                        {chip}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="discover-questionnaire-compact__empty">Your answers will show up here.</span>
+                  )}
+                </div>
+              </article>
+            </div>
+            <div className="games-questionnaire__body discover-questionnaire-body">
               {!isFavoriteQuestionStep && activeQuestion ? (
-                <section key={activeQuestion.id} className="games-questionnaire__question">
-                  <h3>{activeQuestion.prompt}</h3>
+                <section key={activeQuestion.id} className="games-questionnaire__question discover-questionnaire-card">
+                  <div className="discover-questionnaire-question__header">
+                    <span className="discover-questionnaire-question__step">{`Step ${questionnaireStep + 1}`}</span>
+                    <h3>{activeQuestion.prompt}</h3>
+                  </div>
                   <p className="games-questionnaire__hint">
                     {activeQuestion.type === "multi_select"
-                      ? "Select one or more options."
-                      : "Select one option."}
+                      ? "Select one or more options. Keep it broad only if you actually want broader results."
+                      : "Select the closest fit for your default taste right now."}
                   </p>
                   <div className="games-questionnaire__options">
                     {activeQuestion.options.map((option) => {
@@ -2279,13 +2769,27 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                       );
                     })}
                   </div>
+                  <div className="discover-questionnaire-selection" aria-live="polite">
+                    <span className="discover-questionnaire-selection__label">Selected</span>
+                    <div className="discover-questionnaire-selection__chips">
+                      {activeQuestionSelectionLabels.length > 0 ? (
+                        activeQuestionSelectionLabels.map((label) => (
+                          <span key={`selected-${activeQuestion?.id}-${label}`} className="discover-questionnaire-selection__chip">
+                            {label}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="discover-questionnaire-selection__empty">Nothing selected yet.</span>
+                      )}
+                    </div>
+                  </div>
                 </section>
               ) : null}
               {isFavoriteQuestionStep ? (
-                <section className="games-questionnaire__question games-questionnaire__question--favorites">
+                <section className="games-questionnaire__question games-questionnaire__question--favorites discover-questionnaire-card">
                   <h3>{`Top ${FAVORITE_GAMES_TARGET} games of all time`}</h3>
                   <p className="games-questionnaire__hint">
-                    This final step boosts recommendation quality. Search is filtered to released, high-confidence titles. Pick exactly 3 games.
+                    This step gives the feed stronger anchors. Search is limited to released, high-confidence titles. Pick exactly 3.
                   </p>
                   <input
                     type="text"
@@ -2300,6 +2804,13 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                   <p className="games-questionnaire__hint games-questionnaire__favorites-count">
                     {`Selected ${favoriteCount}/${FAVORITE_GAMES_TARGET}`}
                   </p>
+                  <div className="discover-questionnaire-selection discover-questionnaire-selection--favorites" aria-live="polite">
+                    <span className="discover-questionnaire-selection__label">Submission readiness</span>
+                    <div className="discover-questionnaire-selection__chips">
+                      <span className="discover-questionnaire-selection__chip">{favoriteCount === FAVORITE_GAMES_TARGET ? "Ready to submit" : `${favoritesRemainingCount} favorite${favoritesRemainingCount === 1 ? "" : "s"} left`}</span>
+                      <span className="discover-questionnaire-selection__chip discover-questionnaire-selection__chip--muted">Released only</span>
+                    </div>
+                  </div>
                   {favoriteSelectedGames.length > 0 ? (
                     <div className="games-questionnaire__favorites">
                       {favoriteSelectedGames.map((game) => (
@@ -2439,6 +2950,28 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                 Your Discover picks are ready.
               </h2>
             </header>
+            <section className="discover-result-summary discover-result-summary--dialog" aria-label="Recommendation summary">
+              <div className="discover-result-summary__stats">
+                <article className="discover-result-summary__stat">
+                  <span className="discover-result-summary__stat-value">{recommendedGames.length}</span>
+                  <span className="discover-result-summary__stat-label">Picks queued</span>
+                </article>
+                <article className="discover-result-summary__stat">
+                  <span className="discover-result-summary__stat-value">{questionnaireProgressPercent}%</span>
+                  <span className="discover-result-summary__stat-label">Questionnaire complete</span>
+                </article>
+                <article className="discover-result-summary__stat">
+                  <span className="discover-result-summary__stat-value">{recommendationTrace?.rankingProfile ?? "balanced_v1"}</span>
+                  <span className="discover-result-summary__stat-label">Ranking profile</span>
+                </article>
+              </div>
+              <div className="discover-result-summary__groups">
+                {renderRecommendationReasonGroups(
+                  "dialog-reason",
+                  "Your saved answers will shape the next recommendation refresh.",
+                )}
+              </div>
+            </section>
             {topRecommendedGame ? (
               <section className="games-result__card">
                 <div className="games-result__poster">

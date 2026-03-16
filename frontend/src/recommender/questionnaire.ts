@@ -35,7 +35,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
   questions: [
     {
       id: "preferred_pace",
-      prompt: "What pace do you enjoy most?",
+      prompt: "How fast do you want the game to feel?",
       type: "single_select",
       options: [
         {
@@ -102,7 +102,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "session_length",
-      prompt: "How long are your typical play sessions?",
+      prompt: "How long do you usually play in one sitting?",
       type: "single_select",
       options: [
         {
@@ -169,7 +169,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "era_preference",
-      prompt: "What release era do you usually prefer?",
+      prompt: "Which release era sounds right for this pick?",
       type: "single_select",
       weight: 1.15,
       options: [
@@ -227,7 +227,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "play_mode",
-      prompt: "How do you usually play?",
+      prompt: "Who are you usually playing with?",
       type: "single_select",
       options: [
         {
@@ -284,7 +284,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "challenge_preference",
-      prompt: "What challenge level do you prefer?",
+      prompt: "How challenging should this feel?",
       type: "single_select",
       options: [
         {
@@ -351,7 +351,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "theme_preferences",
-      prompt: "Which genres do you enjoy?",
+      prompt: "Which genres sound good right now?",
       type: "multi_select",
       options: [
         {
@@ -588,7 +588,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "avoid_content",
-      prompt: "Any content you'd rather avoid?",
+      prompt: "What should we avoid?",
       type: "multi_select",
       options: [
         {
@@ -802,7 +802,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "control_preference",
-      prompt: "How do you prefer to play?",
+      prompt: "What kind of play style fits today?",
       type: "single_select",
       options: [
         {
@@ -869,7 +869,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "story_vs_gameplay",
-      prompt: "What matters more to you?",
+      prompt: "What should this recommendation optimize for?",
       type: "single_select",
       options: [
         {
@@ -926,7 +926,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "price_sensitivity",
-      prompt: "How price-sensitive are you?",
+      prompt: "How much does price matter right now?",
       type: "single_select",
       options: [
         {
@@ -1003,7 +1003,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "competitive_vs_chill",
-      prompt: "What vibe are you in the mood for right now?",
+      prompt: "What mood are you chasing right now?",
       type: "single_select",
       options: [
         {
@@ -1080,7 +1080,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "friction_tolerance",
-      prompt: "How much friction can you tolerate?",
+      prompt: "How much setup or friction is acceptable?",
       type: "single_select",
       options: [
         {
@@ -1157,7 +1157,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "world_structure",
-      prompt: "What kind of world structure sounds best right now?",
+      prompt: "What kind of world structure sounds best?",
       type: "single_select",
       options: [
         {
@@ -1214,7 +1214,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "engagement_goal",
-      prompt: "What do you want from your next game?",
+      prompt: "What do you want your next game to deliver?",
       type: "single_select",
       weight: 1.2,
       options: [
@@ -1272,7 +1272,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "narrative_depth",
-      prompt: "How much narrative depth do you want?",
+      prompt: "How story-heavy should it be?",
       type: "single_select",
       options: [
         {
@@ -1319,7 +1319,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "progression_style",
-      prompt: "Which progression style keeps you engaged?",
+      prompt: "What kind of progression keeps you hooked?",
       type: "single_select",
       options: [
         {
@@ -1366,7 +1366,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "setting_preference",
-      prompt: "Which settings are you in the mood for?",
+      prompt: "Which setting sounds good right now?",
       type: "multi_select",
       options: [
         {
@@ -1423,7 +1423,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "failure_tolerance",
-      prompt: "How do you feel about failing and retrying?",
+      prompt: "How much failure-and-retry are you up for?",
       type: "single_select",
       options: [
         {
@@ -1460,7 +1460,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "genre_mix",
-      prompt: "Pick up to 3 genres you want right now",
+      prompt: "Pick up to 3 genres you want most right now",
       type: "multi_select",
       weight: 1.25,
       options: [
@@ -1528,7 +1528,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "time_commitment",
-      prompt: "How much time do you want to commit to your next game?",
+      prompt: "How much time do you want to commit?",
       type: "single_select",
       weight: 1.1,
       options: [
@@ -1576,7 +1576,7 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
     {
       id: "complexity_tolerance",
-      prompt: "How much mechanical complexity do you want?",
+      prompt: "How mechanically complex should it be?",
       type: "single_select",
       weight: 1.1,
       options: [
@@ -1614,6 +1614,26 @@ export const QUESTIONNAIRE_V1: QuestionnaireCatalog = {
     },
   ],
 };
+
+const CONDENSED_QUESTION_ORDER = [
+  "preferred_pace",
+  "era_preference",
+  "play_mode",
+  "challenge_preference",
+  "genre_mix",
+  "avoid_content",
+  "primary_platform",
+  "engagement_goal",
+  "time_commitment",
+] as const;
+
+const condensedQuestionSet = new Set<string>(CONDENSED_QUESTION_ORDER);
+const questionById = new Map(QUESTIONNAIRE_V1.questions.map((question) => [question.id, question] as const));
+QUESTIONNAIRE_V1.questions = CONDENSED_QUESTION_ORDER
+  .map((id) => questionById.get(id))
+  .filter((question): question is QuestionnaireQuestion => Boolean(question))
+  .filter((question) => condensedQuestionSet.has(question.id));
+
 
 /**
  * Returns an empty QuestionnaireAnswers object with keys for each question ID.
@@ -1670,6 +1690,28 @@ export const isQuestionnaireComplete = (answers: QuestionnaireAnswers): boolean 
     return selected.length > 0;
   });
 
+export const getRecommendationEraPreference = (answers: QuestionnaireAnswers): string => {
+  const selected = answers["era_preference"] ?? [];
+  const raw = selected[0] ?? "no_era_preference";
+  if (raw === "latest_2020_plus") {
+    return "strict_latest_2020_plus";
+  }
+  return raw;
+};
+
+const normalizeAnswersForRecommendation = (
+  answers: QuestionnaireAnswers,
+): QuestionnaireAnswers => {
+  const preferredEra = getRecommendationEraPreference(answers);
+  if ((answers["era_preference"]?.[0] ?? "no_era_preference") === preferredEra) {
+    return answers;
+  }
+  return {
+    ...answers,
+    era_preference: preferredEra === "no_era_preference" ? [] : [preferredEra],
+  };
+};
+
 /**
  * Builds a RecommendRequest object from the given questionnaire answers.
  *
@@ -1688,6 +1730,7 @@ export const buildRecommendRequestFromQuestionnaire = (
   answers: QuestionnaireAnswers,
   favoriteGameIds: number[] = [],
 ) => {
+  const normalizedAnswers = normalizeAnswersForRecommendation(answers);
   const likedKeywords = new Set<number>();
   const dislikedKeywords = new Set<number>();
   const likedPlatforms = new Set<number>();
@@ -1719,7 +1762,7 @@ export const buildRecommendRequestFromQuestionnaire = (
       version: QUESTIONNAIRE_V1.version,
       feature_schema_version: QUESTIONNAIRE_V1.feature_schema_version,
       id_catalog: QUESTIONNAIRE_V1.id_catalog,
-      answers,
+      answers: normalizedAnswers,
       question_weights: questionWeights,
       favorite_game_ids: favoriteGameIds.slice(0, 3),
     },

@@ -180,50 +180,68 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
   const [heroEmail, setHeroEmail] = useState("");
   const pageCountTarget = 4;
   const totalLimit = pageCountTarget * 4;
+  const preferredPopularYear = 2026;
   const [popularGames, setPopularGames] = useState<PopularGame[]>([]);
-  const popularYear = 2026;
+  const [popularTitle, setPopularTitle] = useState(
+    `Most Popular Games: ${preferredPopularYear}`,
+  );
   const [popularLoading, setPopularLoading] = useState(false);
   const [popularError, setPopularError] = useState<string | null>(null);
 
-  // Load popular games on component mount
+  // Load a lightweight featured set for the landing page.
   useEffect(() => {
-    // Abort controller for fetch requests
     const controller = new AbortController();
+
     const loadPopularGames = async () => {
       setPopularLoading(true);
       setPopularError(null);
+      setPopularTitle(`Most Popular Games: ${preferredPopularYear}`);
+
       try {
-        const cacheBust = Date.now();
-        const fetchPopular = async (year: number) => {
-          const params = new URLSearchParams({
-            limit: String(totalLimit),
-            t: String(cacheBust),
-            min_rating_count: "1",
-            include_media: "1",
+        const cacheBust = String(Date.now());
+        const fetchGames = async (
+          path: string,
+          params: URLSearchParams,
+        ): Promise<PopularGameResponse[]> => {
+          params.set("limit", String(totalLimit));
+          params.set("offset", "0");
+          params.set("t", cacheBust);
+          params.set("include_media", "0");
+
+          const response = await fetch(`${apiUrl(path)}?${params.toString()}`, {
+            signal: controller.signal,
           });
-          if (year > 0) {
-            params.set("year", String(year));
-          }
-          const response = await fetch(
-            `${apiUrl("/games/popular")}?${params.toString()}`,
-            {
-              signal: controller.signal,
-            },
-          );
           if (!response.ok) {
             const errorText = await response.text();
             throw new Error(
-              `Failed to load popular games (${response.status}) ${errorText}`,
+              `Failed to load featured games (${response.status}) ${errorText}`.trim(),
             );
           }
+
           const data = (await response.json()) as PopularGameResponse[];
           if (!Array.isArray(data)) {
-            throw new Error("Unexpected response shape for popular games");
+            throw new Error("Unexpected response shape for featured games");
           }
           return data;
         };
 
-        const data = await fetchPopular(popularYear);
+        let data = await fetchGames(
+          "/games/popular",
+          new URLSearchParams({
+            year: String(preferredPopularYear),
+            min_rating_count: "1",
+          }),
+        );
+
+        if (data.length === 0) {
+          setPopularTitle("Popular Picks");
+          data = await fetchGames(
+            "/games",
+            new URLSearchParams({
+              exclude_non_base: "1",
+            }),
+          );
+        }
 
         const normalized = data.map((game) => {
           const rawImage = game.cover_image ?? "";
@@ -236,10 +254,14 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
             image,
           };
         });
+
         setPopularGames(normalized.slice(0, totalLimit));
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
-          setPopularError(err instanceof Error ? err.message : String(err));
+          setPopularGames([]);
+          setPopularError(
+            `Games for ${preferredPopularYear} are temporarily unavailable. Try refreshing in a moment.`,
+          );
         }
       } finally {
         setPopularLoading(false);
@@ -248,7 +270,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
 
     loadPopularGames();
     return () => controller.abort();
-  }, [popularYear, totalLimit]);
+  }, [preferredPopularYear, totalLimit]);
 
   return (
     <div className="landing">
@@ -310,15 +332,9 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
         </section>
 
         <section className="popular">
-          <h3 className="popular__title">
-            {popularYear > 0
-              ? `Most Popular Games: ${popularYear}`
-              : "Most Popular Games"}
-          </h3>
+          <h3 className="popular__title">{popularTitle}</h3>
           {popularError ? (
-            <p className="popular__status">
-              Unable to load popular games: {popularError}
-            </p>
+            <p className="popular__status">{popularError}</p>
           ) : popularLoading ? (
             <Loader
               title="Loading popular games"

@@ -85,6 +85,18 @@ func (c *UserClient) DeleteUserInteraction(id, gameId string) (interface{}, erro
 	return doDelete(url, c.headers())
 }
 
+// GET /users/:id/interactions/events
+func (c *UserClient) GetUserInteractionEvents(id string) (interface{}, error) {
+	url := fmt.Sprintf("%s/users/%s/interactions/events", c.BaseURL, id)
+	return doGet(url, c.headers())
+}
+
+// POST /users/:id/interactions/events
+func (c *UserClient) CreateUserInteractionEvent(id string, body []byte) (interface{}, error) {
+	url := fmt.Sprintf("%s/users/%s/interactions/events", c.BaseURL, id)
+	return doPost(url, body, c.headers())
+}
+
 // PUT /users/:id
 func (c *UserClient) UpdateUser(id string, body []byte) (interface{}, error) {
 	url := fmt.Sprintf("%s/users/%s", c.BaseURL, id)
@@ -94,53 +106,5 @@ func (c *UserClient) UpdateUser(id string, body []byte) (interface{}, error) {
 // DELETE /users/:id
 func (c *UserClient) DeleteUser(id string) (interface{}, error) {
 	url := fmt.Sprintf("%s/users/%s", c.BaseURL, id)
-	return doDelete(url, c.headers())
-}
-
-// GET /users/:id/keywords
-func (c *UserClient) GetUserKeywordPreferences(id string) (interface{}, error) {
-	url := fmt.Sprintf("%s/users/%s/keywords", c.BaseURL, id)
-	return doGet(url, c.headers())
-}
-
-// POST /users/:id/keywords
-func (c *UserClient) CreateUserKeywordPreference(id string, body []byte) (interface{}, error) {
-	url := fmt.Sprintf("%s/users/%s/keywords", c.BaseURL, id)
-	return doPost(url, body, c.headers())
-}
-
-// PUT /users/:id/keywords/:keywordId
-func (c *UserClient) UpdateUserKeywordPreference(id, keywordId string, body []byte) (interface{}, error) {
-	url := fmt.Sprintf("%s/users/%s/keywords/%s", c.BaseURL, id, keywordId)
-	return doPut(url, body, c.headers())
-}
-
-// DELETE /users/:id/keywords/:keywordId
-func (c *UserClient) DeleteUserKeywordPreference(id, keywordId string) (interface{}, error) {
-	url := fmt.Sprintf("%s/users/%s/keywords/%s", c.BaseURL, id, keywordId)
-	return doDelete(url, c.headers())
-}
-
-// GET /users/:id/platforms
-func (c *UserClient) GetUserPlatformPreferences(id string) (interface{}, error) {
-	url := fmt.Sprintf("%s/users/%s/platforms", c.BaseURL, id)
-	return doGet(url, c.headers())
-}
-
-// POST /users/:id/platforms
-func (c *UserClient) CreateUserPlatformPreference(id string, body []byte) (interface{}, error) {
-	url := fmt.Sprintf("%s/users/%s/platforms", c.BaseURL, id)
-	return doPost(url, body, c.headers())
-}
-
-// PUT /users/:id/platforms/:platformId
-func (c *UserClient) UpdateUserPlatformPreference(id, platformId string, body []byte) (interface{}, error) {
-	url := fmt.Sprintf("%s/users/%s/platforms/%s", c.BaseURL, id, platformId)
-	return doPut(url, body, c.headers())
-}
-
-// DELETE /users/:id/platforms/:platformId
-func (c *UserClient) DeleteUserPlatformPreference(id, platformId string) (interface{}, error) {
-	url := fmt.Sprintf("%s/users/%s/platforms/%s", c.BaseURL, id, platformId)
 	return doDelete(url, c.headers())
 }

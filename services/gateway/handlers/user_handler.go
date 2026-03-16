@@ -65,70 +65,18 @@ func DeleteUserInteraction(c *fiber.Ctx) error {
 	return sendProxyJSON(c, resp, err)
 }
 
-// GetUserKeywordPreferences handles GET /api/users/:id/keywords
-func GetUserKeywordPreferences(c *fiber.Ctx) error {
+// GetUserInteractionEvents handles GET /api/users/:id/interactions/events
+func GetUserInteractionEvents(c *fiber.Ctx) error {
 	id := c.Params("id")
 	userClient := userClientFromCtx(c)
-	resp, err := userClient.GetUserKeywordPreferences(id)
+	resp, err := userClient.GetUserInteractionEvents(id)
 	return sendProxyJSON(c, resp, err)
 }
 
-// CreateUserKeywordPreference handles POST /api/users/:id/keywords
-func CreateUserKeywordPreference(c *fiber.Ctx) error {
+// CreateUserInteractionEvent handles POST /api/users/:id/interactions/events
+func CreateUserInteractionEvent(c *fiber.Ctx) error {
 	id := c.Params("id")
 	userClient := userClientFromCtx(c)
-	resp, err := userClient.CreateUserKeywordPreference(id, c.Body())
-	return sendProxyJSON(c, resp, err)
-}
-
-// UpdateUserKeywordPreference handles PUT /api/users/:id/keywords/:keywordId
-func UpdateUserKeywordPreference(c *fiber.Ctx) error {
-	id := c.Params("id")
-	keywordID := c.Params("keywordId")
-	userClient := userClientFromCtx(c)
-	resp, err := userClient.UpdateUserKeywordPreference(id, keywordID, c.Body())
-	return sendProxyJSON(c, resp, err)
-}
-
-// DeleteUserKeywordPreference handles DELETE /api/users/:id/keywords/:keywordId
-func DeleteUserKeywordPreference(c *fiber.Ctx) error {
-	id := c.Params("id")
-	keywordID := c.Params("keywordId")
-	userClient := userClientFromCtx(c)
-	resp, err := userClient.DeleteUserKeywordPreference(id, keywordID)
-	return sendProxyJSON(c, resp, err)
-}
-
-// GetUserPlatformPreferences handles GET /api/users/:id/platforms
-func GetUserPlatformPreferences(c *fiber.Ctx) error {
-	id := c.Params("id")
-	userClient := userClientFromCtx(c)
-	resp, err := userClient.GetUserPlatformPreferences(id)
-	return sendProxyJSON(c, resp, err)
-}
-
-// CreateUserPlatformPreference handles POST /api/users/:id/platforms
-func CreateUserPlatformPreference(c *fiber.Ctx) error {
-	id := c.Params("id")
-	userClient := userClientFromCtx(c)
-	resp, err := userClient.CreateUserPlatformPreference(id, c.Body())
-	return sendProxyJSON(c, resp, err)
-}
-
-// UpdateUserPlatformPreference handles PUT /api/users/:id/platforms/:platformId
-func UpdateUserPlatformPreference(c *fiber.Ctx) error {
-	id := c.Params("id")
-	platformID := c.Params("platformId")
-	userClient := userClientFromCtx(c)
-	resp, err := userClient.UpdateUserPlatformPreference(id, platformID, c.Body())
-	return sendProxyJSON(c, resp, err)
-}
-
-// DeleteUserPlatformPreference handles DELETE /api/users/:id/platforms/:platformId
-func DeleteUserPlatformPreference(c *fiber.Ctx) error {
-	id := c.Params("id")
-	platformID := c.Params("platformId")
-	userClient := userClientFromCtx(c)
-	resp, err := userClient.DeleteUserPlatformPreference(id, platformID)
+	resp, err := userClient.CreateUserInteractionEvent(id, c.Body())
 	return sendProxyJSON(c, resp, err)
 }

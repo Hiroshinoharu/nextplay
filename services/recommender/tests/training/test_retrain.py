@@ -87,6 +87,9 @@ def _low_quality_threshold_kwargs() -> dict[str, float | int]:
         "min_train_rows": 1,
         "min_validation_rows": 0,
         "min_test_rows": 1,
+        "min_validation_positive_rows": 0,
+        "min_test_positive_rows": 1,
+        "min_test_users_with_positive": 1,
         "min_positive_ratio": 0.0,
         "max_positive_ratio": 1.0,
     }

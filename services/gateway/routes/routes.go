@@ -40,16 +40,9 @@ func SetUpRoutes(app *fiber.App) {
 		securedUsers.Get("/interactions", handlers.GetUserInteraction)
 		securedUsers.Post("/interactions", handlers.CreateUserInteraction)
 		securedUsers.Delete("/interactions/:gameId", handlers.DeleteUserInteraction)
+		securedUsers.Get("/interactions/events", handlers.GetUserInteractionEvents)
+		securedUsers.Post("/interactions/events", handlers.CreateUserInteractionEvent)
 
-		securedUsers.Get("/keywords", handlers.GetUserKeywordPreferences)
-		securedUsers.Post("/keywords", handlers.CreateUserKeywordPreference)
-		securedUsers.Put("/keywords/:keywordId", handlers.UpdateUserKeywordPreference)
-		securedUsers.Delete("/keywords/:keywordId", handlers.DeleteUserKeywordPreference)
-
-		securedUsers.Get("/platforms", handlers.GetUserPlatformPreferences)
-		securedUsers.Post("/platforms", handlers.CreateUserPlatformPreference)
-		securedUsers.Put("/platforms/:platformId", handlers.UpdateUserPlatformPreference)
-		securedUsers.Delete("/platforms/:platformId", handlers.DeleteUserPlatformPreference)
 	}
 
 	// --------------------------
