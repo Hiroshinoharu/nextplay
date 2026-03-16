@@ -1,4 +1,4 @@
-.PHONY: retrain retrain-export retrain-from-db retrain-from-db-local recommender-balanced recommender-favorites-strong retrain-seeded-xl retrain-seeded-xl-local tensorboard
+.PHONY: help retrain retrain-export retrain-from-db retrain-from-db-local recommender-balanced recommender-favorites-strong retrain-seeded-xl retrain-seeded-xl-local tensorboard
 
 RETRAIN_SCRIPT := services/recommender/training/retrain.sh
 TRAINING_DIR := services/recommender/training
@@ -8,8 +8,22 @@ ifeq ($(OS),Windows_NT)
 SHELL := C:/Progra~1/Git/usr/bin/sh.exe
 BASH := C:/Progra~1/Git/bin/bash.exe
 else
+SHELL := /bin/sh
 BASH := bash
 endif
+
+help:
+	@printf "%s\n" \
+		"Available targets:" \
+		"  make retrain" \
+		"  make retrain-export" \
+		"  make retrain-from-db" \
+		"  make retrain-from-db-local" \
+		"  make recommender-balanced" \
+		"  make recommender-favorites-strong" \
+		"  make retrain-seeded-xl" \
+		"  make retrain-seeded-xl-local" \
+		"  make tensorboard"
 
 retrain:
 	$(BASH) $(RETRAIN_SCRIPT) $(ARGS)
@@ -37,25 +51,36 @@ recommender-balanced:
 	@docker compose -f $(COMPOSE_FILE) up -d --build recommender gateway
 	@echo "Recommender profile: balanced"
 
-recommender-balanced: SHELL := powershell.exe
 recommender-favorites-strong:
-	@$$env:RANK_WEIGHT_FAVORITE_KEYWORD="4.2"; $$env:RANK_WEIGHT_FAVORITE_PLATFORM="2.5"; $$env:RANK_WEIGHT_FAVORITE_GENRE="3.0"; $$env:RANK_WEIGHT_FAVORITE_TEXT_SIM="8.5"; $$env:RANK_WEIGHT_FAVORITE_SEED_BOOST="12.0"; docker compose -f $(COMPOSE_FILE) up -d --build recommender gateway
+	@RANK_WEIGHT_FAVORITE_KEYWORD="4.2" \
+	RANK_WEIGHT_FAVORITE_PLATFORM="2.5" \
+	RANK_WEIGHT_FAVORITE_GENRE="3.0" \
+	RANK_WEIGHT_FAVORITE_TEXT_SIM="8.5" \
+	RANK_WEIGHT_FAVORITE_SEED_BOOST="12.0" \
+	docker compose -f $(COMPOSE_FILE) up -d --build recommender gateway
 	@echo "Recommender profile: favorites-strong"
 
-recommender-favorites-strong: SHELL := powershell.exe
-
 retrain-seeded-xl:
-	@python -m services.recommender.training.retrain --source_mode seeded_plus_db --seed_users 10000 --seed_games 50000 --seed_history_per_user 50 --seed_holdout_per_user 5 --epochs 12 --batch_size 64 --thresholds_json services/recommender/training/offline_eval_thresholds_large_catalog.json --promote_current; if ($$LASTEXITCODE -eq 3) { Write-Host "Retrain completed, but offline evaluation gates failed so promotion was blocked."; exit 3 } elseif ($$LASTEXITCODE -ne 0) { exit $$LASTEXITCODE }
+	@python -m services.recommender.training.retrain --source_mode seeded_plus_db --seed_users 10000 --seed_games 50000 --seed_history_per_user 50 --seed_holdout_per_user 5 --epochs 12 --batch_size 64 --thresholds_json services/recommender/training/offline_eval_thresholds_large_catalog.json --promote_current; \
+	status=$$?; \
+	if [ "$$status" -eq 3 ]; then \
+		echo "Retrain completed, but offline evaluation gates failed so promotion was blocked."; \
+		exit 3; \
+	elif [ "$$status" -ne 0 ]; then \
+		exit "$$status"; \
+	fi
 	@echo "Retrain profile: seeded-xl"
 
 retrain-seeded-xl-local:
-	@python -m services.recommender.training.retrain --source_mode seeded_plus_db --seed_users 10000 --seed_games 50000 --seed_history_per_user 50 --seed_holdout_per_user 5 --epochs 12 --batch_size 64 --thresholds_json services/recommender/training/offline_eval_thresholds_large_catalog.json --promote_current; if ($$LASTEXITCODE -eq 3) { Write-Host "Retrain completed, but offline evaluation gates failed so promotion was blocked (non-blocking local mode)."; exit 0 } elseif ($$LASTEXITCODE -ne 0) { exit $$LASTEXITCODE }
+	@python -m services.recommender.training.retrain --source_mode seeded_plus_db --seed_users 10000 --seed_games 50000 --seed_history_per_user 50 --seed_holdout_per_user 5 --epochs 12 --batch_size 64 --thresholds_json services/recommender/training/offline_eval_thresholds_large_catalog.json --promote_current; \
+	status=$$?; \
+	if [ "$$status" -eq 3 ]; then \
+		echo "Retrain completed, but offline evaluation gates failed so promotion was blocked (non-blocking local mode)."; \
+		exit 0; \
+	elif [ "$$status" -ne 0 ]; then \
+		exit "$$status"; \
+	fi
 	@echo "Retrain profile: seeded-xl-local"
 
 tensorboard:
 	@tensorboard --logdir services/recommender/training/runs
-
-tensorboard: SHELL := powershell.exe
-
-retrain-seeded-xl: SHELL := powershell.exe
-retrain-seeded-xl-local: SHELL := powershell.exe
