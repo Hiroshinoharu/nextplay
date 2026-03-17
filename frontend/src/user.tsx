@@ -325,8 +325,8 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
     deleteConfirmation.trim().toUpperCase() === DELETE_CONFIRMATION_TEXT;
   const themeSummary =
     theme === "dark"
-      ? "Torch lit: the page stays in dark mode with neon contrast."
-      : "Torch dimmed: the page switches to a brighter light mode shell.";
+      ? "Torch off: the page stays in dark mode with neon contrast."
+      : "Torch lit: the page switches to a brighter light mode shell.";
 
   const handleSearchSubmit = useCallback(() => {
     const query = searchInput.trim();
@@ -344,7 +344,7 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
   }, [navigate, onSignOut]);
 
   const handleThemeToggle = useCallback((checked: boolean) => {
-    setTheme(checked ? "dark" : "light");
+    setTheme(checked ? "light" : "dark");
   }, []);
 
   const handlePasswordChange = useCallback(
@@ -664,18 +664,18 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
                 <div className="user-settings-card__header">
                   <div>
                     <h3>Appearance</h3>
-                    <p>Use the torch to switch between dark and light mode for this page.</p>
+                    <p>Torch off keeps dark mode. Light the torch to switch this page into light mode.</p>
                   </div>
                   <span className="user-settings-badge">{theme === "dark" ? "Dark" : "Light"}</span>
                 </div>
                 <div className="user-theme-panel">
                   <div className="user-theme-panel__toggle">
                     <MinecraftTorch
-                      checked={theme === "dark"}
+                      checked={theme === "light"}
                       onChange={handleThemeToggle}
-                      label="Toggle dark mode"
-                      onLabel="Dark mode"
-                      offLabel="Light mode"
+                      label="Toggle page theme"
+                      onLabel="Light mode"
+                      offLabel="Dark mode"
                     />
                   </div>
                   <div className="user-theme-panel__copy">

@@ -636,6 +636,38 @@
   color: #8b1616;
 }
 
+.user-page[data-theme="light"] .user-interaction-card__game .card--poster {
+  background:
+    radial-gradient(circle at top, rgba(59, 143, 62, 0.08), transparent 55%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(235, 245, 252, 0.96));
+  box-shadow: 0 16px 30px rgba(31, 67, 92, 0.18);
+}
+
+.user-page[data-theme="light"] .user-interaction-card__game .card--poster svg {
+  fill: rgba(24, 53, 74, 0.44);
+}
+
+.user-page[data-theme="light"] .user-interaction-card__game .card__content {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(248, 252, 255, 0.72) 55%,
+    rgba(235, 245, 252, 0.96) 100%
+  );
+}
+
+.user-page[data-theme="light"] .user-interaction-card__game .card__title {
+  color: #18354a;
+}
+
+.user-page[data-theme="light"] .user-interaction-card__game .card__description {
+  color: rgba(24, 53, 74, 0.78);
+}
+
+.user-page[data-theme="light"] .user-interaction-card__game .card__image {
+  background: rgba(244, 250, 255, 0.92);
+}
+
 .user-delete-row {
   align-items: flex-end;
 }

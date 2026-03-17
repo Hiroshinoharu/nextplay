@@ -17,8 +17,8 @@ const MinecraftTorch = ({
   disabled = false,
   id,
   label = 'Toggle theme',
-  onLabel = 'Dark mode',
-  offLabel = 'Light mode',
+  onLabel = 'Light mode',
+  offLabel = 'Dark mode',
 }: MinecraftTorchProps) => {
   const generatedId = useId();
   const inputId = id ?? generatedId;
