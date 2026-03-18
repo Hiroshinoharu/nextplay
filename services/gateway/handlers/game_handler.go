@@ -33,6 +33,12 @@ func GetTopGames(c *fiber.Ctx) error {
 	return sendProxyBytes(c, status, data, err)
 }
 
+func GetQuestionnaireFacets(c *fiber.Ctx) error {
+	gameClient := clients.NewGameClientWithHeaders(forwardingHeaders(c))
+	status, data, err := gameClient.GetQuestionnaireFacets()
+	return sendProxyBytes(c, status, data, err)
+}
+
 func GetGameByID(c *fiber.Ctx) error {
 	id := c.Params("id")
 	gameClient := clients.NewGameClientWithHeaders(forwardingHeaders(c))

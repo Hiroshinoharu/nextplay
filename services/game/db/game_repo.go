@@ -11,6 +11,105 @@ import (
 
 const nonBaseContentRegex = `(\m(dlc|downloadable content|expansion|expansion pack|add[- ]?on|bonus( content)?|soundtrack|artbook|season pass|character pass|battle pass|event pass|starter pack|founder.?s pack|cosmetic pack|skin( pack| set)?|costume( pack)?|outfit( pack)?|upgrade pack|item pack|consumable( pack)?|bundle|edition upgrade|currency pack|booster pack|mission pack|title update|content update|seasonal update|mid[- ]?season|live service|ranked split|rotation update|patch( v?[0-9]+)?|hotfix|content drop|episode[[:space:]]*[0-9ivxlcdm]+|season[[:space:]]*[0-9ivxlcdm]+|chapter[[:space:]]*[0-9ivxlcdm]+)\M)`
 
+type QuestionnaireFacetGenre struct {
+	Slug  string `json:"slug"`
+	Label string `json:"label"`
+	Count int    `json:"count"`
+}
+
+type QuestionnaireFacetPlatform struct {
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+type QuestionnaireFacets struct {
+	Genres    []QuestionnaireFacetGenre    `json:"genres"`
+	Platforms []QuestionnaireFacetPlatform `json:"platforms"`
+}
+
+func GetQuestionnaireFacets() (*QuestionnaireFacets, error) {
+	genresRows, err := DB.Query(
+		`
+		SELECT
+			LOWER(TRIM(SPLIT_PART(genre, ',', 1))) AS slug,
+			TRIM(SPLIT_PART(genre, ',', 1)) AS label,
+			COUNT(*) AS game_count
+		FROM games
+		WHERE genre IS NOT NULL
+		  AND TRIM(SPLIT_PART(genre, ',', 1)) <> ''
+		  AND NOT (CONCAT_WS(' ', COALESCE(game_name, ''), COALESCE(genre, ''), COALESCE(game_description, '')) ~* '` + nonBaseContentRegex + `')
+		GROUP BY slug, label
+		ORDER BY game_count DESC, label ASC
+		LIMIT 24
+		`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer genresRows.Close()
+
+	facets := &QuestionnaireFacets{
+		Genres:    make([]QuestionnaireFacetGenre, 0, 24),
+		Platforms: make([]QuestionnaireFacetPlatform, 0, 16),
+	}
+
+	for genresRows.Next() {
+		var item QuestionnaireFacetGenre
+		if err := genresRows.Scan(&item.Slug, &item.Label, &item.Count); err != nil {
+			return nil, err
+		}
+		item.Label = strings.TrimSpace(item.Label)
+		item.Slug = strings.TrimSpace(item.Slug)
+		if item.Label == "" || item.Slug == "" {
+			continue
+		}
+		facets.Genres = append(facets.Genres, item)
+	}
+	if err := genresRows.Err(); err != nil {
+		return nil, err
+	}
+
+	platformRows, err := DB.Query(
+		`
+		SELECT
+			p.platform_id,
+			p.platform_name,
+			COUNT(DISTINCT gp.game_id) AS game_count
+		FROM platform p
+		INNER JOIN game_platform gp ON gp.platform_id = p.platform_id
+		INNER JOIN games g ON g.game_id = gp.game_id
+		WHERE p.platform_name IS NOT NULL
+		  AND TRIM(p.platform_name) <> ''
+		  AND NOT (CONCAT_WS(' ', COALESCE(g.game_name, ''), COALESCE(g.genre, ''), COALESCE(g.game_description, '')) ~* '` + nonBaseContentRegex + `')
+		GROUP BY p.platform_id, p.platform_name
+		ORDER BY game_count DESC, p.platform_name ASC
+		LIMIT 24
+		`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer platformRows.Close()
+
+	for platformRows.Next() {
+		var item QuestionnaireFacetPlatform
+		if err := platformRows.Scan(&item.ID, &item.Name, &item.Count); err != nil {
+			return nil, err
+		}
+		item.Name = strings.TrimSpace(item.Name)
+		if item.Name == "" {
+			continue
+		}
+		facets.Platforms = append(facets.Platforms, item)
+	}
+	if err := platformRows.Err(); err != nil {
+		return nil, err
+	}
+
+	return facets, nil
+}
+
 // GetGames retrieves a page of games from the database.
 // Use includeMedia for detail-heavy responses; it is off by default for speed.
 func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool, searchQuery string, randomOrder bool, excludeNonBaseContent bool) ([]models.Game, error) {

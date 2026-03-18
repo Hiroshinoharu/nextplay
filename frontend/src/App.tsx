@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Route, Routes, useLocation ,useNavigate, Navigate } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
 import "./health.css";
 import BrandLogo from "./components/BrandLogo";
@@ -577,9 +577,7 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const unauthorizedRedirectingRef = useRef(false);
-  const previousPathRef = useRef(location.pathname);
   const [showBootLoadingScreen, setShowBootLoadingScreen] = useState(true);
-  const [routeLoaderTick, setRouteLoaderTick] = useState(0);
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
     if (typeof window === "undefined") return null;
     try {
@@ -677,17 +675,8 @@ function App() {
     };
   }, [handleSignOut, navigate, sessionUser]);
 
-  useEffect(() => {
-    if (showBootLoadingScreen) {
-      previousPathRef.current = location.pathname;
-      return;
-    }
-
-    if (previousPathRef.current !== location.pathname) {
-      previousPathRef.current = location.pathname;
-      setRouteLoaderTick((current) => current + 1);
-    }
-  }, [location.pathname, showBootLoadingScreen]);
+  const shouldShowRouteLoader =
+    !showBootLoadingScreen && location.key !== "default";
 
   useEffect(() => {
     let startX = 0;
@@ -865,9 +854,9 @@ function App() {
           ]}
         />
       ) : null}
-      {!showBootLoadingScreen && routeLoaderTick > 0 ? (
+      {shouldShowRouteLoader ? (
         <RouteTransitionLoader
-          key={`${location.pathname}-${routeLoaderTick}`}
+          key={location.key}
           eyebrow={routeLoaderConfig.eyebrow}
           title={routeLoaderConfig.title}
           subtitle={routeLoaderConfig.subtitle}

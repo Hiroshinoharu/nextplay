@@ -599,6 +599,10 @@ def test_personalized_ranking_applies_diversity_and_recent_exposure_penalty(monk
         "services.recommender.handlers.recommend._build_favorite_profile",
         lambda request, favorite_game_ids: (set(), set(), set(), []),
     )
+    monkeypatch.setattr(
+        "services.recommender.handlers.recommend._build_avoid_profile",
+        lambda request, avoided_game_ids: (set(), set(), set(), []),
+    )
 
     first_ids, _ = _build_personalized_recommendation_ids(
         request,
@@ -607,6 +611,7 @@ def test_personalized_ranking_applies_diversity_and_recent_exposure_penalty(monk
         disliked_keyword_ids=set(),
         disliked_platform_ids=set(),
         favorite_game_ids=[],
+        avoided_game_ids=[],
         answer_token_weights={},
         favorite_seed_ids=[],
         model_seed_ids=[],
@@ -622,6 +627,7 @@ def test_personalized_ranking_applies_diversity_and_recent_exposure_penalty(monk
         disliked_keyword_ids=set(),
         disliked_platform_ids=set(),
         favorite_game_ids=[],
+        avoided_game_ids=[],
         answer_token_weights={},
         favorite_seed_ids=[],
         model_seed_ids=[],
@@ -634,3 +640,74 @@ def test_personalized_ranking_applies_diversity_and_recent_exposure_penalty(monk
     assert first_ids == second_ids
     assert len(set(first_ids)) == len(first_ids)
     assert first_ids[0] != 1
+
+
+def test_recommend_route_uses_full_interaction_history_to_personalize():
+    class _Inference:
+        def infer(self, payload):
+            return ModelOutputSchema(
+                user_id=payload.user_id,
+                strategy="rule_based_fallback_v1",
+                candidates=[],
+            )
+
+    app.state.service_urls = {
+        "user": "http://user",
+        "game": "http://game",
+    }
+    app.state.http = _HTTP(
+        {
+            "http://user/users/12/interactions": _Resp(
+                200,
+                [
+                    {"game_id": 1001, "favorited": True, "liked": True, "rating": 9.5},
+                    {"game_id": 1002, "favorited": False, "liked": True, "rating": 8.0},
+                    {"game_id": 1003, "favorited": False, "liked": False, "rating": 2.0},
+                ],
+            ),
+            "http://user/users/12/interactions/events?event_type=recommendation_exposure&limit=120": _Resp(200, []),
+            "http://game/games/top?limit=300": _Resp(
+                200,
+                [
+                    {"id": 501, "name": "Star Tactics", "genre": "Strategy", "description": "space tactics fleet command", "keywords": [77], "platforms": [6], "popularity": 900.0, "aggregated_rating": 90.0},
+                    {"id": 502, "name": "Galaxy Orders", "genre": "Strategy", "description": "space tactics squad planning", "keywords": [77], "platforms": [6], "popularity": 870.0, "aggregated_rating": 88.0},
+                    {"id": 503, "name": "Dread Arena", "genre": "Horror", "description": "grim horror survival panic", "keywords": [88], "platforms": [9], "popularity": 950.0, "aggregated_rating": 91.0},
+                ],
+            ),
+            "http://game/games/1001": _Resp(200, {"id": 1001, "name": "Fleet Doctrine", "genre": "Strategy", "description": "space tactics fleet command", "keywords": [77], "platforms": [6]}),
+            "http://game/games/1001/related-content?limit=160": _Resp(200, [{"id": 501}, {"id": 502}]),
+            "http://game/games/search?q=Fleet Doctrine&mode=contains&limit=120": _Resp(200, [{"id": 501}, {"id": 502}]),
+            "http://game/games/1002": _Resp(200, {"id": 1002, "name": "Orbit Planner", "genre": "Strategy", "description": "space tactics squad planning", "keywords": [77], "platforms": [6]}),
+            "http://game/games/1002/related-content?limit=160": _Resp(200, [{"id": 502}, {"id": 501}]),
+            "http://game/games/search?q=Orbit Planner&mode=contains&limit=120": _Resp(200, [{"id": 502}, {"id": 501}]),
+            "http://game/games/1003": _Resp(200, {"id": 1003, "name": "Night Panic", "genre": "Horror", "description": "grim horror survival panic", "keywords": [88], "platforms": [9]}),
+        }
+    )
+    app.state.inference_service = _Inference()
+    app.state.model = object()
+
+    response = client.post(
+        "/recommend",
+        json={
+            "user_id": 12,
+            "liked_keywords": [],
+            "liked_platforms": [],
+            "disliked_keywords": [],
+            "disliked_platforms": [],
+            "favorite_game_ids": [],
+            "questionnaire": {
+                "answers": {},
+                "question_weights": {},
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["strategy"] == "hybrid_profile_fallback_v1"
+    assert body["recommended_games"][:2] == [501, 502]
+    assert 503 not in body["recommended_games"]
+
+    for attr in ("service_urls", "http", "inference_service", "model"):
+        if hasattr(app.state, attr):
+            delattr(app.state, attr)

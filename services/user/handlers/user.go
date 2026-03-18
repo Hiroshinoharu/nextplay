@@ -83,19 +83,31 @@ func DeleteUser(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database not initialized"})
 	}
 
+	tx, err := db.DB.Begin()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to start delete transaction"})
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM user_interactions WHERE user_id = $1", id); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete user interactions"})
+	}
+
+	var recommendationEventsTable sql.NullString
+	if err := tx.QueryRow("SELECT to_regclass('public.recommendation_events')::text").Scan(&recommendationEventsTable); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to inspect user event storage"})
+	}
+	if recommendationEventsTable.Valid && recommendationEventsTable.String != "" {
+		if _, err := tx.Exec("DELETE FROM recommendation_events WHERE user_id = $1", id); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete user interaction events"})
+		}
+	}
+
 	var deletedID int64
-	err := db.DB.QueryRow(
-		`WITH deleted_interactions AS (
-			DELETE FROM user_interactions WHERE user_id = $1
-		),
-		deleted_events AS (
-			DELETE FROM recommendation_events WHERE user_id = $1
-		),
-		deleted_user AS (
-			DELETE FROM app_user WHERE user_id = $1
-			RETURNING user_id
-		)
-		SELECT user_id FROM deleted_user`,
+	err = tx.QueryRow(
+		`DELETE FROM app_user
+		 WHERE user_id = $1
+		 RETURNING user_id`,
 		id,
 	).Scan(&deletedID)
 	if err == sql.ErrNoRows {
@@ -103,6 +115,9 @@ func DeleteUser(c *fiber.Ctx) error {
 	}
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete user"})
+	}
+	if err := tx.Commit(); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to finalize user deletion"})
 	}
 	return c.JSON(fiber.Map{
 		"message": "Delete user",

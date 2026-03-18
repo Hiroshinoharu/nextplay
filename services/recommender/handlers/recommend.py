@@ -572,6 +572,106 @@ def _to_int_set(values: Any) -> set[int]:
     return normalized
 
 
+def _fetch_user_interaction_rows(request: Request, user_id: int) -> list[dict[str, Any]]:
+    """
+    Fetch full interaction rows for a user.
+
+    Returns an empty list when dependencies are unavailable.
+    """
+    if user_id <= 0:
+        return []
+
+    service_urls = getattr(request.app.state, "service_urls", None)
+    http = getattr(request.app.state, "http", None)
+    timeout = getattr(request.app.state, "request_timeout", (2.0, 5.0))
+    if not service_urls or http is None:
+        return []
+
+    user_url = service_urls.get("user")
+    if not user_url:
+        return []
+
+    status, payload = _safe_get_json_with_status(http, f"{user_url}/users/{user_id}/interactions", timeout)
+    if status != 200 or not isinstance(payload, list):
+        return []
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def _positive_interaction_score(item: dict[str, Any]) -> float:
+    score = 0.0
+    if item.get("favorited") is True:
+        score += 4.0
+    if item.get("liked") is True:
+        score += 3.0
+
+    rating = item.get("rating")
+    try:
+        rating_value = float(rating)
+    except (ValueError, TypeError):
+        rating_value = None
+    if rating_value is not None:
+        if rating_value >= 9.0:
+            score += 3.0
+        elif rating_value >= 8.0:
+            score += 2.0
+        elif rating_value >= 7.0:
+            score += 1.0
+
+    if str(item.get("review") or "").strip():
+        score += 0.25
+    return score
+
+
+def _negative_interaction_score(item: dict[str, Any]) -> float:
+    score = 0.0
+    if item.get("liked") is False:
+        score += 3.0
+
+    rating = item.get("rating")
+    try:
+        rating_value = float(rating)
+    except (ValueError, TypeError):
+        rating_value = None
+    if rating_value is not None:
+        if rating_value <= 2.0:
+            score += 3.0
+        elif rating_value <= 4.0:
+            score += 2.0
+        elif rating_value <= 5.0:
+            score += 1.0
+
+    if str(item.get("review") or "").strip():
+        score += 0.25
+    return score
+
+
+def _extract_interaction_preference_game_ids(
+    interactions: list[dict[str, Any]],
+    *,
+    positive: bool,
+) -> list[int]:
+    ranked: list[tuple[float, int, int]] = []
+    for index, item in enumerate(interactions):
+        game_id = _normalize_int(item.get("game_id"))
+        if game_id is None or game_id <= 0:
+            continue
+        score = _positive_interaction_score(item) if positive else _negative_interaction_score(item)
+        if score <= 0:
+            continue
+        ranked.append((score, -index, game_id))
+
+    ranked.sort(key=lambda row: (-row[0], -row[1], row[2]))
+
+    ordered: list[int] = []
+    seen: set[int] = set()
+    for _, _, game_id in ranked:
+        if game_id in seen:
+            continue
+        seen.add(game_id)
+        ordered.append(game_id)
+    return ordered
+
+
 def _fetch_user_interacted_game_ids(request: Request, user_id: int) -> set[int]:
     """
     Fetch game IDs the user already interacted with.
@@ -581,20 +681,7 @@ def _fetch_user_interacted_game_ids(request: Request, user_id: int) -> set[int]:
     if user_id <= 0:
         return set()
 
-    service_urls = getattr(request.app.state, "service_urls", None)
-    http = getattr(request.app.state, "http", None)
-    timeout = getattr(request.app.state, "request_timeout", (2.0, 5.0))
-    if not service_urls or http is None:
-        return set()
-
-    user_url = service_urls.get("user")
-    if not user_url:
-        return set()
-
-    status, payload = _safe_get_json_with_status(http, f"{user_url}/users/{user_id}/interactions", timeout)
-    if status != 200 or not isinstance(payload, list):
-        return set()
-    return _extract_int_set(payload, "game_id")
+    return _extract_int_set(_fetch_user_interaction_rows(request, user_id), "game_id")
 
 
 def _fetch_recent_recommendation_events(
@@ -663,7 +750,7 @@ def _build_favorite_profile(
 
     unique_favorite_ids: list[int] = []
     seen_ids: set[int] = set()
-    for raw_id in favorite_game_ids[:3]:
+    for raw_id in favorite_game_ids:
         normalized_id = _normalize_int(raw_id)
         if normalized_id is None or normalized_id <= 0 or normalized_id in seen_ids:
             continue
@@ -694,6 +781,57 @@ def _build_favorite_profile(
     return favorite_keyword_ids, favorite_platform_ids, favorite_genres, favorite_token_sets
 
 
+def _build_avoid_profile(
+    request: Request,
+    avoided_game_ids: list[int],
+) -> tuple[set[int], set[int], set[str], list[set[str]]]:
+    """
+    Build a lightweight negative profile from avoided games so disliked history
+    can penalize nearby candidates.
+    """
+    service_urls = getattr(request.app.state, "service_urls", None)
+    http = getattr(request.app.state, "http", None)
+    timeout = getattr(request.app.state, "request_timeout", (2.0, 5.0))
+    if not service_urls or http is None:
+        return set(), set(), set(), []
+
+    game_url = service_urls.get("game")
+    if not game_url:
+        return set(), set(), set(), []
+
+    unique_avoided_ids: list[int] = []
+    seen_ids: set[int] = set()
+    for raw_id in avoided_game_ids:
+        normalized_id = _normalize_int(raw_id)
+        if normalized_id is None or normalized_id <= 0 or normalized_id in seen_ids:
+            continue
+        seen_ids.add(normalized_id)
+        unique_avoided_ids.append(normalized_id)
+
+    avoided_keyword_ids: set[int] = set()
+    avoided_platform_ids: set[int] = set()
+    avoided_genres: set[str] = set()
+    avoided_token_sets: list[set[str]] = []
+    for game_id in unique_avoided_ids:
+        status, payload = _safe_get_json_with_status(
+            http,
+            f"{game_url}/games/{game_id}",
+            timeout,
+        )
+        if status != 200 or not isinstance(payload, dict):
+            continue
+        avoided_keyword_ids |= _to_int_set(payload.get("keywords"))
+        avoided_platform_ids |= _to_int_set(payload.get("platforms"))
+        avoided_genre = _normalize_primary_genre(payload.get("genre"))
+        if avoided_genre:
+            avoided_genres.add(avoided_genre)
+        tokens = _tokenize_game_text(payload)
+        if tokens:
+            avoided_token_sets.append(tokens)
+
+    return avoided_keyword_ids, avoided_platform_ids, avoided_genres, avoided_token_sets
+
+
 def _build_personalized_recommendation_ids(
     request: Request,
     *,
@@ -702,6 +840,7 @@ def _build_personalized_recommendation_ids(
     disliked_keyword_ids: set[int],
     disliked_platform_ids: set[int],
     favorite_game_ids: list[int],
+    avoided_game_ids: list[int],
     answer_token_weights: dict[str, float],
     favorite_seed_ids: list[int],
     model_seed_ids: list[int],
@@ -735,6 +874,12 @@ def _build_personalized_recommendation_ids(
         favorite_genres,
         favorite_token_sets,
     ) = _build_favorite_profile(request, favorite_game_ids)
+    (
+        avoided_keyword_ids,
+        avoided_platform_ids,
+        avoided_genres,
+        avoided_token_sets,
+    ) = _build_avoid_profile(request, avoided_game_ids)
     scored_rows: list[tuple[float, float, int]] = []
     seeded_rows: list[tuple[float, float, int]] = []
     for game in candidates:
@@ -765,9 +910,17 @@ def _build_personalized_recommendation_ids(
             if game_text_tokens
             else 0.0
         )
+        avoided_keyword_overlap = len(avoided_keyword_ids & game_keywords)
+        avoided_platform_overlap = len(avoided_platform_ids & game_platforms)
+        avoided_genre_match = 1 if _normalize_primary_genre(game.get("genre")) in avoided_genres else 0
+        avoided_text_similarity = (
+            max((_jaccard_similarity(game_text_tokens, token_set) for token_set in avoided_token_sets), default=0.0)
+            if game_text_tokens
+            else 0.0
+        )
 
         if (
-            disliked_keyword_overlap + disliked_platform_overlap > 0
+            disliked_keyword_overlap + disliked_platform_overlap + avoided_keyword_overlap + avoided_platform_overlap > 0
             and liked_keyword_overlap + liked_platform_overlap == 0
             and game_id not in favorite_seed_rank
             and game_id not in model_seed_rank
@@ -792,6 +945,10 @@ def _build_personalized_recommendation_ids(
         score += favorite_text_similarity * RANKING_PROFILE.favorite_text_sim
         score -= disliked_keyword_overlap * RANKING_PROFILE.disliked_keyword
         score -= disliked_platform_overlap * RANKING_PROFILE.disliked_platform
+        score -= avoided_keyword_overlap * (RANKING_PROFILE.favorite_keyword * 0.7)
+        score -= avoided_platform_overlap * (RANKING_PROFILE.favorite_platform * 0.7)
+        score -= avoided_genre_match * (RANKING_PROFILE.favorite_genre * 0.55)
+        score -= avoided_text_similarity * (RANKING_PROFILE.favorite_text_sim * 0.8)
         score += min(max(popularity, 0.0) / 1000.0, RANKING_PROFILE.cap_popularity)
         score += min(max(rating, 0.0) / 100.0, RANKING_PROFILE.cap_rating)
         score += _release_era_alignment_score(release_year, release_year_preference) * RANKING_PROFILE.release_era_match
@@ -1226,9 +1383,21 @@ async def recommend(payload: RecommendRequest, request: Request) -> UserRecommen
     )
 
     model_seed_ids = [candidate.game_id for candidate in getattr(inference_output, "candidates", [])]
+    interaction_rows = _fetch_user_interaction_rows(request, int(model_input.user_id or 0))
+    interaction_positive_game_ids = _extract_interaction_preference_game_ids(interaction_rows, positive=True)
+    interaction_negative_game_ids = _extract_interaction_preference_game_ids(interaction_rows, positive=False)
+    combined_positive_game_ids: list[int] = []
+    seen_positive_game_ids: set[int] = set()
+    for game_id in [*model_input.favorite_game_ids, *interaction_positive_game_ids]:
+        normalized_id = _normalize_int(game_id)
+        if normalized_id is None or normalized_id <= 0 or normalized_id in seen_positive_game_ids:
+            continue
+        seen_positive_game_ids.add(normalized_id)
+        combined_positive_game_ids.append(normalized_id)
+
     favorite_seed_ids = _expand_favorite_seed_ids(
         request,
-        favorite_game_ids=model_input.favorite_game_ids,
+        favorite_game_ids=combined_positive_game_ids,
         top_k_per_game=20,
     )
     answer_token_weights = _extract_questionnaire_answer_tokens(model_input.questionnaire)
@@ -1241,7 +1410,8 @@ async def recommend(payload: RecommendRequest, request: Request) -> UserRecommen
         liked_platform_ids=set(model_input.liked_platform_ids),
         disliked_keyword_ids=set(model_input.disliked_keyword_ids),
         disliked_platform_ids=set(model_input.disliked_platform_ids),
-        favorite_game_ids=model_input.favorite_game_ids,
+        favorite_game_ids=combined_positive_game_ids,
+        avoided_game_ids=interaction_negative_game_ids,
         answer_token_weights=answer_token_weights,
         favorite_seed_ids=favorite_seed_ids,
         model_seed_ids=model_seed_ids,
@@ -1396,13 +1566,8 @@ async def recommend_for_user(user_id: int, request: Request) -> UserRecommendRes
         )
 
     interacted_games = _extract_int_set(interactions_payload, "game_id")
-    favorite_game_ids = [
-        game_id
-        for item in interactions_payload
-        if isinstance(item, dict)
-        for game_id in [_normalize_int(item.get("game_id"))]
-        if game_id is not None and bool(item.get("favorited") or item.get("liked"))
-    ]
+    favorite_game_ids = _extract_interaction_preference_game_ids(interactions_payload, positive=True)
+    avoided_game_ids = _extract_interaction_preference_game_ids(interactions_payload, positive=False)
 
     if not favorite_game_ids:
         _record_named_metric(request, "recommend_user_cold_start_total")
@@ -1422,6 +1587,7 @@ async def recommend_for_user(user_id: int, request: Request) -> UserRecommendRes
         disliked_keyword_ids=set(),
         disliked_platform_ids=set(),
         favorite_game_ids=favorite_game_ids,
+        avoided_game_ids=avoided_game_ids,
         answer_token_weights={},
         favorite_seed_ids=favorite_seed_ids,
         model_seed_ids=[],
@@ -1521,6 +1687,5 @@ async def recommend_similar_post(payload: SimilarRequest, request: Request):
         similar_items=similar,
         filters=payload.filters or {},
     )
-
 
 

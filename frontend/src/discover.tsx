@@ -102,6 +102,23 @@ type RecommendationReasonGroup = {
   tone?: "default" | "avoid" | "favorite";
 };
 
+type QuestionnaireFacetGenre = {
+  slug: string;
+  label: string;
+  count: number;
+};
+
+type QuestionnaireFacetPlatform = {
+  id: number;
+  name: string;
+  count: number;
+};
+
+type QuestionnaireFacetsResponse = {
+  genres?: QuestionnaireFacetGenre[];
+  platforms?: QuestionnaireFacetPlatform[];
+};
+
 const QUESTIONNAIRE_STORAGE_PREFIX = "nextplay_questionnaire_v1";
 const RESULT_PAGE_SIZE = 10;
 const RECOMMENDATION_TARGET_SIZE = 30;
@@ -246,6 +263,94 @@ const normalizeMediaUrl = (url?: string) => {
   if (!url) return null;
   if (url.startsWith("//")) return `https:${url}`;
   return url;
+};
+
+const normalizeFacetText = (value?: string) =>
+  collapseWhitespace(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const tokenizeFacetText = (value?: string) =>
+  normalizeFacetText(value)
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2);
+
+const getTokenOverlapCount = (left: string[], right: string[]) => {
+  if (!left.length || !right.length) return 0;
+  const rightSet = new Set(right);
+  return left.reduce((count, token) => count + (rightSet.has(token) ? 1 : 0), 0);
+};
+
+const rankThemeOptionsFromCatalog = (question: typeof QUESTIONNAIRE_V1.questions[number], facets?: QuestionnaireFacetsResponse | null) => {
+  const genreFacets = Array.isArray(facets?.genres) ? facets.genres : [];
+  if (!genreFacets.length) return question.options;
+
+  const scored = question.options.map((option, index) => {
+    const optionTokens = tokenizeFacetText(`${option.id} ${option.label}`);
+    let facetCount = 0;
+    let overlap = 0;
+    for (const facet of genreFacets) {
+      const facetTokens = tokenizeFacetText(`${facet.slug} ${facet.label}`);
+      const candidateOverlap = getTokenOverlapCount(optionTokens, facetTokens);
+      if (candidateOverlap <= 0) continue;
+      if (candidateOverlap > overlap || (candidateOverlap === overlap && facet.count > facetCount)) {
+        overlap = candidateOverlap;
+        facetCount = facet.count;
+      }
+    }
+    return { option, index, overlap, facetCount };
+  });
+
+  const matched = scored.filter((item) => item.overlap > 0);
+  if (!matched.length) return question.options;
+
+  return [...matched]
+    .sort((left, right) =>
+      right.facetCount - left.facetCount ||
+      right.overlap - left.overlap ||
+      left.option.label.localeCompare(right.option.label) ||
+      left.index - right.index,
+    )
+    .map((item) => item.option);
+};
+
+const rankPlatformOptionsFromCatalog = (question: typeof QUESTIONNAIRE_V1.questions[number], facets?: QuestionnaireFacetsResponse | null) => {
+  const platformFacets = Array.isArray(facets?.platforms) ? facets.platforms : [];
+  if (!platformFacets.length) return question.options;
+
+  const platformCountById = new Map(platformFacets.map((platform) => [platform.id, platform.count] as const));
+  const scored = question.options.map((option, index) => {
+    const mappedPlatformScore = option.mapping.liked_platforms.reduce(
+      (total, platformId) => total + (platformCountById.get(platformId) ?? 0),
+      0,
+    );
+    const fallbackTextScore = platformFacets.reduce((best, facet) => {
+      const overlap = getTokenOverlapCount(
+        tokenizeFacetText(`${option.id} ${option.label}`),
+        tokenizeFacetText(facet.name),
+      );
+      if (overlap <= 0) return best;
+      return Math.max(best, overlap * facet.count);
+    }, 0);
+    return {
+      option,
+      index,
+      score: Math.max(mappedPlatformScore, fallbackTextScore),
+    };
+  });
+
+  const matched = scored.filter((item) => item.score > 0);
+  if (!matched.length) return question.options;
+
+  return [...matched]
+    .sort((left, right) =>
+      right.score - left.score ||
+      left.option.label.localeCompare(right.option.label) ||
+      left.index - right.index,
+    )
+    .map((item) => item.option);
 };
 
 /**
@@ -619,9 +724,43 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     if (!authUser?.id) return null;
     return `${API_ROOT}/api/users/${authUser.id}/interactions/events`;
   }, [authUser?.id]);
+  const questionnaireFacetsQuery = useQuery({
+    queryKey: ["discover-questionnaire-facets", authUser?.id ?? "guest"],
+    enabled: Boolean(authToken),
+    staleTime: 1000 * 60 * 10,
+    queryFn: async (): Promise<QuestionnaireFacetsResponse> => {
+      const response = await fetch(`${API_ROOT}/api/games/questionnaire-facets`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`Questionnaire facets failed: ${response.status}`);
+      }
+      return (await response.json()) as QuestionnaireFacetsResponse;
+    },
+  });
   const showQuestionnaireBanner =
     !questionnaireComplete && !dismissedQuestionnaireBanner;
-  const questionnaireQuestions = QUESTIONNAIRE_V1.questions;
+  const questionnaireQuestions = useMemo(
+    () =>
+      QUESTIONNAIRE_V1.questions.map((question) => {
+        if (question.id === "theme_preferences") {
+          return {
+            ...question,
+            options: rankThemeOptionsFromCatalog(question, questionnaireFacetsQuery.data),
+          };
+        }
+        if (question.id === "primary_platform") {
+          return {
+            ...question,
+            options: rankPlatformOptionsFromCatalog(question, questionnaireFacetsQuery.data),
+          };
+        }
+        return question;
+      }),
+    [questionnaireFacetsQuery.data],
+  );
   const recommendationEraPreference = useMemo(
     () => getRecommendationEraPreference(questionnaireAnswers),
     [questionnaireAnswers],

@@ -120,6 +120,15 @@ func GetTopGames(c *fiber.Ctx) error {
 	return c.JSON(games)
 }
 
+// GET /api/games/questionnaire-facets - retrieves catalog-aware questionnaire facets.
+func GetQuestionnaireFacets(c *fiber.Ctx) error {
+	facets, err := db.GetQuestionnaireFacets()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(facets)
+}
+
 // GET /api/games/:id - retrieves a game by ID
 func GetGameByID(c *fiber.Ctx) error {
 	// Get game ID from URL params

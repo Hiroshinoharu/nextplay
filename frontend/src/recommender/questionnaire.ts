@@ -1757,14 +1757,14 @@ export const buildRecommendRequestFromQuestionnaire = (
     liked_platforms: Array.from(likedPlatforms),
     disliked_keywords: Array.from(dislikedKeywords),
     disliked_platforms: Array.from(dislikedPlatforms),
-    favorite_game_ids: favoriteGameIds.slice(0, 3),
+    favorite_game_ids: favoriteGameIds,
     questionnaire: {
       version: QUESTIONNAIRE_V1.version,
       feature_schema_version: QUESTIONNAIRE_V1.feature_schema_version,
       id_catalog: QUESTIONNAIRE_V1.id_catalog,
       answers: normalizedAnswers,
       question_weights: questionWeights,
-      favorite_game_ids: favoriteGameIds.slice(0, 3),
+      favorite_game_ids: favoriteGameIds,
     },
   };
 };

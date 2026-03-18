@@ -58,6 +58,7 @@ func SetUpRoutes(app *fiber.App) {
 		games.Get("/", middleware.RequireJWT, handlers.GetAllGames)
 		games.Get("/search", middleware.RequireJWT, handlers.SearchGamesByName)
 		games.Get("/top", middleware.RequireJWT, handlers.GetTopGames)
+		games.Get("/questionnaire-facets", middleware.RequireJWT, handlers.GetQuestionnaireFacets)
 		games.Get("/:id", middleware.RequireJWT, handlers.GetGameByID)
 		games.Get("/:id/related-content", middleware.RequireJWT, handlers.GetRelatedAddOnContent)
 
