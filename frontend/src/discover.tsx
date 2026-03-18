@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState, type TouchEvent as ReactTouchEvent } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Card from "./components/card";
@@ -10,6 +10,7 @@ import Loader from "./components/Loader";
 import LoadingScreen from "./components/LoadingScreen";
 import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
+import { type ThemeMode } from "./utils/theme";
 import {
   QUESTIONNAIRE_V1,
   buildRecommendRequestFromQuestionnaire,
@@ -62,6 +63,7 @@ type RandomPoolPage = {
 
 type DiscoverPageProps = {
   authUser: AuthUser | null;
+  theme: ThemeMode;
 };
 
 type RecommendResponse = {
@@ -117,6 +119,18 @@ type QuestionnaireFacetPlatform = {
 type QuestionnaireFacetsResponse = {
   genres?: QuestionnaireFacetGenre[];
   platforms?: QuestionnaireFacetPlatform[];
+};
+
+const BANNER_SWIPE_TRIGGER_PX = 56;
+const BANNER_SWIPE_VERTICAL_TOLERANCE = 1.1;
+
+const shouldIgnoreBannerSwipeTarget = (target: EventTarget | null) => {
+  if (!(target instanceof Element)) return false;
+  return Boolean(
+    target.closest(
+      "button, a, input, textarea, select, [role='button'], .games-result__list-item-main",
+    ),
+  );
 };
 
 const QUESTIONNAIRE_STORAGE_PREFIX = "nextplay_questionnaire_v1";
@@ -657,7 +671,7 @@ type DiscoverCarousel = {
   rowType?: "genre";
 };
 
-function DiscoverPage({ authUser }: DiscoverPageProps) {
+function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -693,6 +707,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   const [debouncedFavoriteSearchInput, setDebouncedFavoriteSearchInput] =
     useState<string>("");
   const [resultPage, setResultPage] = useState<number>(1);
+  const [featuredRecommendationIndex, setFeaturedRecommendationIndex] = useState<number>(0);
   const avatarText = useMemo(() => getUserInitials(authUser), [authUser]);
   const authToken = authUser?.token?.trim() ?? "";
   const randomPoolFetchPromiseRef = useRef<Promise<unknown> | null>(null);
@@ -702,6 +717,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   const searchGridSectionRef = useRef<HTMLElement | null>(null);
   const randomLanesSectionRef = useRef<HTMLDivElement | null>(null);
   const recommendationSectionRef = useRef<HTMLDivElement | null>(null);
+  const bannerTouchStartRef = useRef<{ x: number; y: number } | null>(null);
   const normalizedSearchQuery = collapseWhitespace(searchQuery);
   const recentReleaseWindowMonths =
     parseBoundedInt(
@@ -1399,6 +1415,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     recommendationRunIdRef.current = runId;
     if (!authUser?.id || !questionnaireComplete) {
       setRecommendedGames([]);
+      setFeaturedRecommendationIndex(0);
       setBackendRecommendationScores({});
       setBackendRecommendationRanks({});
       setRecommendationStrategy(null);
@@ -1410,6 +1427,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
 
     setRecommendationLoading(true);
     setRecommendationError(null);
+    setFeaturedRecommendationIndex(0);
     setDismissedRecommendationIds([]);
     setSavedRecommendationIds([]);
     loggedRecommendationEventKeysRef.current = new Set();
@@ -1474,6 +1492,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
 
       if (!candidateIds.length) {
         setRecommendedGames([]);
+        setFeaturedRecommendationIndex(0);
         setBackendRecommendationScores({});
         return true;
       }
@@ -1494,6 +1513,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
       });
 
       setRecommendedGames(initialVisibleRecommendations);
+      setFeaturedRecommendationIndex(0);
       logRecommendationExposureBatch(initialVisibleRecommendations, nextTrace, nextBackendRanks);
       setRecommendationLoading(false);
 
@@ -1527,11 +1547,13 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
         if (recommendationRunIdRef.current !== runId) return;
         const finalRecommendations = dedupedRecommendations.slice(0, RECOMMENDATION_TARGET_SIZE);
         setRecommendedGames(finalRecommendations);
+        setFeaturedRecommendationIndex(0);
         logRecommendationExposureBatch(finalRecommendations, nextTrace, nextBackendRanks);
       })();
       return true;
     } catch (err) {
       setRecommendedGames([]);
+      setFeaturedRecommendationIndex(0);
       setBackendRecommendationScores({});
       setBackendRecommendationRanks({});
       setRecommendationTrace(null);
@@ -1653,15 +1675,40 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     [dismissedRecommendationIds, recommendedGames],
   );
 
+  const safeFeaturedRecommendationIndex = useMemo(
+    () =>
+      rankedRecommendedGames.length
+        ? Math.min(featuredRecommendationIndex, rankedRecommendedGames.length - 1)
+        : 0,
+    [featuredRecommendationIndex, rankedRecommendedGames.length],
+  );
+
   const topRecommendedGame = useMemo(
-    () => rankedRecommendedGames[0] ?? null,
-    [rankedRecommendedGames],
+    () => rankedRecommendedGames[safeFeaturedRecommendationIndex] ?? null,
+    [rankedRecommendedGames, safeFeaturedRecommendationIndex],
   );
 
   const additionalRecommendedGames = useMemo(
-    () => rankedRecommendedGames.slice(1),
-    [rankedRecommendedGames],
+    () =>
+      rankedRecommendedGames.filter(
+        (_, index) => index !== safeFeaturedRecommendationIndex,
+      ),
+    [rankedRecommendedGames, safeFeaturedRecommendationIndex],
   );
+
+  const recommendationDisplayRankById = useMemo(() => {
+    const next = new Map<number, number>();
+    rankedRecommendedGames.forEach((game, index) => {
+      next.set(game.id, index + 1);
+    });
+    return next;
+  }, [rankedRecommendedGames]);
+
+  const topRecommendationDisplayRank = topRecommendedGame
+    ? recommendationDisplayRankById.get(topRecommendedGame.id) ?? 1
+    : 1;
+
+  const canSwipeFeaturedRecommendations = rankedRecommendedGames.length > 1;
 
   const resultTotalPages = useMemo(
     () => Math.max(1, Math.ceil(additionalRecommendedGames.length / RESULT_PAGE_SIZE)),
@@ -1674,6 +1721,63 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
     const start = (currentResultPage - 1) * RESULT_PAGE_SIZE;
     return additionalRecommendedGames.slice(start, start + RESULT_PAGE_SIZE);
   }, [additionalRecommendedGames, currentResultPage]);
+
+  const handleRecommendationBannerTouchStart = useCallback(
+    (event: ReactTouchEvent<HTMLElement>) => {
+      if (!canSwipeFeaturedRecommendations) {
+        bannerTouchStartRef.current = null;
+        return;
+      }
+
+      if (shouldIgnoreBannerSwipeTarget(event.target)) {
+        bannerTouchStartRef.current = null;
+        return;
+      }
+
+      const touch = event.touches[0];
+      if (!touch) {
+        bannerTouchStartRef.current = null;
+        return;
+      }
+
+      bannerTouchStartRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+      };
+    },
+    [canSwipeFeaturedRecommendations],
+  );
+
+  const handleRecommendationBannerTouchEnd = useCallback(
+    (event: ReactTouchEvent<HTMLElement>) => {
+      const start = bannerTouchStartRef.current;
+      bannerTouchStartRef.current = null;
+
+      if (!start || !canSwipeFeaturedRecommendations || event.changedTouches.length !== 1) return;
+      if (shouldIgnoreBannerSwipeTarget(event.target)) return;
+
+      const touch = event.changedTouches[0];
+      const deltaX = touch.clientX - start.x;
+      const deltaY = touch.clientY - start.y;
+      const absX = Math.abs(deltaX);
+      const absY = Math.abs(deltaY);
+
+      if (absX < BANNER_SWIPE_TRIGGER_PX) return;
+      if (absX <= absY * BANNER_SWIPE_VERTICAL_TOLERANCE) return;
+
+      if (deltaX < 0) {
+        setFeaturedRecommendationIndex((index) =>
+          Math.min(rankedRecommendedGames.length - 1, index + 1),
+        );
+        setResultPage(1);
+        return;
+      }
+
+      setFeaturedRecommendationIndex((index) => Math.max(0, index - 1));
+      setResultPage(1);
+    },
+    [canSwipeFeaturedRecommendations, rankedRecommendedGames.length],
+  );
 
   const topRecommendationSummary = useMemo(() => {
     const fallback = "We couldn't load details for the top recommendation yet.";
@@ -2362,7 +2466,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
   }, [hasMoreSearchResults, searchFetching, searchLoading]);
 
   return (
-    <div className="search-page">
+    <div className="search-page" data-theme={theme}>
       <div className="search-shell">
         <header className="search-header">
           <button
@@ -2418,6 +2522,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                       <Loader
                         title="Searching discover"
                         subtitle="Finding the best matches for your query..."
+                        theme={theme}
                       />
                     ) : null}
                   </>
@@ -2513,6 +2618,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                     <Loader
                       title="Loading results"
                       subtitle="Pulling in matching games..."
+                      theme={theme}
                     />
                   ) : cards.length ? (
                     <div className="games-search-grid">
@@ -2572,6 +2678,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                   {randomPoolLoading && visibleDisplayedDiscoverCarousels.length === 0 ? (
                     <LoadingScreen
                       fullScreen
+                      theme={theme}
                       eyebrow="Discover feed"
                       title="Building discover lanes"
                       subtitle="Mixing random, genre, and momentum picks."
@@ -2591,6 +2698,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                         <Loader
                           title="Refreshing algorithm verdicts"
                           subtitle="Recomputing recommendations from your answers..."
+                          theme={theme}
                         />
                       </div>
                     ) : recommendationError ? (
@@ -2605,6 +2713,8 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                         ref={recommendationSectionRef}
                         className="games-home-recommendation discover-algorithm-verdict"
                         aria-label="Algorithm verdicts result"
+                        onTouchStart={handleRecommendationBannerTouchStart}
+                        onTouchEnd={handleRecommendationBannerTouchEnd}
                       >
                         <div className="games-result">
                           <header className="games-result__header">
@@ -2651,7 +2761,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                             </div>
 
                             <div className="games-result__content">
-                              <span className="games-result__list-item-rank">#1</span>
+                              <span className="games-result__list-item-rank">
+                                #{topRecommendationDisplayRank}
+                              </span>
                               <h3>{topRecommendedGame.name || "Top recommendation"}</h3>
                               <p className="games-result__summary" title={topRecommendationSummary.full}>{topRecommendationSummary.display}</p>
                               <div className="games-result__meta">
@@ -2672,7 +2784,9 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
 
                             <aside className="games-result__score">
                               <p>Rank</p>
-                              <div className="games-result__score-pill">#1</div>
+                              <div className="games-result__score-pill">
+                                #{topRecommendationDisplayRank}
+                              </div>
                               <p className="games-result__score-sub">
                                 {`Score: ${effectiveRecommendationScores.get(topRecommendedGame.id) ?? 99}%`}
                               </p>
@@ -2687,7 +2801,8 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                               </div>
                               <div className="games-result__list-grid">
                                 {pagedAdditionalRecommendations.map((game, index) => {
-                                  const visibleRank = 2 + ((currentResultPage - 1) * RESULT_PAGE_SIZE) + index;
+                                  const visibleRank = recommendationDisplayRankById.get(game.id) ??
+                                    (2 + ((currentResultPage - 1) * RESULT_PAGE_SIZE) + index);
                                   const coverUrl = getPreferredCoverImage(game);
                                   const modelRank = getRecommendationRank(game.id, visibleRank);
                                   const isSaved = savedRecommendationIds.includes(game.id);
@@ -2775,6 +2890,11 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                                   </button>
                                 </div>
                               ) : null}
+                              {canSwipeFeaturedRecommendations ? (
+                                <p className="discover-banner-swipe-hint">
+                                  Swipe left or right on this banner to browse picks.
+                                </p>
+                              ) : null}
                             </section>
                           ) : null}
 
@@ -2802,23 +2922,49 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
                             <button
                               type="button"
                               className="games-result__button games-result__button--ghost"
-                              onClick={() => void handleRecommendationFavorite(topRecommendedGame.id, getRecommendationRank(topRecommendedGame.id, 1))}
+                              onClick={() =>
+                                void handleRecommendationFavorite(
+                                  topRecommendedGame.id,
+                                  getRecommendationRank(
+                                    topRecommendedGame.id,
+                                    topRecommendationDisplayRank,
+                                  ),
+                                )
+                              }
                             >
-                              {savedRecommendationIds.includes(topRecommendedGame.id) ? "Saved" : "Save #1"}
+                              {savedRecommendationIds.includes(topRecommendedGame.id)
+                                ? "Saved"
+                                : `Save #${topRecommendationDisplayRank}`}
                             </button>
                             <button
                               type="button"
                               className="games-result__button games-result__button--ghost"
-                              onClick={() => void handleRecommendationDismiss(topRecommendedGame.id, getRecommendationRank(topRecommendedGame.id, 1))}
+                              onClick={() =>
+                                void handleRecommendationDismiss(
+                                  topRecommendedGame.id,
+                                  getRecommendationRank(
+                                    topRecommendedGame.id,
+                                    topRecommendationDisplayRank,
+                                  ),
+                                )
+                              }
                             >
-                              Hide #1 pick
+                              {`Hide #${topRecommendationDisplayRank} pick`}
                             </button>
                             <button
                               type="button"
                               className="games-result__button games-result__button--ghost"
-                              onClick={() => openGameDetail(topRecommendedGame.id, { fromRecommendation: true, rank: getRecommendationRank(topRecommendedGame.id, 1) })}
+                              onClick={() =>
+                                openGameDetail(topRecommendedGame.id, {
+                                  fromRecommendation: true,
+                                  rank: getRecommendationRank(
+                                    topRecommendedGame.id,
+                                    topRecommendationDisplayRank,
+                                  ),
+                                })
+                              }
                             >
-                              Open #1 pick
+                              {`Open #${topRecommendationDisplayRank} pick`}
                             </button>
                           </footer>
                         </div>
@@ -3152,7 +3298,7 @@ function DiscoverPage({ authUser }: DiscoverPageProps) {
 
       {showQuestionnaireResult ? (
         <div className="games-result-backdrop" role="dialog" aria-modal="true">
-          <div className="games-result">
+          <div className="games-result games-result--discover-dialog">
             <header className="games-result__header">
               <p className="games-result__eyebrow">Discover Match Feed</p>
               <h2 className="games-result__title">

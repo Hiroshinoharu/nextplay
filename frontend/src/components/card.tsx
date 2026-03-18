@@ -88,9 +88,9 @@ const StyledWrapper = styled.div`
     width: 180px;
     height: 260px;
     background:
-      radial-gradient(circle at top, rgba(140, 243, 122, 0.06), transparent 55%),
-      linear-gradient(145deg, rgba(8, 22, 34, 0.94), rgba(6, 14, 22, 0.96));
-    box-shadow: 0 14px 30px rgba(7, 12, 16, 0.52);
+      radial-gradient(circle at top, var(--games-card-poster-glow, rgba(140, 243, 122, 0.06)), transparent 55%),
+      var(--games-card-poster-bg, linear-gradient(145deg, rgba(8, 22, 34, 0.94), rgba(6, 14, 22, 0.96)));
+    box-shadow: var(--games-card-poster-shadow, 0 14px 30px rgba(7, 12, 16, 0.52));
     transform: translateZ(0);
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
@@ -100,11 +100,11 @@ const StyledWrapper = styled.div`
 
   .card--poster:hover {
     transform: translateY(-5px) scale(1.03);
-    box-shadow: 0 20px 40px rgba(7, 12, 16, 0.66);
+    box-shadow: var(--games-card-poster-shadow-hover, 0 20px 40px rgba(7, 12, 16, 0.66));
   }
 
   .card--clickable:focus-visible {
-    outline: 2px solid #38bdf8;
+    outline: 2px solid var(--games-accent, #38bdf8);
     outline-offset: 3px;
   }
 
@@ -114,7 +114,7 @@ const StyledWrapper = styled.div`
 
   .card--poster svg {
     width: 48px;
-    fill: #cbd5f5;
+    fill: var(--games-card-icon, #cbd5f5);
     opacity: 0.65;
     transition: opacity 0.3s ease;
   }
@@ -127,7 +127,10 @@ const StyledWrapper = styled.div`
     width: 100%;
     padding: 14px 15px;
     box-sizing: border-box;
-    background: linear-gradient(180deg, rgba(4, 9, 12, 0.05) 0%, rgba(4, 9, 12, 0.65) 55%, rgba(4, 9, 12, 0.9) 100%);
+    background: var(
+      --games-card-content-bg,
+      linear-gradient(180deg, rgba(4, 9, 12, 0.05) 0%, rgba(4, 9, 12, 0.65) 55%, rgba(4, 9, 12, 0.9) 100%)
+    );
     transition: transform 0.3s ease;
   }
 
@@ -146,7 +149,7 @@ const StyledWrapper = styled.div`
   .card__title {
     margin: 0;
     font-size: 15px;
-    color: #f8fafc;
+    color: var(--games-card-title, #f8fafc);
     font-weight: 700;
     letter-spacing: 0.015em;
   }
@@ -154,7 +157,7 @@ const StyledWrapper = styled.div`
   .card__description {
     margin: 8px 0 0;
     font-size: 12px;
-    color: #d2ddf7;
+    color: var(--games-card-description, #d2ddf7);
     line-height: 1.4;
     white-space: pre-line;
   }
@@ -181,28 +184,28 @@ const StyledWrapper = styled.div`
     width: 280px;
     min-height: 220px;
     background:
-      radial-gradient(circle at top, rgba(140, 243, 122, 0.06), transparent 60%),
-      linear-gradient(150deg, rgba(8, 28, 44, 0.92), rgba(7, 19, 31, 0.9));
+      radial-gradient(circle at top, var(--games-card-info-glow, rgba(140, 243, 122, 0.06)), transparent 60%),
+      var(--games-card-info-bg, linear-gradient(150deg, rgba(8, 28, 44, 0.92), rgba(7, 19, 31, 0.9)));
     box-shadow:
-      0 16px 30px rgba(0, 0, 0, 0.28),
-      inset 0 0 0 1px rgba(140, 243, 122, 0.12);
+      var(--games-card-info-shadow, 0 16px 30px rgba(0, 0, 0, 0.28)),
+      inset 0 0 0 1px var(--games-card-info-inset, rgba(140, 243, 122, 0.12));
     align-items: flex-start;
-    border: 1px solid rgba(140, 243, 122, 0.24);
+    border: 1px solid var(--games-card-info-border, rgba(140, 243, 122, 0.24));
   }
 
   .card--info .card__content {
     position: relative;
     background: none;
-    color: #e2f2ff;
+    color: var(--games-card-info-text, #e2f2ff);
   }
 
   .card--info .card__title {
-    color: #e2f2ff;
+    color: var(--games-card-info-title, #e2f2ff);
     font-size: 18px;
   }
 
   .card--info .card__description {
-    color: rgba(226, 242, 255, 0.76);
+    color: var(--games-card-info-description, rgba(226, 242, 255, 0.76));
     font-size: 13px;
   }
 

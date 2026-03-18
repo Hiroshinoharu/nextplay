@@ -16,6 +16,43 @@
   --health-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
   position: relative;
   overflow-x: hidden;
+  --games-text: var(--health-text);
+  --games-muted: var(--health-muted);
+  --games-subtle: var(--health-subtle);
+  --games-accent: var(--health-accent);
+  --games-accent-strong: var(--health-accent-strong);
+  --games-border: var(--health-border);
+  --games-surface: var(--health-panel);
+  --games-button-bg: linear-gradient(135deg, #c7f000, #8cf37a);
+  --games-button-bg-hover: linear-gradient(135deg, #d2f72d, #a6f08a);
+  --games-button-text: #07131a;
+  --games-button-border: rgba(199, 240, 0, 0.55);
+  --games-button-shadow: 0 10px 20px rgba(7, 15, 22, 0.28);
+  --games-button-shadow-hover: 0 14px 24px rgba(7, 15, 22, 0.34);
+  --games-button-icon: #08161f;
+}
+
+.health-page[data-theme="light"] {
+  background:
+    radial-gradient(circle at 12% 12%, rgba(133, 197, 103, 0.16), transparent 46%),
+    radial-gradient(circle at 84% 10%, rgba(121, 199, 230, 0.2), transparent 44%),
+    linear-gradient(155deg, #f5fbff 0%, #ebf5fc 48%, #deedf7 100%);
+  --health-text: #18354a;
+  --health-muted: rgba(24, 53, 74, 0.92);
+  --health-subtle: rgba(24, 53, 74, 0.8);
+  --health-accent: #5fa93b;
+  --health-accent-strong: #75c844;
+  --health-panel: rgba(255, 255, 255, 0.82);
+  --health-panel-strong: rgba(255, 255, 255, 0.9);
+  --health-border: rgba(59, 143, 62, 0.18);
+  --health-shadow: 0 18px 40px rgba(31, 67, 92, 0.12);
+  --games-button-bg: linear-gradient(135deg, #75c844, #89d6d9);
+  --games-button-bg-hover: linear-gradient(135deg, #89d55f, #9ee5e7);
+  --games-button-text: #18354a;
+  --games-button-border: rgba(59, 143, 62, 0.2);
+  --games-button-shadow: 0 10px 20px rgba(31, 67, 92, 0.12);
+  --games-button-shadow-hover: 0 14px 24px rgba(31, 67, 92, 0.16);
+  --games-button-icon: #18354a;
 }
 
 .health-shell {
@@ -173,6 +210,21 @@
 .health-card.is-error {
   border-color: rgba(255, 120, 120, 0.45);
   background: rgba(120, 20, 20, 0.18);
+}
+
+.health-page[data-theme="light"] .health-meta,
+.health-page[data-theme="light"] .health-card {
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 12px 24px rgba(31, 67, 92, 0.08);
+}
+
+.health-page[data-theme="light"] .health-card.is-error,
+.health-page[data-theme="light"] .health-alert {
+  background: rgba(255, 239, 239, 0.9);
+}
+
+.health-page[data-theme="light"] .health-card.is-error .health-card__status {
+  color: #b94a48;
 }
 
 .health-card__header {

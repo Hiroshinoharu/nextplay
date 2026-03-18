@@ -43,15 +43,22 @@ const LikeButton = ({
 
 const StyledWrapper = styled.div`
   button {
+    --np-chip-border: var(--games-border, rgba(140, 243, 122, 0.34));
+    --np-chip-bg: var(--games-surface, rgba(10, 30, 48, 0.62));
+    --np-chip-text: var(--games-text, rgba(226, 242, 255, 0.9));
+    --np-chip-icon: var(--games-muted, rgba(226, 242, 255, 0.72));
+    --np-chip-active-border: var(--games-border-active, rgba(199, 240, 0, 0.74));
+    --np-chip-active-bg: var(--games-accent-surface, rgba(140, 243, 122, 0.2));
+    --np-chip-active-text: var(--games-accent-strong, rgba(220, 255, 116, 0.96));
     display: inline-flex;
     justify-content: center;
     align-items: center;
     gap: 7px;
     padding: 7px 12px;
     border-radius: 999px;
-    border: 1px solid rgba(140, 243, 122, 0.34);
-    background: rgba(10, 30, 48, 0.62);
-    color: rgba(226, 242, 255, 0.9);
+    border: 1px solid var(--np-chip-border);
+    background: var(--np-chip-bg);
+    color: var(--np-chip-text);
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
@@ -60,23 +67,23 @@ const StyledWrapper = styled.div`
   }
 
   button svg {
-    fill: rgba(226, 242, 255, 0.72);
+    fill: var(--np-chip-icon);
     transition: fill 0.2s ease;
   }
 
   button:hover:not(:disabled) {
     transform: translateY(-1px);
-    border-color: rgba(199, 240, 0, 0.66);
+    border-color: var(--np-chip-active-border);
   }
 
   button.is-active {
-    border-color: rgba(199, 240, 0, 0.74);
-    background: rgba(140, 243, 122, 0.2);
-    box-shadow: inset 0 0 0 1px rgba(199, 240, 0, 0.22);
+    border-color: var(--np-chip-active-border);
+    background: var(--np-chip-active-bg);
+    box-shadow: inset 0 0 0 1px var(--games-accent-outline, rgba(199, 240, 0, 0.22));
   }
 
   button.is-active svg {
-    fill: rgba(220, 255, 116, 0.96);
+    fill: var(--np-chip-active-text);
   }
 
   button:disabled {

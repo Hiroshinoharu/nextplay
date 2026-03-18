@@ -104,6 +104,11 @@ const MinecraftTorch = ({
 };
 
 const StyledWrapper = styled.div<{ $checked: boolean; $disabled: boolean }>`
+  --torch-head-size: clamp(28px, 3.8vw, 34px);
+  --torch-stick-width: calc(var(--torch-head-size) * 0.88);
+  --torch-stick-height: clamp(126px, 17vw, 164px);
+  --torch-lift: ${({ $checked }) => ($checked ? '-4px' : '0px')};
+
   .container input {
     position: absolute;
     opacity: 0;
@@ -117,10 +122,14 @@ const StyledWrapper = styled.div<{ $checked: boolean; $disabled: boolean }>`
     flex-direction: column;
     align-items: center;
     position: relative;
+    width: min(100%, 220px);
+    min-height: 100%;
+    padding: 0 0 52px;
     cursor: ${({ $disabled }) => ($disabled ? 'not-allowed' : 'pointer')};
     user-select: none;
     opacity: ${({ $disabled }) => ($disabled ? 0.55 : 1)};
     transition: opacity 180ms ease, transform 180ms ease;
+    touch-action: manipulation;
   }
 
   .container:hover {
@@ -129,13 +138,13 @@ const StyledWrapper = styled.div<{ $checked: boolean; $disabled: boolean }>`
 
   .simple-text {
     position: absolute;
-    bottom: -48px;
-    width: 150px;
+    bottom: 0;
+    width: min(100%, 190px);
     text-align: center;
     color: ${({ $checked }) => ($checked ? '#fff1ac' : 'rgba(226, 242, 255, 0.88)')};
     text-shadow: ${({ $checked }) =>
       $checked ? '0 0 12px rgba(255, 216, 0, 0.45)' : '0 0 10px rgba(14, 165, 233, 0.18)'};
-    font-size: 13px;
+    font-size: clamp(12px, 1.4vw, 13px);
     font-weight: 800;
     font-family: monospace;
     letter-spacing: 0.12em;
@@ -143,31 +152,70 @@ const StyledWrapper = styled.div<{ $checked: boolean; $disabled: boolean }>`
   }
 
   .torch {
+    position: relative;
     display: flex;
     justify-content: center;
-    height: 150px;
+    align-items: flex-start;
+    width: min(100%, 148px);
+    height: calc(var(--torch-stick-height) + var(--torch-head-size) + 12px);
     filter: ${({ $checked }) => ($checked ? 'saturate(1)' : 'saturate(0.88) brightness(0.96)')};
-    transition: filter 220ms ease;
+    transform: translateY(var(--torch-lift));
+    transition: filter 220ms ease, transform 220ms ease;
+  }
+
+  .torch::before {
+    content: '';
+    position: absolute;
+    inset: 8px 8px 12px;
+    border-radius: 22px;
+    background:
+      radial-gradient(
+        circle at 50% 18%,
+        ${({ $checked }) => ($checked ? 'rgba(255, 222, 112, 0.38)' : 'rgba(17, 96, 128, 0.2)')} 0,
+        ${({ $checked }) => ($checked ? 'rgba(255, 173, 48, 0.16)' : 'rgba(17, 96, 128, 0.08)')} 26%,
+        transparent 72%
+      );
+    filter: blur(12px);
+    pointer-events: none;
+  }
+
+  .torch::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 10px;
+    width: 58px;
+    height: 14px;
+    background: radial-gradient(circle, rgba(0, 0, 0, 0.42) 0, rgba(0, 0, 0, 0) 74%);
+    transform: translateX(-50%);
+    pointer-events: none;
   }
 
   .head,
   .stick {
     position: absolute;
-    width: 30px;
+    left: 50%;
     transform-style: preserve-3d;
-    transform: rotateX(-30deg) rotateY(45deg);
+    transform: translateX(-50%) rotateX(-28deg) rotateY(45deg);
+  }
+
+  .head {
+    top: 12px;
+    width: var(--torch-head-size);
+    height: var(--torch-head-size);
   }
 
   .stick {
-    position: relative;
-    height: 120px;
+    top: calc(var(--torch-head-size) + 1px);
+    width: var(--torch-stick-width);
+    height: var(--torch-stick-height);
   }
 
   .face {
     position: absolute;
     transform-style: preserve-3d;
-    width: 30px;
-    height: 30px;
+    width: var(--torch-head-size);
+    height: var(--torch-head-size);
     display: grid;
     grid-template-columns: 50% 50%;
     grid-template-rows: 50% 50%;
@@ -176,15 +224,15 @@ const StyledWrapper = styled.div<{ $checked: boolean; $disabled: boolean }>`
   }
 
   .top {
-    transform: rotateX(90deg) translateZ(15px);
+    transform: rotateX(90deg) translateZ(calc(var(--torch-head-size) / 2));
   }
 
   .left {
-    transform: rotateY(-90deg) translateZ(15px);
+    transform: rotateY(-90deg) translateZ(calc(var(--torch-head-size) / 2));
   }
 
   .right {
-    transform: rotateY(0deg) translateZ(15px);
+    transform: rotateY(0deg) translateZ(calc(var(--torch-head-size) / 2));
   }
 
   .top div,
@@ -221,20 +269,20 @@ const StyledWrapper = styled.div<{ $checked: boolean; $disabled: boolean }>`
 
   .side {
     position: absolute;
-    width: 30px;
-    height: 120px;
+    width: var(--torch-stick-width);
+    height: var(--torch-stick-height);
     display: grid;
     grid-template-columns: 50% 50%;
     grid-template-rows: repeat(8, 12.5%);
-    translate: 0 12px;
+    translate: 0 4px;
   }
 
   .side-left {
-    transform: rotateY(-90deg) translateZ(15px) translateY(8px);
+    transform: rotateY(-90deg) translateZ(calc(var(--torch-stick-width) / 2)) translateY(4px);
   }
 
   .side-right {
-    transform: rotateY(0deg) translateZ(15px) translateY(8px);
+    transform: rotateY(0deg) translateZ(calc(var(--torch-stick-width) / 2)) translateY(4px);
   }
 
   .side-left div,
@@ -302,7 +350,7 @@ const StyledWrapper = styled.div<{ $checked: boolean; $disabled: boolean }>`
 
   .container input:focus-visible ~ .torch {
     outline: 2px solid rgba(140, 243, 122, 0.6);
-    outline-offset: 10px;
+    outline-offset: 8px;
     border-radius: 18px;
   }
 
@@ -390,6 +438,17 @@ const StyledWrapper = styled.div<{ $checked: boolean; $disabled: boolean }>`
 
   .container input:checked ~ .torch .side div:nth-child(16) {
     background-color: #372a17;
+  }
+
+  @media (max-width: 640px) {
+    .container {
+      width: min(100%, 190px);
+      padding-bottom: 48px;
+    }
+
+    .torch {
+      width: min(100%, 132px);
+    }
   }
 `;
 

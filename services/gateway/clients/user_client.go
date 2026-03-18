@@ -55,6 +55,12 @@ func (c *UserClient) GetUserByID(id string) (interface{}, error) {
 	return doGet(url, c.headers())
 }
 
+// GET /users/availability
+func (c *UserClient) CheckAvailability(query string) (interface{}, error) {
+	url := fmt.Sprintf("%s/users/availability%s", c.BaseURL, query)
+	return doGet(url, c.headers())
+}
+
 // POST /users/register
 func (c *UserClient) RegisterUser(body []byte) (interface{}, error) {
 	url := fmt.Sprintf("%s/users/register", c.BaseURL)

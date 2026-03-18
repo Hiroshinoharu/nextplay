@@ -3,7 +3,9 @@
   --ml-muted: var(--games-muted, var(--game-muted, rgba(226, 242, 255, 0.75)));
   --ml-accent: var(--games-accent, var(--game-accent, #8cf37a));
   --ml-border: var(--games-border, var(--game-border, rgba(140, 243, 122, 0.28)));
-  --ml-panel: rgba(8, 22, 34, 0.9);
+  --ml-panel: var(--games-panel-strong, var(--game-panel-strong, rgba(8, 22, 34, 0.9)));
+  --ml-surface: var(--games-surface, var(--game-panel, rgba(8, 22, 34, 0.8)));
+  --ml-card: var(--games-card, var(--game-card, #040b12));
   position: fixed;
   inset: 0;
   z-index: 120;
@@ -23,8 +25,7 @@
   max-height: min(92vh, 920px);
   border-radius: 18px;
   border: 1px solid var(--ml-border);
-  background:
-    linear-gradient(145deg, rgba(9, 26, 41, 0.95), rgba(6, 18, 29, 0.92));
+  background: var(--ml-panel);
   box-shadow:
     0 26px 64px rgba(0, 0, 0, 0.52),
     0 0 0 1px rgba(140, 243, 122, 0.12);
@@ -38,9 +39,8 @@
   margin: 0;
   height: min(70vh, 700px);
   border-radius: 14px;
-  border: 1px solid rgba(226, 242, 255, 0.12);
-  background:
-    linear-gradient(155deg, rgba(6, 18, 29, 0.9), rgba(3, 10, 16, 0.92));
+  border: 1px solid var(--ml-border);
+  background: var(--ml-card);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -68,7 +68,7 @@
 .media-lightbox__nav {
   border: 1px solid var(--ml-border);
   color: var(--ml-text);
-  background: rgba(8, 22, 34, 0.8);
+  background: var(--ml-surface);
   border-radius: 999px;
   cursor: pointer;
   transition:
@@ -107,8 +107,8 @@
 
 .media-lightbox__close:hover,
 .media-lightbox__nav:hover {
-  background: rgba(140, 243, 122, 0.2);
-  border-color: rgba(140, 243, 122, 0.56);
+  background: var(--games-accent-surface, rgba(140, 243, 122, 0.2));
+  border-color: var(--games-border-active, rgba(140, 243, 122, 0.56));
 }
 
 .media-lightbox__thumbs {
@@ -125,10 +125,10 @@
   width: 74px;
   height: 44px;
   padding: 0;
-  border: 1px solid rgba(226, 242, 255, 0.2);
+  border: 1px solid var(--ml-border);
   border-radius: 8px;
   overflow: hidden;
-  background: #040b12;
+  background: var(--ml-card);
   cursor: pointer;
   opacity: 0.8;
   transition:

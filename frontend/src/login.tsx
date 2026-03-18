@@ -4,14 +4,16 @@ import Form from './components/Form'
 import BrandLogo from './components/BrandLogo'
 import SiteFooter from './components/SiteFooter'
 import { type AuthUser } from './utils/authUser'
+import { type ThemeMode } from './utils/theme'
 
 type LoginProps = {
   apiBaseUrl: string
   authUser: AuthUser | null
   onAuthSuccess: (payload: unknown) => void
+  theme: ThemeMode
 }
 
-export default function Login({ apiBaseUrl, authUser, onAuthSuccess }: LoginProps) {
+export default function Login({ apiBaseUrl, authUser, onAuthSuccess, theme }: LoginProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const emailFromQuery = new URLSearchParams(location.search).get('email') ?? undefined
@@ -27,7 +29,7 @@ export default function Login({ apiBaseUrl, authUser, onAuthSuccess }: LoginProp
   }, [authUser, navigate])
 
   return (
-    <div className="landing landing--auth">
+    <div className="landing landing--auth" data-theme={theme}>
       <div className="landing__container landing__container--auth">
         <nav className="landing__nav landing__nav--auth">
           <BrandLogo onClick={() => navigate('/')} />

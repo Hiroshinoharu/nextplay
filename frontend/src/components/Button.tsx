@@ -46,6 +46,13 @@ const Button = ({
 
 const StyledWrapper = styled.div`
   button {
+    --np-button-bg: var(--games-button-bg, linear-gradient(135deg, #c7f000, #8cf37a));
+    --np-button-bg-hover: var(--games-button-bg-hover, linear-gradient(135deg, #d2f72d, #a6f08a));
+    --np-button-text: var(--games-button-text, #07131a);
+    --np-button-border: var(--games-button-border, rgba(199, 240, 0, 0.55));
+    --np-button-shadow: var(--games-button-shadow, 0 10px 20px rgba(7, 15, 22, 0.28));
+    --np-button-shadow-hover: var(--games-button-shadow-hover, 0 14px 24px rgba(7, 15, 22, 0.34));
+    --np-button-icon: var(--games-button-icon, #08161f);
     cursor: pointer;
     font-weight: 700;
     transition:
@@ -55,9 +62,9 @@ const StyledWrapper = styled.div`
       box-shadow 280ms ease-in-out;
     padding: 11px 20px;
     border-radius: 100px;
-    background: linear-gradient(135deg, #c7f000, #8cf37a);
-    color: #07131a;
-    border: 1px solid rgba(199, 240, 0, 0.55);
+    background: var(--np-button-bg);
+    color: var(--np-button-text);
+    border: 1px solid var(--np-button-border);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -66,8 +73,9 @@ const StyledWrapper = styled.div`
     min-height: 42px;
     justify-content: center;
     letter-spacing: 0.01em;
+    text-shadow: none;
     box-shadow:
-      0 10px 20px rgba(7, 15, 22, 0.28),
+      var(--np-button-shadow),
       inset 0 1px 0 rgba(255, 255, 255, 0.3);
   }
 
@@ -86,12 +94,16 @@ const StyledWrapper = styled.div`
   }
 
   button:hover {
-    background: linear-gradient(135deg, #d2f72d, #a6f08a);
+    background: var(--np-button-bg-hover);
     transform: translateY(-1px);
     animation: movingBorders 3s infinite;
     box-shadow:
-      0 14px 24px rgba(7, 15, 22, 0.34),
+      var(--np-button-shadow-hover),
       inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  }
+
+  button span {
+    color: inherit;
   }
 
   .button__icon-arrow {
@@ -101,11 +113,11 @@ const StyledWrapper = styled.div`
   }
 
   .button__icon-arrow circle {
-    stroke: #08161f;
+    stroke: var(--np-button-icon);
   }
 
   .button__icon-arrow path {
-    fill: #08161f;
+    fill: var(--np-button-icon);
   }
 
   button:hover .button__icon-arrow {

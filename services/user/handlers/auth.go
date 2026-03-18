@@ -10,6 +10,75 @@ import (
 	"github.com/maxceban/nextplay/services/user/models"
 )
 
+// lookupExistingAuthIdentity checks if a user with the given username or email already exists.
+// It returns two booleans indicating whether the username or email already exists, and an error if one occurs.
+// If the database connection is not initialized, it returns false, false, and sql.ErrConnDone.
+func lookupExistingAuthIdentity(username string, email string) (bool, bool, error) {
+	if db.DB == nil {
+		return false, false, sql.ErrConnDone
+	}
+
+	normalizedUsername := strings.TrimSpace(username)
+	normalizedEmail := strings.TrimSpace(email)
+
+	var usernameExists bool
+	var emailExists bool
+
+	if normalizedUsername != "" {
+		err := db.DB.QueryRow(
+			"SELECT EXISTS(SELECT 1 FROM app_user WHERE LOWER(username) = LOWER($1))",
+			normalizedUsername,
+		).Scan(&usernameExists)
+		if err != nil {
+			return false, false, err
+		}
+	}
+
+	if normalizedEmail != "" {
+		err := db.DB.QueryRow(
+			"SELECT EXISTS(SELECT 1 FROM app_user WHERE LOWER(email) = LOWER($1))",
+			normalizedEmail,
+		).Scan(&emailExists)
+		if err != nil {
+			return false, false, err
+		}
+	}
+
+	return usernameExists, emailExists, nil
+}
+
+// CheckAvailability handles GET /users/availability requests.
+func CheckAvailability(c *fiber.Ctx) error {
+	username := strings.TrimSpace(c.Query("username"))
+	email := strings.TrimSpace(c.Query("email"))
+
+	if username == "" && email == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "username or email is required"})
+	}
+	if email != "" && !strings.Contains(email, "@") {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid email"})
+	}
+	if db.DB == nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database not initialized"})
+	}
+
+	usernameExists, emailExists, err := lookupExistingAuthIdentity(username, email)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to check availability"})
+	}
+
+	return c.JSON(fiber.Map{
+		"username": fiber.Map{
+			"value":  username,
+			"exists": usernameExists,
+		},
+		"email": fiber.Map{
+			"value":  email,
+			"exists": emailExists,
+		},
+	})
+}
+
 // Register handles POST /auth/register requests
 func Register(c *fiber.Ctx) error {
 	var req struct {
@@ -36,6 +105,17 @@ func Register(c *fiber.Ctx) error {
 	// Check database connection
 	if db.DB == nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database not initialized"})
+	}
+
+	usernameExists, emailExists, err := lookupExistingAuthIdentity(req.Username, req.Email)
+	if err != nil && err != sql.ErrConnDone {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to validate user identity"})
+	}
+	if usernameExists {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "username already exists"})
+	}
+	if emailExists {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "email already exists"})
 	}
 
 	hashedPassword, err := auth.HashPassword(req.Password)

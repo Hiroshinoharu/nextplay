@@ -56,7 +56,7 @@ const StyledWrapper = styled.div`
     border: 1px solid var(--games-border, rgba(140, 243, 122, 0.3));
     border-radius: 999px;
     background: var(--games-surface, rgba(10, 30, 48, 0.62));
-    color: var(--games-text, rgba(226, 242, 255, 0.88));
+    color: var(--games-text, rgba(226, 242, 255, 0.92));
     font-size: 11px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -76,7 +76,7 @@ const StyledWrapper = styled.div`
   .filter-radio__item.is-active {
     border-color: var(--games-border-active, rgba(199, 240, 0, 0.72));
     background: var(--games-accent-surface, rgba(140, 243, 122, 0.2));
-    color: var(--games-accent-strong, rgba(220, 255, 116, 0.96));
+    color: var(--games-button-text, var(--games-text, rgba(24, 53, 74, 0.96)));
     box-shadow: inset 0 0 0 1px var(--games-accent-outline, rgba(199, 240, 0, 0.22));
   }
 
@@ -86,7 +86,7 @@ const StyledWrapper = styled.div`
     background: var(--games-chip-bg, transparent);
     padding: 1px 6px;
     font-size: 10px;
-    color: var(--games-text, rgba(226, 242, 255, 0.85));
+    color: var(--games-text, rgba(226, 242, 255, 0.92));
   }
 `;
 

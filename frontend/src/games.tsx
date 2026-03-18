@@ -11,6 +11,7 @@ import Loader from "./components/Loader";
 import LoadingScreen from "./components/LoadingScreen";
 import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
+import { type ThemeMode } from "./utils/theme";
 import {
   QUESTIONNAIRE_V1,
   buildRecommendRequestFromQuestionnaire,
@@ -70,6 +71,7 @@ type RecommendResponse = {
 
 type GamesProps = {
   authUser: AuthUser | null;
+  theme: ThemeMode;
 };
 
 const QUESTIONNAIRE_STORAGE_PREFIX = "nextplay_questionnaire_v1";
@@ -286,7 +288,7 @@ const getFeaturedRotationBucket = () =>
   Math.floor(Date.now() / FEATURED_ROTATION_WINDOW_MS);
 
 // Main Games component handling game list view
-function Games({ authUser }: GamesProps) {
+function Games({ authUser, theme }: GamesProps) {
   // Router and state hooks
   const navigate = useNavigate();
   const baseUrl = API_ROOT;
@@ -1390,10 +1392,11 @@ function Games({ authUser }: GamesProps) {
   }, []);
 
   return (
-    <div className="games-page">
+    <div className="games-page" data-theme={theme}>
       {showInitialLibraryLoadingScreen ? (
         <LoadingScreen
           fullScreen
+          theme={theme}
           eyebrow="Game library"
           title="Loading your library"
           subtitle="Pulling recent, upcoming, and top-rated games into view."
@@ -1500,6 +1503,7 @@ function Games({ authUser }: GamesProps) {
                 <Loader
                   title="Loading games"
                   subtitle="Ranking recent, trending, and top-rated picks..."
+                  theme={theme}
                 />
                 <div className="games-hero__actions">
                   <button
@@ -1572,6 +1576,7 @@ function Games({ authUser }: GamesProps) {
                   <Loader
                     title="Searching library"
                     subtitle="Matching titles and metadata..."
+                    theme={theme}
                   />
                 ) : null}
               </>
@@ -1807,4 +1812,3 @@ function Games({ authUser }: GamesProps) {
 }
 
 export default Games;
-

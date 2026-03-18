@@ -14,6 +14,68 @@
   --games-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
 }
 
+.search-page[data-theme="light"] {
+  --games-text: #18354a;
+  --games-muted: rgba(24, 53, 74, 0.92);
+  --games-subtle: rgba(24, 53, 74, 0.8);
+  --games-accent: #5fa93b;
+  --games-accent-strong: #75c844;
+  --games-border: rgba(59, 143, 62, 0.18);
+  --games-shadow: 0 18px 40px rgba(31, 67, 92, 0.12);
+  --games-active-text: #f8fdff;
+  --games-surface: rgba(255, 255, 255, 0.92);
+  --games-chip-bg: rgba(24, 53, 74, 0.05);
+  --games-accent-surface: rgba(59, 143, 62, 0.12);
+  --games-accent-outline: rgba(59, 143, 62, 0.18);
+  --games-hover-surface: rgba(59, 143, 62, 0.1);
+  --games-hover-surface-strong: rgba(59, 143, 62, 0.16);
+  --games-input-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(239, 248, 255, 0.88));
+  --games-input-shadow: 0 12px 24px rgba(31, 67, 92, 0.1), inset 0 0 0 1px rgba(59, 143, 62, 0.05);
+  --games-input-focus-shadow: 0 14px 26px rgba(31, 67, 92, 0.14), 0 0 0 3px rgba(59, 143, 62, 0.12);
+  --games-placeholder: rgba(24, 53, 74, 0.68);
+  --games-nav-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(239, 248, 255, 0.9));
+  --games-nav-shadow: 0 16px 26px rgba(31, 67, 92, 0.1), inset 0 0 0 1px rgba(59, 143, 62, 0.05);
+  --games-hover-shadow: 0 8px 16px rgba(31, 67, 92, 0.1), inset 0 0 0 1px rgba(59, 143, 62, 0.1);
+  --games-active-shadow: 0 8px 18px rgba(59, 143, 62, 0.22);
+  --games-card-poster-glow: rgba(59, 143, 62, 0.08);
+  --games-card-poster-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(235, 245, 252, 0.96));
+  --games-card-poster-shadow: 0 16px 30px rgba(31, 67, 92, 0.14);
+  --games-card-poster-shadow-hover: 0 18px 34px rgba(31, 67, 92, 0.2);
+  --games-card-icon: rgba(24, 53, 74, 0.58);
+  --games-card-content-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(248, 252, 255, 0.72) 55%, rgba(235, 245, 252, 0.96) 100%);
+  --games-card-title: #18354a;
+  --games-card-description: rgba(24, 53, 74, 0.86);
+  --games-card-info-glow: rgba(59, 143, 62, 0.08);
+  --games-card-info-bg: linear-gradient(150deg, rgba(255, 255, 255, 0.96), rgba(238, 247, 252, 0.92));
+  --games-card-info-shadow: 0 14px 26px rgba(31, 67, 92, 0.12);
+  --games-card-info-inset: rgba(59, 143, 62, 0.08);
+  --games-card-info-border: rgba(59, 143, 62, 0.18);
+  --games-card-info-text: #18354a;
+  --games-card-info-title: #18354a;
+  --games-card-info-description: rgba(24, 53, 74, 0.82);
+  background:
+    radial-gradient(circle at 12% 12%, rgba(133, 197, 103, 0.16), transparent 46%),
+    radial-gradient(circle at 84% 10%, rgba(121, 199, 230, 0.2), transparent 44%),
+    linear-gradient(155deg, #f5fbff 0%, #ebf5fc 48%, #deedf7 100%);
+}
+
+.search-page[data-theme="light"] .search-header,
+.search-page[data-theme="light"] .discover-questionnaire,
+.search-page[data-theme="light"] .discover-results-panel,
+.search-page[data-theme="light"] .discover-algorithm-verdict .games-result,
+.search-page[data-theme="light"] .landing__footer {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.95), rgba(239, 248, 255, 0.9));
+}
+
+.search-page[data-theme="light"] .search-brand img {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.search-page[data-theme="light"] .search-avatar {
+  background: linear-gradient(135deg, #5fa93b, #89d6d9);
+  color: #f8fdff;
+}
+
 .search-shell {
   width: min(1200px, 92vw);
   margin: 0 auto;
@@ -158,6 +220,7 @@
 .discover-algorithm-verdict {
   display: flex;
   justify-content: stretch;
+  touch-action: pan-y;
 }
 
 .discover-algorithm-verdict .games-result {
@@ -281,11 +344,137 @@
   padding: 12px 16px 14px;
 }
 
+.discover-banner-swipe-hint {
+  margin: 10px 0 0;
+  text-align: center;
+  color: var(--games-subtle);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .discover-algorithm-verdict .games-result__list-item-rank {
   margin-bottom: 2px;
   border-color: rgba(140, 243, 122, 0.4);
   background: rgba(140, 243, 122, 0.12);
   color: var(--games-accent-strong);
+}
+
+.search-page[data-theme="light"] .discover-algorithm-verdict .games-result {
+  box-shadow: 0 18px 34px rgba(31, 67, 92, 0.12);
+  background:
+    radial-gradient(circle at 12% 14%, rgba(133, 197, 103, 0.12), transparent 44%),
+    radial-gradient(circle at 86% 10%, rgba(121, 199, 230, 0.18), transparent 46%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.96), rgba(236, 246, 255, 0.92));
+}
+
+.search-page[data-theme="light"] .discover-algorithm-verdict .games-result__header {
+  border-bottom-color: rgba(59, 143, 62, 0.14);
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.84), rgba(239, 248, 255, 0.64));
+}
+
+.search-page[data-theme="light"] .discover-algorithm-verdict .games-result__card {
+  border-top-color: rgba(59, 143, 62, 0.14);
+  border-bottom-color: rgba(59, 143, 62, 0.14);
+  background: linear-gradient(145deg, rgba(244, 250, 255, 0.96), rgba(229, 240, 248, 0.92));
+}
+
+.search-page[data-theme="light"] .discover-algorithm-verdict .games-result__content p {
+  color: rgba(24, 53, 74, 0.88);
+}
+
+.search-page[data-theme="light"] .discover-algorithm-verdict .games-result__score {
+  border-left-color: rgba(59, 143, 62, 0.14);
+  background: linear-gradient(170deg, rgba(255, 255, 255, 0.56), rgba(233, 244, 252, 0.84));
+}
+
+.search-page[data-theme="light"] .discover-algorithm-verdict .games-result__score-sub {
+  color: rgba(24, 53, 74, 0.76);
+}
+
+.search-page[data-theme="light"] .discover-algorithm-verdict .games-result__score-pill {
+  border-color: rgba(59, 143, 62, 0.34);
+  background: linear-gradient(135deg, rgba(133, 197, 103, 0.2), rgba(121, 199, 230, 0.18));
+  color: #3b8f3e;
+}
+
+.search-page[data-theme="light"] .discover-algorithm-verdict .games-result__list-item {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.84), rgba(238, 247, 252, 0.78));
+}
+
+.search-page[data-theme="light"] .discover-algorithm-verdict .games-result__list-item-rank {
+  border-color: rgba(59, 143, 62, 0.22);
+  background: rgba(59, 143, 62, 0.08);
+  color: #3b8f3e;
+}
+
+.search-page[data-theme="light"] .discover-algorithm-verdict .games-result__chip {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(59, 143, 62, 0.18);
+  color: #18354a;
+}
+
+.search-page[data-theme="light"] .discover-algorithm-verdict .games-result__chip--ghost {
+  background: rgba(239, 248, 255, 0.9);
+}
+
+.search-page[data-theme="light"] .discover-result-summary {
+  border-top-color: rgba(59, 143, 62, 0.14);
+  border-bottom-color: rgba(59, 143, 62, 0.14);
+  background: linear-gradient(160deg, rgba(248, 252, 255, 0.94), rgba(232, 243, 250, 0.88));
+}
+
+.search-page[data-theme="light"] .discover-result-summary__stat {
+  border-color: rgba(59, 143, 62, 0.16);
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.98), rgba(236, 246, 252, 0.92));
+  box-shadow: 0 10px 18px rgba(31, 67, 92, 0.08);
+}
+
+.search-page[data-theme="light"] .discover-result-summary__stat-value {
+  color: #5fa93b;
+}
+
+.search-page[data-theme="light"] .discover-result-summary__stat-label,
+.search-page[data-theme="light"] .discover-result-summary__group-label {
+  color: rgba(24, 53, 74, 0.76);
+}
+
+.search-page[data-theme="light"] .discover-result-summary__chip {
+  border-color: rgba(59, 143, 62, 0.18);
+  background: rgba(255, 255, 255, 0.96);
+  color: #18354a;
+}
+
+.search-page[data-theme="light"] .discover-result-summary__chip--avoid {
+  border-color: rgba(185, 74, 72, 0.24);
+  background: rgba(255, 239, 239, 0.92);
+}
+
+.search-page[data-theme="light"] .discover-result-summary__chip--favorite {
+  border-color: rgba(90, 152, 201, 0.24);
+  background: rgba(236, 246, 255, 0.96);
+}
+
+.search-page[data-theme="light"] .discover-questionnaire-status__card {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.98), rgba(235, 245, 252, 0.94));
+  border-color: rgba(59, 143, 62, 0.16);
+  box-shadow: 0 12px 22px rgba(31, 67, 92, 0.08);
+}
+
+.search-page[data-theme="light"] .discover-questionnaire-status__label {
+  color: rgba(24, 53, 74, 0.76);
+}
+
+.search-page[data-theme="light"] .discover-algorithm-verdict .games-result__actions .games-result__button {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(235, 245, 252, 0.94));
+  color: #18354a;
+  border-color: rgba(59, 143, 62, 0.18);
+}
+
+.search-page[data-theme="light"] .discover-algorithm-verdict .games-result__actions .games-result__button--primary {
+  background: linear-gradient(135deg, rgba(133, 197, 103, 0.24), rgba(137, 214, 217, 0.22));
+  color: #18354a;
+  border-color: rgba(59, 143, 62, 0.24);
 }
 
 .discover-algorithm-verdict .games-result__eyebrow,
@@ -381,6 +570,13 @@
   text-transform: uppercase;
   padding: 8px 14px;
   cursor: pointer;
+}
+
+.search-page[data-theme="light"] .search-quick-actions__button {
+  background: linear-gradient(145deg, rgba(244, 250, 255, 0.98), rgba(228, 240, 248, 0.94));
+  color: #18354a;
+  border-color: rgba(59, 143, 62, 0.18);
+  box-shadow: 0 10px 18px rgba(31, 67, 92, 0.08);
 }
 
 .search-quick-actions__button:hover:not(:disabled) {
@@ -977,5 +1173,533 @@
 @media (max-width: 640px) {
   .discover-questionnaire-compact {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1024px) {
+  .discover-algorithm-verdict .games-result__header,
+  .discover-algorithm-verdict .games-result__list,
+  .discover-algorithm-verdict .games-result__actions {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .discover-algorithm-verdict .games-result__title {
+    max-width: 100%;
+    font-size: clamp(22px, 3.4vw, 32px);
+  }
+
+  .discover-algorithm-verdict .games-result__card {
+    grid-template-columns: 136px minmax(0, 1fr) 156px;
+  }
+
+  .discover-algorithm-verdict .games-result__poster {
+    min-height: 196px;
+  }
+
+  .discover-algorithm-verdict .games-result__content {
+    padding: 12px 14px;
+  }
+
+  .discover-algorithm-verdict .games-result__content h3 {
+    font-size: clamp(24px, 3vw, 34px);
+  }
+
+  .discover-algorithm-verdict .games-result__list-grid {
+    grid-template-columns: repeat(auto-fit, minmax(188px, 1fr));
+  }
+
+  .discover-result-summary {
+    padding: 14px;
+  }
+}
+
+@media (max-width: 760px) {
+  .discover-result-summary {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .discover-result-summary__stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .discover-algorithm-verdict .games-result__card {
+    grid-template-columns: 120px minmax(0, 1fr);
+  }
+
+  .discover-algorithm-verdict .games-result__score {
+    grid-column: 1 / -1;
+    grid-auto-flow: column;
+    justify-content: flex-start;
+    justify-items: flex-start;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-left: none;
+    border-top: 1px solid rgba(140, 243, 122, 0.16);
+  }
+
+  .discover-algorithm-verdict .games-result__score-pill {
+    min-width: 84px;
+  }
+
+  .discover-algorithm-verdict .games-result__actions {
+    justify-content: stretch;
+  }
+
+  .discover-algorithm-verdict .games-result__actions .games-result__button {
+    flex: 1 1 220px;
+    min-width: 0;
+  }
+
+  .discover-algorithm-verdict .games-result__list-grid {
+    grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .discover-algorithm-verdict .games-result {
+    border-radius: 14px;
+  }
+
+  .discover-algorithm-verdict .games-result__header {
+    padding: 12px 12px 10px;
+  }
+
+  .discover-algorithm-verdict .games-result__title {
+    font-size: clamp(20px, 7vw, 28px);
+  }
+
+  .discover-result-summary {
+    padding: 12px;
+  }
+
+  .discover-result-summary__stats {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .discover-algorithm-verdict .games-result__card {
+    grid-template-columns: 1fr;
+  }
+
+  .discover-algorithm-verdict .games-result__poster,
+  .discover-algorithm-verdict .games-result__poster-fallback {
+    min-height: 188px;
+  }
+
+  .discover-algorithm-verdict .games-result__content {
+    padding: 12px;
+  }
+
+  .discover-algorithm-verdict .games-result__content h3 {
+    font-size: clamp(22px, 8vw, 30px);
+  }
+
+  .discover-algorithm-verdict .games-result__content p {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .discover-algorithm-verdict .games-result__meta {
+    font-size: 10px;
+    gap: 6px;
+  }
+
+  .discover-algorithm-verdict .games-result__score {
+    grid-auto-flow: row;
+    align-items: start;
+    justify-items: start;
+    padding: 10px 12px 12px;
+  }
+
+  .discover-algorithm-verdict .games-result__list {
+    padding: 12px;
+  }
+
+  .discover-algorithm-verdict .games-result__list-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .discover-algorithm-verdict .games-result__list-item {
+    padding: 9px;
+  }
+
+  .discover-algorithm-verdict .games-result__list-item-main {
+    grid-template-columns: 60px minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .discover-algorithm-verdict .games-result__list-item-actions {
+    flex-wrap: wrap;
+  }
+
+  .discover-algorithm-verdict .games-result__chip {
+    flex: 1 1 120px;
+    text-align: center;
+  }
+
+  .discover-algorithm-verdict .games-result__actions {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .discover-algorithm-verdict .games-result__actions .games-result__button {
+    flex: 1 1 100%;
+  }
+
+  .discover-banner-swipe-hint {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+}
+
+@media (max-width: 420px) {
+  .discover-algorithm-verdict .games-result__eyebrow {
+    margin-bottom: 6px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+  }
+
+  .discover-algorithm-verdict .games-result__poster,
+  .discover-algorithm-verdict .games-result__poster-fallback {
+    min-height: 168px;
+  }
+
+  .discover-algorithm-verdict .games-result__content h3 {
+    font-size: clamp(20px, 8.6vw, 26px);
+  }
+
+  .discover-algorithm-verdict .games-result__score p {
+    font-size: 15px;
+  }
+
+  .discover-algorithm-verdict .games-result__score-sub {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 960px) {
+  .search-grid {
+    grid-template-columns: repeat(auto-fit, minmax(196px, 1fr));
+  }
+
+  .search-result__body {
+    padding: 10px 11px 12px;
+  }
+
+  .discover-questionnaire-status {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .discover-questionnaire-compact {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .search-grid {
+    grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
+    gap: 12px;
+  }
+
+  .search-result__title {
+    font-size: 0.9rem;
+  }
+
+  .search-result__meta span {
+    font-size: 0.68rem;
+    padding: 3px 7px;
+  }
+
+  .search-quick-actions__button {
+    flex: 1 1 calc(50% - 10px);
+    min-width: 0;
+    text-align: center;
+  }
+
+  .discover-questionnaire-status,
+  .discover-result-summary__stats {
+    grid-template-columns: 1fr;
+  }
+
+  .discover-questionnaire-status__card,
+  .discover-result-summary__stat,
+  .discover-questionnaire-compact__card {
+    padding: 11px 12px;
+  }
+
+  .discover-questionnaire-selection,
+  .discover-result-summary {
+    gap: 10px;
+  }
+
+  .discover-questionnaire-selection__chips,
+  .discover-result-summary__chips,
+  .discover-questionnaire-compact__chips {
+    gap: 6px;
+  }
+}
+
+@media (max-width: 560px) {
+  .search-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .search-result {
+    border-radius: 12px;
+  }
+
+  .search-result__media {
+    aspect-ratio: 15 / 8;
+  }
+
+  .search-result__body {
+    padding: 10px;
+  }
+
+  .search-result__title {
+    font-size: 0.88rem;
+  }
+
+  .search-quick-actions {
+    gap: 8px;
+  }
+
+  .search-quick-actions__button {
+    flex: 1 1 100%;
+    font-size: 10px;
+    padding: 8px 12px;
+  }
+
+  .discover-questionnaire-status {
+    gap: 8px;
+  }
+
+  .discover-questionnaire-status__value,
+  .discover-result-summary__stat-value {
+    font-size: clamp(17px, 5vw, 22px);
+  }
+
+  .discover-questionnaire-status__label,
+  .discover-result-summary__stat-label,
+  .discover-questionnaire-compact__label,
+  .discover-result-summary__group-label,
+  .discover-questionnaire-question__step,
+  .discover-questionnaire-selection__label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+
+  .discover-result-summary__chip,
+  .discover-questionnaire-compact__chip {
+    font-size: 11px;
+    padding: 6px 9px;
+  }
+
+  .discover-questionnaire-card {
+    padding: 10px;
+  }
+}
+
+@media (max-width: 420px) {
+  .search-header {
+    padding: 9px;
+  }
+
+  .search-grid {
+    gap: 8px;
+  }
+
+  .search-result__placeholder {
+    font-size: 0.74rem;
+  }
+
+  .discover-questionnaire-status__card,
+  .discover-result-summary__stat,
+  .discover-questionnaire-compact__card {
+    border-radius: 12px;
+    padding: 10px;
+  }
+
+  .discover-questionnaire-selection,
+  .discover-result-summary {
+    padding-top: 10px;
+    margin-top: 10px;
+  }
+}
+
+@media (max-width: 1080px) {
+  .search-shell {
+    width: min(100%, calc(100vw - 28px));
+    padding-top: 14px;
+  }
+
+  .search-header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .search-nav,
+  .search-actions {
+    grid-column: 1 / -1;
+  }
+
+  .search-actions {
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+
+  .search-actions > *:first-child {
+    flex: 1 1 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .search-shell {
+    width: min(100%, calc(100vw - 20px));
+    gap: 16px;
+  }
+
+  .search-header,
+  .discover-algorithm-verdict .games-result,
+  .discover-questionnaire-card,
+  .landing__footer {
+    border-radius: 14px;
+  }
+
+  .discover-algorithm-verdict .games-result__list-grid,
+  .discover-random .games-search-grid {
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    gap: 12px;
+  }
+
+  .discover-questionnaire-compact__section {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .games-result--discover-dialog .discover-result-summary--dialog {
+    gap: 10px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .games-result--discover-dialog .discover-result-summary__stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .games-result--discover-dialog .discover-result-summary__stat {
+    padding: 9px 8px;
+    border-radius: 12px;
+  }
+
+  .games-result--discover-dialog .discover-result-summary__stat-value {
+    font-size: clamp(14px, 4vw, 18px);
+  }
+
+  .games-result--discover-dialog .discover-result-summary__stat-label {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+  }
+
+  .games-result--discover-dialog .discover-result-summary__groups {
+    gap: 8px;
+  }
+
+  .games-result--discover-dialog .discover-result-summary__group {
+    gap: 5px;
+  }
+
+  .games-result--discover-dialog .discover-result-summary__group-label {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+  }
+
+  .games-result--discover-dialog .discover-result-summary__chips {
+    gap: 6px;
+  }
+
+  .games-result--discover-dialog .discover-result-summary__chip {
+    padding: 5px 8px;
+    font-size: 10px;
+    line-height: 1.2;
+  }
+}
+
+@media (max-width: 420px) {
+  .games-result--discover-dialog .discover-result-summary__stats {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .games-result--discover-dialog .discover-result-summary__chip {
+    font-size: 9px;
+    padding: 4px 7px;
+  }
+}
+
+@media (max-width: 560px) {
+  .search-shell {
+    width: min(100%, calc(100vw - 16px));
+    gap: 14px;
+  }
+
+  .search-header {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .search-nav,
+  .search-actions {
+    width: 100%;
+  }
+
+  .search-actions {
+    gap: 8px;
+  }
+
+  .search-actions > * {
+    min-width: 0;
+  }
+
+  .discover-algorithm-verdict .games-result,
+  .discover-questionnaire,
+  .discover-questionnaire-card,
+  .discover-results-panel,
+  .landing__footer {
+    border-radius: 14px;
+  }
+
+  .discover-algorithm-verdict .games-result__card,
+  .discover-questionnaire-selection,
+  .discover-questionnaire-compact__section,
+  .discover-results-grid {
+    min-width: 0;
+  }
+
+  .discover-random .games-search-grid,
+  .discover-algorithm-verdict .games-result__list-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
+  }
+}
+
+@media (max-width: 420px) {
+  .search-shell {
+    width: min(100%, calc(100vw - 12px));
+  }
+
+  .search-brand__title {
+    letter-spacing: 0.16em;
+    font-size: 11px;
+  }
+
+  .discover-random .games-search-grid,
+  .discover-algorithm-verdict .games-result__list-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

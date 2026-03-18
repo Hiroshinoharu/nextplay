@@ -16,13 +16,13 @@ const sharedFrameShell = css`
   aspect-ratio: 16 / 9;
   border-radius: 14px;
   overflow: hidden;
-  border: 1px solid rgba(226, 242, 255, 0.16);
+  border: 1px solid var(--game-border, rgba(226, 242, 255, 0.16));
   background:
-    radial-gradient(circle at top, rgba(140, 243, 122, 0.06), transparent 52%),
-    linear-gradient(155deg, rgba(8, 22, 34, 0.94), rgba(4, 12, 20, 0.95));
+    radial-gradient(circle at top, var(--games-card-poster-glow, rgba(140, 243, 122, 0.06)), transparent 52%),
+    var(--games-card-poster-bg, linear-gradient(155deg, rgba(8, 22, 34, 0.94), rgba(4, 12, 20, 0.95)));
   box-shadow:
-    0 20px 40px rgba(0, 0, 0, 0.34),
-    inset 0 0 0 1px rgba(140, 243, 122, 0.1);
+    var(--games-card-poster-shadow, 0 20px 40px rgba(0, 0, 0, 0.34)),
+    inset 0 0 0 1px var(--games-card-info-inset, rgba(140, 243, 122, 0.1));
 `
 
 export const FramePanel = styled.div`
@@ -55,7 +55,7 @@ export const NavButton = styled.button<{ $position: 'prev' | 'next' }>`
   z-index: 2;
   border: 1px solid var(--game-border, rgba(140, 243, 122, 0.36));
   color: var(--game-text, #e2f2ff);
-  background: rgba(8, 22, 34, 0.84);
+  background: var(--games-surface, var(--game-panel, rgba(8, 22, 34, 0.84)));
   border-radius: 999px;
   cursor: pointer;
   padding: 8px 12px;
@@ -72,8 +72,8 @@ export const NavButton = styled.button<{ $position: 'prev' | 'next' }>`
   right: ${({ $position }) => ($position === 'next' ? '12px' : 'auto')};
 
   &:hover {
-    background: rgba(140, 243, 122, 0.16);
-    border-color: rgba(140, 243, 122, 0.62);
+    background: var(--games-accent-surface, rgba(140, 243, 122, 0.16));
+    border-color: var(--games-border-active, rgba(140, 243, 122, 0.62));
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
   }
 
@@ -120,10 +120,10 @@ export const ThumbButton = styled.button`
   height: 68px;
   padding: 0;
   overflow: hidden;
-  border: 1px solid rgba(226, 242, 255, 0.2);
+  border: 1px solid var(--game-border, rgba(226, 242, 255, 0.2));
   border-radius: 9px;
   color: var(--game-text, #e2f2ff);
-  background: #040b12;
+  background: var(--game-card, #040b12);
   cursor: pointer;
   transition:
     border-color 0.2s ease,
@@ -167,7 +167,7 @@ export const ThumbLabel = styled.span`
   bottom: 0;
   padding: 4px 6px;
   background: linear-gradient(180deg, transparent 0%, rgba(4, 10, 16, 0.88) 100%);
-  color: #e2f2ff;
+  color: var(--game-text, #e2f2ff);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;

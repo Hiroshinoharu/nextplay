@@ -11,6 +11,7 @@ func SetUpRoutes(app *fiber.App) {
 	// ------------------------
 	// USER AUTH + PROFILE
 	// ------------------------
+	app.Get("/users/availability", handlers.CheckAvailability)
 	app.Post("/users/register", handlers.Register)
 	app.Post("/users/login", handlers.Login)
 	securedUsers := app.Group("/users", middleware.RequireJWT)

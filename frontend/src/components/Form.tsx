@@ -8,6 +8,20 @@ type AuthFormProps = {
   initialMode?: 'login' | 'register';
 };
 
+type AvailabilityFieldState = {
+  value: string;
+  exists: boolean;
+};
+
+type AvailabilityResponse = {
+  username?: AvailabilityFieldState;
+  email?: AvailabilityFieldState;
+  error?: string;
+};
+
+const PASSWORD_POLICY_TEXT =
+  'Password must be at least 8 characters and include upper-case, lower-case, number, and special character.';
+
 const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }: AuthFormProps) => {
   const rawBaseUrl = (apiBaseUrl ?? import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '');
   const apiRoot = rawBaseUrl.endsWith('/api') ? rawBaseUrl.slice(0, -4) : rawBaseUrl;
@@ -25,6 +39,10 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [signupNameExists, setSignupNameExists] = useState(false);
+  const [signupEmailExists, setSignupEmailExists] = useState(false);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
 
   useEffect(() => {
     const trimmedEmail = initialEmail?.trim();
@@ -32,6 +50,66 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
     setLoginIdentifier((current) => current || trimmedEmail);
     setSignupEmail((current) => current || trimmedEmail);
   }, [initialEmail]);
+
+  useEffect(() => {
+    const trimmedUsername = signupName.trim();
+    const trimmedEmail = signupEmail.trim();
+
+    setSignupNameExists(false);
+    setSignupEmailExists(false);
+    setAvailabilityError(null);
+
+    if (!trimmedUsername && !trimmedEmail) {
+      setAvailabilityLoading(false);
+      return;
+    }
+
+    if (trimmedEmail && !trimmedEmail.includes('@')) {
+      setAvailabilityLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      setAvailabilityLoading(true);
+      try {
+        const params = new URLSearchParams();
+        if (trimmedUsername) params.set('username', trimmedUsername);
+        if (trimmedEmail) params.set('email', trimmedEmail);
+
+        const response = await fetch(apiUrl(`/users/availability?${params.toString()}`), {
+          signal: controller.signal,
+        });
+        const data = (await response.json().catch(() => null)) as AvailabilityResponse | null;
+        if (!response.ok) {
+          setAvailabilityError(data?.error ?? `Availability check failed: ${response.status}`);
+          return;
+        }
+
+        const usernameMatches =
+          trimmedUsername !== '' &&
+          data?.username?.value?.trim().toLowerCase() === trimmedUsername.toLowerCase();
+        const emailMatches =
+          trimmedEmail !== '' &&
+          data?.email?.value?.trim().toLowerCase() === trimmedEmail.toLowerCase();
+
+        setSignupNameExists(Boolean(usernameMatches && data?.username?.exists));
+        setSignupEmailExists(Boolean(emailMatches && data?.email?.exists));
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        setAvailabilityError(`${err}`);
+      } finally {
+        if (!controller.signal.aborted) {
+          setAvailabilityLoading(false);
+        }
+      }
+    }, 320);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [signupEmail, signupName]);
 
   const extractToken = (payload: unknown): string => {
     if (typeof payload !== 'object' || payload === null) return '';
@@ -107,6 +185,18 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
     setError(null);
     if (!signupName.trim() || !signupEmail.trim() || !signupPassword.trim()) {
       setError('Name, email, and password are required.');
+      return;
+    }
+    if (signupNameExists) {
+      setError('That username already exists.');
+      return;
+    }
+    if (signupEmailExists) {
+      setError('That email is already registered.');
+      return;
+    }
+    if (availabilityError) {
+      setError('Resolve the account availability check before signing up.');
       return;
     }
 
@@ -213,11 +303,16 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
                     <input
                       className="flip-card__input"
                       name="username"
-                      placeholder="Name"
+                      placeholder="Username"
                       type="text"
                       value={signupName}
                       onChange={event => setSignupName(event.target.value)}
                     />
+                    {signupName.trim() && (
+                      <div className={`auth-inline-message ${signupNameExists ? 'error' : 'success'}`}>
+                        {signupNameExists ? 'Username already exists.' : 'Username is available.'}
+                      </div>
+                    )}
                     <input
                       className="flip-card__input"
                       name="email"
@@ -226,6 +321,11 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
                       value={signupEmail}
                       onChange={event => setSignupEmail(event.target.value)}
                     />
+                    {signupEmail.trim() && signupEmail.includes('@') && (
+                      <div className={`auth-inline-message ${signupEmailExists ? 'error' : 'success'}`}>
+                        {signupEmailExists ? 'Email already exists.' : 'Email is available.'}
+                      </div>
+                    )}
                     <input
                       className="flip-card__input"
                       name="password"
@@ -234,6 +334,16 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
                       value={signupPassword}
                       onChange={event => setSignupPassword(event.target.value)}
                     />
+                    <div className="auth-policy">
+                      <strong>Policy</strong>
+                      <span>{PASSWORD_POLICY_TEXT}</span>
+                    </div>
+                    {availabilityLoading && (
+                      <div className="auth-inline-message pending">Checking account availability...</div>
+                    )}
+                    {availabilityError && (
+                      <div className="auth-inline-message error">{availabilityError}</div>
+                    )}
                     <button className="flip-card__btn" type="submit" disabled={isLoading}>
                       {isLoading ? 'Working...' : 'Confirm!'}
                     </button>
@@ -272,6 +382,17 @@ const StyledWrapper = styled.div`
     align-items: center;
     justify-content: center;
     width: 100%;
+  }
+
+  .landing[data-theme='light'] & .wrapper,
+  .landing[data-theme='light'] .wrapper {
+    --input-focus: #5fa93b;
+    --font-color: #18354a;
+    --font-color-sub: rgba(24, 53, 74, 0.86);
+    --bg-color: rgba(255, 255, 255, 0.95);
+    --bg-color-alt: rgba(239, 248, 255, 0.9);
+    --main-color: rgba(59, 143, 62, 0.28);
+    --switch-color: #5fa93b;
   }
   .card-switch {
     width: 100%;
@@ -435,7 +556,7 @@ const StyledWrapper = styled.div`
 
   .card-stack {
     width: min(320px, 92vw);
-    height: 350px;
+    height: 470px;
     position: relative;
     padding-bottom: 6px;
     margin: 0 auto;
@@ -496,6 +617,16 @@ const StyledWrapper = styled.div`
       0 0 14px rgba(140, 243, 122, 0.2);
   }
 
+  .landing[data-theme='light'] & .flip-card__front,
+  .landing[data-theme='light'] & .flip-card__back,
+  .landing[data-theme='light'] .flip-card__front,
+  .landing[data-theme='light'] .flip-card__back {
+    box-shadow:
+      0 16px 28px rgba(31, 67, 92, 0.12),
+      0 0 24px rgba(121, 199, 230, 0.12),
+      0 0 16px rgba(59, 143, 62, 0.08);
+  }
+
   .flip-card__btn:active, .button-confirm:active {
     box-shadow: 0px 0px var(--main-color);
     transform: translate(3px, 3px);
@@ -516,6 +647,16 @@ const StyledWrapper = styled.div`
     font-weight: 600;
     color: #c7f000;
     cursor: pointer;
+  }
+
+  .landing[data-theme='light'] & .flip-card__btn,
+  .landing[data-theme='light'] .flip-card__btn {
+    background-color: rgba(59, 143, 62, 0.12);
+    box-shadow:
+      0 10px 20px rgba(31, 67, 92, 0.12),
+      0 0 18px rgba(121, 199, 230, 0.12),
+      0 0 14px rgba(59, 143, 62, 0.12);
+    color: #3b8f3e;
   }
 
   .flip-card__btn:disabled {
@@ -544,6 +685,16 @@ const StyledWrapper = styled.div`
     overflow-wrap: anywhere;
   }
 
+  .landing[data-theme='light'] & .auth-message,
+  .landing[data-theme='light'] .auth-message {
+    border-color: rgba(59, 143, 62, 0.24);
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(239, 248, 255, 0.9));
+    color: #18354a;
+    box-shadow:
+      0 10px 18px rgba(31, 67, 92, 0.1),
+      inset 0 0 0 1px rgba(59, 143, 62, 0.05);
+  }
+
   .flip-card__front .auth-message {
     display: block;
   }
@@ -561,6 +712,10 @@ const StyledWrapper = styled.div`
   }
 
   @media (max-width: 480px) {
+    .card-stack {
+      height: 500px;
+    }
+
     .switch {
       width: min(320px, 94vw);
       gap: 12px;
@@ -636,6 +791,90 @@ const StyledWrapper = styled.div`
     box-shadow:
       0 10px 18px rgba(0, 0, 0, 0.3),
       inset 0 0 0 1px rgba(140, 243, 122, 0.16);
+  }
+
+  .auth-inline-message,
+  .auth-policy {
+    width: 100%;
+    max-width: min(260px, 100%);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 12px;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
+  .landing[data-theme='light'] & .auth-inline-message,
+  .landing[data-theme='light'] .auth-inline-message {
+    border-color: rgba(59, 143, 62, 0.2);
+    background: rgba(255, 255, 255, 0.92);
+    color: #23455d;
+  }
+
+  .auth-inline-message {
+    border: 1px solid rgba(140, 243, 122, 0.3);
+    background: rgba(7, 21, 33, 0.72);
+    color: #d7e8f6;
+  }
+
+  .auth-inline-message.success {
+    border-color: rgba(140, 243, 122, 0.55);
+    color: #d4f932;
+  }
+
+  .auth-inline-message.error {
+    border-color: rgba(255, 125, 125, 0.58);
+    color: #ffd7d7;
+  }
+
+  .auth-inline-message.pending {
+    border-color: rgba(14, 165, 233, 0.42);
+    color: #bfeaff;
+  }
+
+  .auth-policy {
+    display: grid;
+    gap: 4px;
+    border: 1px solid rgba(140, 243, 122, 0.24);
+    background: linear-gradient(160deg, rgba(8, 24, 38, 0.82), rgba(7, 18, 28, 0.78));
+    color: #d7e8f6;
+  }
+
+  .landing[data-theme='light'] & .auth-policy,
+  .landing[data-theme='light'] .auth-policy {
+    border-color: rgba(59, 143, 62, 0.18);
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.94), rgba(239, 248, 255, 0.9));
+    color: #23455d;
+  }
+
+  .auth-policy strong {
+    color: #c7f000;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .auth-policy span {
+    color: rgba(226, 242, 255, 0.78);
+  }
+
+  .landing[data-theme='light'] & .auth-policy strong,
+  .landing[data-theme='light'] .auth-policy strong {
+    color: #3b8f3e;
+  }
+
+  .landing[data-theme='light'] & .auth-policy span,
+  .landing[data-theme='light'] .auth-policy span {
+    color: rgba(24, 53, 74, 0.88);
+  }
+
+  @media (max-width: 480px) {
+    .auth-inline-message,
+    .auth-policy {
+      max-width: 100%;
+      font-size: 11px;
+      padding: 8px 9px;
+    }
   }`;
 
 export default Form;

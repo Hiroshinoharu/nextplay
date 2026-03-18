@@ -19,11 +19,14 @@ import {
   getUserInitials,
   type AuthUser,
 } from "./utils/authUser";
+import { type ThemeMode } from "./utils/theme";
 import "./user.css";
 
 type UserPageProps = {
   authUser: AuthUser | null;
   onSignOut: () => void;
+  theme: ThemeMode;
+  onThemeChange: (theme: ThemeMode) => void;
 };
 
 type UserInteraction = {
@@ -45,7 +48,6 @@ type GameItem = {
 };
 
 type ListFilter = "all" | "liked" | "favorited" | "rated" | "reviewed";
-type ThemeMode = "dark" | "light";
 
 const hasMeaningfulInteraction = (item: UserInteraction) =>
   (typeof item.rating === "number" && Number.isFinite(item.rating)) ||
@@ -57,7 +59,6 @@ const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(/\/+$/, ""
 const API_ROOT = RAW_BASE_URL.endsWith("/api")
   ? RAW_BASE_URL.slice(0, -4)
   : RAW_BASE_URL;
-const THEME_STORAGE_KEY = "nextplay-user-theme";
 const DELETE_CONFIRMATION_TEXT = "DELETE";
 const PASSWORD_POLICY_TEXT =
   "Use at least 8 characters with an upper-case letter, lower-case letter, number, and symbol.";
@@ -79,20 +80,7 @@ const formatReleaseDate = (value?: string) => {
   });
 };
 
-const getInitialTheme = (): ThemeMode => {
-  if (typeof window === "undefined") return "dark";
-  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-  if (storedTheme === "light" || storedTheme === "dark") return storedTheme;
-  if (
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-color-scheme: light)").matches
-  ) {
-    return "light";
-  }
-  return "dark";
-};
-
-const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
+const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) => {
   const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState("");
   const [interactions, setInteractions] = useState<UserInteraction[]>([]);
@@ -102,7 +90,6 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
   const [gamesLoading, setGamesLoading] = useState(false);
   const [listFilter, setListFilter] = useState<ListFilter>("all");
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -139,11 +126,6 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
     setSettingsOpen(false);
     resetSettingsState();
   }, [resetSettingsState, settingsBusy]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-  }, [theme]);
 
   useEffect(() => {
     if (!settingsOpen) return;
@@ -344,8 +326,8 @@ const UserPage = ({ authUser, onSignOut }: UserPageProps) => {
   }, [navigate, onSignOut]);
 
   const handleThemeToggle = useCallback((checked: boolean) => {
-    setTheme(checked ? "light" : "dark");
-  }, []);
+    onThemeChange(checked ? "light" : "dark");
+  }, [onThemeChange]);
 
   const handlePasswordChange = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {

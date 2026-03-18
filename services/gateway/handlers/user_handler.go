@@ -1,6 +1,10 @@
 package handlers
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"strings"
+
+	"github.com/gofiber/fiber/v2"
+)
 
 // GetUserByID handles GET /api/users/:id
 func GetUserByID(c *fiber.Ctx) error {
@@ -14,6 +18,17 @@ func GetUserByID(c *fiber.Ctx) error {
 func RegisterUser(c *fiber.Ctx) error {
 	userClient := userClientFromCtx(c)
 	resp, err := userClient.RegisterUser(c.Body())
+	return sendProxyJSON(c, resp, err)
+}
+
+// CheckUserAvailability handles GET /api/users/availability
+func CheckUserAvailability(c *fiber.Ctx) error {
+	userClient := userClientFromCtx(c)
+	query := strings.TrimSpace(c.Context().QueryArgs().String())
+	if query != "" {
+		query = "?" + query
+	}
+	resp, err := userClient.CheckAvailability(query)
 	return sendProxyJSON(c, resp, err)
 }
 

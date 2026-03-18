@@ -1,6 +1,7 @@
 import styled from "styled-components";
 import BrandLogo from "./BrandLogo";
 import Loader from "./Loader";
+import { type ThemeMode } from "../utils/theme";
 
 type LoadingScreenProps = {
   eyebrow?: string;
@@ -8,6 +9,7 @@ type LoadingScreenProps = {
   subtitle: string;
   hints?: string[];
   fullScreen?: boolean;
+  theme?: ThemeMode;
 };
 
 const DEFAULT_HINTS = [
@@ -22,11 +24,17 @@ const LoadingScreen = ({
   subtitle,
   hints = DEFAULT_HINTS,
   fullScreen = true,
+  theme = "dark",
 }: LoadingScreenProps) => {
   const visibleHints = hints.filter(Boolean).slice(0, 3);
 
   return (
-    <StyledWrapper $fullScreen={fullScreen} role="status" aria-live="polite">
+    <StyledWrapper
+      $fullScreen={fullScreen}
+      $theme={theme}
+      role="status"
+      aria-live="polite"
+    >
       <div className="loading-screen__panel">
         <BrandLogo
           className="loading-screen__brand"
@@ -35,7 +43,7 @@ const LoadingScreen = ({
           label="NextPlay"
         />
         <p className="loading-screen__eyebrow">{eyebrow}</p>
-        <Loader title={title} subtitle={subtitle} />
+        <Loader title={title} subtitle={subtitle} theme={theme} />
         {visibleHints.length ? (
           <ul className="loading-screen__status-list" aria-label="Loading progress details">
             {visibleHints.map((hint, index) => (
@@ -50,8 +58,29 @@ const LoadingScreen = ({
   );
 };
 
-const StyledWrapper = styled.div<{ $fullScreen: boolean }>`
-  ${({ $fullScreen }) =>
+const StyledWrapper = styled.div<{ $fullScreen: boolean; $theme: ThemeMode }>`
+  ${({ $theme }) =>
+    $theme === "light"
+      ? `
+    --loading-screen-text: #18354a;
+    --loading-screen-muted: rgba(24, 53, 74, 0.88);
+    --loading-screen-accent: #5fa93b;
+    --loading-screen-border: rgba(59, 143, 62, 0.18);
+    --loading-screen-panel: linear-gradient(160deg, rgba(255, 255, 255, 0.96), rgba(236, 246, 255, 0.92));
+    --loading-screen-surface: rgba(255, 255, 255, 0.94);
+    --loading-screen-glow: rgba(133, 197, 103, 0.1);
+  `
+      : `
+    --loading-screen-text: #e2f2ff;
+    --loading-screen-muted: rgba(198, 224, 245, 0.82);
+    --loading-screen-accent: #8cf37a;
+    --loading-screen-border: rgba(140, 243, 122, 0.2);
+    --loading-screen-panel: linear-gradient(160deg, rgba(7, 21, 34, 0.96), rgba(6, 17, 27, 0.92));
+    --loading-screen-surface: rgba(10, 28, 42, 0.64);
+    --loading-screen-glow: rgba(140, 243, 122, 0.1);
+  `}
+
+  ${({ $fullScreen, $theme }) =>
     $fullScreen
       ? `
     position: fixed;
@@ -61,9 +90,11 @@ const StyledWrapper = styled.div<{ $fullScreen: boolean }>`
     place-items: center;
     padding: clamp(18px, 4vw, 32px);
     background:
-      radial-gradient(1200px 520px at 16% 14%, rgba(140, 243, 122, 0.16), transparent 60%),
-      radial-gradient(1000px 480px at 84% 78%, rgba(67, 197, 248, 0.12), transparent 58%),
-      linear-gradient(180deg, rgba(4, 12, 20, 0.96), rgba(7, 20, 31, 0.98));
+      ${
+        $theme === "light"
+          ? "radial-gradient(1200px 520px at 16% 14%, rgba(133, 197, 103, 0.16), transparent 60%), radial-gradient(1000px 480px at 84% 78%, rgba(121, 199, 230, 0.16), transparent 58%), linear-gradient(180deg, rgba(245, 251, 255, 0.96), rgba(228, 240, 248, 0.98))"
+          : "radial-gradient(1200px 520px at 16% 14%, rgba(140, 243, 122, 0.16), transparent 60%), radial-gradient(1000px 480px at 84% 78%, rgba(67, 197, 248, 0.12), transparent 58%), linear-gradient(180deg, rgba(4, 12, 20, 0.96), rgba(7, 20, 31, 0.98))"
+      };
     backdrop-filter: blur(18px) saturate(118%);
   `
       : `
@@ -78,10 +109,10 @@ const StyledWrapper = styled.div<{ $fullScreen: boolean }>`
     width: min(92vw, 560px);
     padding: clamp(24px, 4vw, 34px);
     border-radius: 28px;
-    border: 1px solid rgba(140, 243, 122, 0.2);
+    border: 1px solid var(--loading-screen-border);
     background:
-      linear-gradient(160deg, rgba(7, 21, 34, 0.96), rgba(6, 17, 27, 0.92)),
-      radial-gradient(circle at top right, rgba(140, 243, 122, 0.1), transparent 40%);
+      var(--loading-screen-panel),
+      radial-gradient(circle at top right, var(--loading-screen-glow), transparent 40%);
     box-shadow:
       0 30px 70px rgba(0, 0, 0, 0.42),
       inset 0 1px 0 rgba(255, 255, 255, 0.04);
@@ -106,7 +137,7 @@ const StyledWrapper = styled.div<{ $fullScreen: boolean }>`
     gap: 14px;
     width: fit-content;
     margin: 0 auto 14px;
-    color: #a7f58e;
+    color: var(--loading-screen-accent);
     font-size: clamp(1.3rem, 2.1vw, 1.65rem);
     font-weight: 600;
     line-height: 1;
@@ -126,7 +157,7 @@ const StyledWrapper = styled.div<{ $fullScreen: boolean }>`
   .loading-screen__eyebrow {
     margin: 0 0 14px;
     text-align: center;
-    color: rgba(198, 224, 245, 0.82);
+    color: var(--loading-screen-muted);
     font-size: 0.82rem;
     font-weight: 600;
     letter-spacing: 0.16em;
@@ -166,9 +197,9 @@ const StyledWrapper = styled.div<{ $fullScreen: boolean }>`
     min-height: 46px;
     padding: 0 14px 0 40px;
     border-radius: 16px;
-    border: 1px solid rgba(140, 243, 122, 0.16);
-    background: rgba(10, 28, 42, 0.64);
-    color: rgba(226, 242, 255, 0.86);
+    border: 1px solid var(--loading-screen-border);
+    background: var(--loading-screen-surface);
+    color: var(--loading-screen-text);
     font-size: 0.95rem;
     line-height: 1.35;
     animation: status-glow 2.4s ease-in-out infinite;
@@ -248,6 +279,75 @@ const StyledWrapper = styled.div<{ $fullScreen: boolean }>`
       padding-inline: 14px;
       padding-left: 38px;
       font-size: 0.9rem;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .loading-screen__panel {
+      width: min(100%, calc(100vw - 20px));
+      padding: 18px 14px;
+      border-radius: 18px;
+    }
+
+    .loading-screen__brand {
+      gap: 8px;
+      margin-bottom: 10px;
+      font-size: 1.02rem;
+    }
+
+    .loading-screen__brand img {
+      width: 56px;
+      height: 56px;
+    }
+
+    .loading-screen__eyebrow {
+      margin-bottom: 10px;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+    }
+
+    .loading-screen__panel .loader-progress {
+      width: 100%;
+    }
+
+    .loading-screen__status-list {
+      margin-top: 14px;
+      gap: 8px;
+    }
+
+    .loading-screen__status-item {
+      min-height: 40px;
+      padding: 10px 12px 10px 34px;
+      border-radius: 14px;
+      font-size: 0.84rem;
+      line-height: 1.3;
+    }
+
+    .loading-screen__status-item::before {
+      left: 12px;
+      width: 10px;
+      height: 10px;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .loading-screen__panel {
+      width: min(100%, calc(100vw - 16px));
+      padding: 16px 12px;
+      border-radius: 16px;
+    }
+
+    .loading-screen__panel::before {
+      inset: auto -16% -54% 8%;
+      height: 140px;
+    }
+
+    .loading-screen__brand span {
+      letter-spacing: 0.03em;
+    }
+
+    .loading-screen__status-item {
+      font-size: 0.8rem;
     }
   }
 

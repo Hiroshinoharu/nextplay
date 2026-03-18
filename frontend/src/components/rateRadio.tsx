@@ -79,12 +79,18 @@ const StyledWrapper = styled.div`
   }
 
   .rate-radio__star {
+    --np-rate-border: var(--games-border, var(--game-border, rgba(140, 243, 122, 0.34)));
+    --np-rate-bg: var(--games-surface, var(--game-panel, rgba(10, 30, 48, 0.62)));
+    --np-rate-color: var(--games-subtle, var(--game-subtle, rgba(226, 242, 255, 0.42)));
+    --np-rate-active-border: var(--games-border-active, rgba(199, 240, 0, 0.72));
+    --np-rate-active-color: var(--games-accent-strong, var(--game-accent-strong, rgba(220, 255, 116, 0.96)));
+    --np-rate-active-bg: var(--games-accent-surface, rgba(140, 243, 122, 0.18));
     width: 34px;
     height: 34px;
     border-radius: 10px;
-    border: 1px solid rgba(140, 243, 122, 0.34);
-    background: rgba(10, 30, 48, 0.62);
-    color: rgba(226, 242, 255, 0.42);
+    border: 1px solid var(--np-rate-border);
+    background: var(--np-rate-bg);
+    color: var(--np-rate-color);
     display: grid;
     place-items: center;
     cursor: pointer;
@@ -99,22 +105,22 @@ const StyledWrapper = styled.div`
 
   .rate-radio__star:hover:not(:disabled) {
     transform: translateY(-1px);
-    border-color: rgba(199, 240, 0, 0.64);
-    color: rgba(199, 240, 0, 0.88);
+    border-color: var(--np-rate-active-border);
+    color: var(--games-accent, var(--game-accent, rgba(199, 240, 0, 0.88)));
   }
 
   .rate-radio__star.is-active {
-    border-color: rgba(199, 240, 0, 0.72);
-    color: rgba(220, 255, 116, 0.96);
-    background: rgba(140, 243, 122, 0.18);
-    box-shadow: inset 0 0 0 1px rgba(199, 240, 0, 0.24);
+    border-color: var(--np-rate-active-border);
+    color: var(--np-rate-active-color);
+    background: var(--np-rate-active-bg);
+    box-shadow: inset 0 0 0 1px var(--games-accent-outline, rgba(199, 240, 0, 0.24));
   }
 
   .rate-radio__clear {
-    border: 1px solid rgba(140, 243, 122, 0.3);
+    border: 1px solid var(--np-rate-border);
     border-radius: 999px;
-    background: rgba(10, 30, 48, 0.62);
-    color: rgba(226, 242, 255, 0.82);
+    background: var(--np-rate-bg);
+    color: var(--games-text, var(--game-text, rgba(226, 242, 255, 0.82)));
     padding: 6px 11px;
     font-size: 11px;
     cursor: pointer;

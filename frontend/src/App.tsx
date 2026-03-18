@@ -1,18 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import "./App.css";
 import "./health.css";
 import BrandLogo from "./components/BrandLogo";
 import Button from "./components/Button";
 import SiteFooter from "./components/SiteFooter";
-import Game from "./game";
-import Games from "./games";
-import SearchPage from "./discover";
-import UserPage from "./user";
-import Login from "./login";
 import { type AuthUser } from "./utils/authUser";
+import { getInitialTheme, THEME_STORAGE_KEY, type ThemeMode } from "./utils/theme";
 import Loader from "./components/Loader";
 import LoadingScreen from "./components/LoadingScreen";
+
+const Game = lazy(() => import("./game"));
+const Games = lazy(() => import("./games"));
+const SearchPage = lazy(() => import("./discover"));
+const UserPage = lazy(() => import("./user"));
+const Login = lazy(() => import("./login"));
 
 // Types for health check statuses
 type HealthStatus = "idle" | "loading" | "ok" | "error";
@@ -104,6 +106,7 @@ type RouteTransitionLoaderProps = {
   title: string;
   subtitle: string;
   hints?: string[];
+  theme: ThemeMode;
 };
 
 const RouteTransitionLoader = ({
@@ -111,6 +114,7 @@ const RouteTransitionLoader = ({
   title,
   subtitle,
   hints,
+  theme,
 }: RouteTransitionLoaderProps) => {
   const [visible, setVisible] = useState(true);
 
@@ -133,6 +137,7 @@ const RouteTransitionLoader = ({
   return (
     <LoadingScreen
       fullScreen
+      theme={theme}
       eyebrow={eyebrow}
       title={title}
       subtitle={subtitle}
@@ -188,9 +193,10 @@ const coerceAuthUser = (payload: unknown): AuthUser | null => {
 type HomeProps = {
   authUser: AuthUser | null;
   onSignOut: () => void;
+  theme: ThemeMode;
 };
 
-const Home = ({ authUser, onSignOut }: HomeProps) => {
+const Home = ({ authUser, onSignOut, theme }: HomeProps) => {
   // Define service cards for the home page
   const navigate = useNavigate();
   const [heroEmail, setHeroEmail] = useState("");
@@ -289,7 +295,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
   }, [preferredPopularYear, totalLimit]);
 
   return (
-    <div className="landing">
+    <div className="landing" data-theme={theme}>
       <div className="landing__container">
         <nav className="landing__nav">
           <BrandLogo onClick={() => navigate("/")} width={128} height={128} />
@@ -355,6 +361,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
             <Loader
               title="Loading popular games"
               subtitle="Curating what players are into right now..."
+              theme={theme}
             />
           ) : popularGames.length === 0 ? (
             <p className="popular__status">No popular games found yet.</p>
@@ -388,7 +395,7 @@ const Home = ({ authUser, onSignOut }: HomeProps) => {
 };
 
 
-const HealthPage = () => {
+const HealthPage = ({ theme }: { theme: ThemeMode }) => {
   // State and handlers for health checks
   const navigate = useNavigate();
   const location = useLocation();
@@ -481,7 +488,7 @@ const HealthPage = () => {
   const score = totalCount ? Math.round((okCount / totalCount) * 100) : 0;
 
   return (
-    <div className="health-page">
+    <div className="health-page" data-theme={theme}>
       <div className="health-shell">
         <header className="health-header">
           <div className="health-brand">
@@ -578,6 +585,7 @@ function App() {
   const location = useLocation();
   const unauthorizedRedirectingRef = useRef(false);
   const [showBootLoadingScreen, setShowBootLoadingScreen] = useState(true);
+  const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => {
     if (typeof window === "undefined") return null;
     try {
@@ -613,6 +621,13 @@ function App() {
     const token = authUser?.token?.trim();
     return token ? { ...authUser, token } : null;
   }, [authUser]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    document.documentElement.dataset.theme = theme;
+    document.body.dataset.theme = theme;
+  }, [theme]);
 
   useEffect(() => {
     let ready = typeof document !== "undefined" && document.readyState === "complete";
@@ -794,56 +809,82 @@ function App() {
 
   return (
     <>
-      <Routes>
-        <Route
-          path="/"
-          element={
-            sessionUser ? (
-              <Navigate to="/games" replace />
-            ) : (
-              <Home authUser={sessionUser} onSignOut={handleSignOut} />
-            )
-          }
-        />
-        <Route
-          path="/games"
-          element={sessionUser ? <Games authUser={sessionUser} /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/discover"
-          element={sessionUser ? <SearchPage authUser={sessionUser} /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/games/:gameId"
-          element={sessionUser ? <Game authUser={sessionUser} /> : <Navigate to="/login" replace />}
-        />
-        <Route
-          path="/login"
-          element={
-            <Login apiBaseUrl={API_ROOT} authUser={sessionUser} onAuthSuccess={handleAuthSuccess} />
-          }
-        />
-        <Route
-          path="/user"
-          element={
-            <UserPage authUser={sessionUser} onSignOut={handleSignOut} />
-          }
-        />
-        <Route path="/health" element={<HealthPage />} />
-        <Route
-          path="*"
-          element={
-            sessionUser ? (
-              <Navigate to="/games" replace />
-            ) : (
-              <Navigate to="/" replace />
-            )
-          }
-        />
-      </Routes>
+      <Suspense fallback={null}>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              sessionUser ? (
+                <Navigate to="/games" replace />
+              ) : (
+                <Home authUser={sessionUser} onSignOut={handleSignOut} theme={theme} />
+              )
+            }
+          />
+          <Route
+            path="/games"
+            element={
+              sessionUser ? (
+                <Games authUser={sessionUser} theme={theme} />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+          <Route
+            path="/discover"
+            element={
+              sessionUser ? (
+                <SearchPage authUser={sessionUser} theme={theme} />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+          <Route
+            path="/games/:gameId"
+            element={
+              sessionUser ? (
+                <Game authUser={sessionUser} theme={theme} />
+              ) : (
+                <Navigate to="/login" replace />
+              )
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <Login
+                apiBaseUrl={API_ROOT}
+                authUser={sessionUser}
+                onAuthSuccess={handleAuthSuccess}
+                theme={theme}
+              />
+            }
+          />
+          <Route
+            path="/user"
+            element={
+              <UserPage authUser={sessionUser} onSignOut={handleSignOut} theme={theme} onThemeChange={setTheme} />
+            }
+          />
+          <Route path="/health" element={<HealthPage theme={theme} />} />
+          <Route
+            path="*"
+            element={
+              sessionUser ? (
+                <Navigate to="/games" replace />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+        </Routes>
+      </Suspense>
       {showBootLoadingScreen ? (
         <LoadingScreen
           fullScreen
+          theme={theme}
           eyebrow="Launching NextPlay"
           title="Booting your play space"
           subtitle="Loading routes, session state, and the first view."
@@ -857,6 +898,7 @@ function App() {
       {shouldShowRouteLoader ? (
         <RouteTransitionLoader
           key={location.key}
+          theme={theme}
           eyebrow={routeLoaderConfig.eyebrow}
           title={routeLoaderConfig.title}
           subtitle={routeLoaderConfig.subtitle}

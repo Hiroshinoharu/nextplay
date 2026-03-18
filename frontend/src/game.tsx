@@ -12,6 +12,7 @@ import TrailerGallery from "./components/TrailerGallery";
 import Loader from "./components/Loader";
 import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
+import { type ThemeMode } from "./utils/theme";
 import "./game.css";
 import "./games.css";
 import SiteFooter from "./components/SiteFooter";
@@ -46,6 +47,7 @@ type GameMedia = {
 // Define the props for the Game component
 type GameProps = {
   authUser: AuthUser | null;
+  theme: ThemeMode;
 };
 
 type UserInteraction = {
@@ -174,7 +176,7 @@ const buildAssociationTokens = (gameName: string): string[] => {
 };
 
 // Main Game component handling individual game detail view
-function Game({ authUser }: GameProps) {
+function Game({ authUser, theme }: GameProps) {
   // Sets a navigation hook and state variables
   const navigate = useNavigate();
   const { gameId } = useParams();
@@ -500,9 +502,20 @@ function Game({ authUser }: GameProps) {
     return () => controller.abort();
   }, [authToken, numericId, isValidId, showToast, userInteractionsUrl]);
 
-  const interactionUpdatedText = interaction?.timestamp
-    ? String(new Date(interaction.timestamp).getTime())
-    : "Not saved yet";
+  const interactionUpdatedText = (() => {
+    if (!interaction?.timestamp) return "Not saved yet";
+    const parsed = new Date(interaction.timestamp);
+    if (Number.isNaN(parsed.getTime())) {
+      return collapseWhitespace(String(interaction.timestamp)) || "Not saved yet";
+    }
+    return parsed.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  })();
   const existingReview = collapseWhitespace(interaction?.review ?? "");
   const currentReview = collapseWhitespace(reviewDraft);
   const reviewCharsRemaining = 500 - reviewDraft.length;
@@ -700,7 +713,7 @@ function Game({ authUser }: GameProps) {
   }, [authToken, game?.id, game?.name]);
 
   return (
-    <div className="game-page">
+    <div className="game-page" data-theme={theme}>
       <div className="game-shell">
         <header className="game-header">
           <button
@@ -740,6 +753,7 @@ function Game({ authUser }: GameProps) {
               <Loader
                 title="Loading game details"
                 subtitle="Fetching media, metadata, and related content..."
+                theme={theme}
               />
             </div>
           )}
@@ -780,6 +794,7 @@ function Game({ authUser }: GameProps) {
                       <Loader
                         title="Loading your interaction"
                         subtitle="Checking saved ratings and notes..."
+                        theme={theme}
                       />
                     </div>
                   ) : (
@@ -1029,6 +1044,7 @@ function Game({ authUser }: GameProps) {
                   <Loader
                     title="Loading franchise games"
                     subtitle="Finding connected titles..."
+                    theme={theme}
                   />
                 </div>
               ) : relatedError ? (
@@ -1060,6 +1076,7 @@ function Game({ authUser }: GameProps) {
                   <Loader
                     title="Loading additional content"
                     subtitle="Gathering expansions and packs..."
+                    theme={theme}
                   />
                 </div>
               ) : additionalError ? (
