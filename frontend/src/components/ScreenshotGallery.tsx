@@ -53,14 +53,6 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
   const touchStartX = useRef<number | null>(null)
   const touchStartY = useRef<number | null>(null)
 
-  if (!items.length) return null
-
-  const safeActiveIndex = activeIndex < items.length ? activeIndex : 0
-  const activeShot = items[safeActiveIndex]
-  const canNavigate = items.length > 1
-  const activeAspectRatio = aspectRatioBySrc[activeShot.src] ?? 16 / 9
-  const clampedAspectRatio = Math.max(0.75, Math.min(2.2, activeAspectRatio))
-
   const showPrevious = () => {
     if (!canNavigate) return
     setActiveIndex((current) => (current - 1 + items.length) % items.length)
@@ -161,6 +153,14 @@ const ScreenshotGallery = ({ screenshots, gameName = 'game', onOpen }: Screensho
     },
     [],
   )
+
+  if (!items.length) return null
+
+  const safeActiveIndex = activeIndex < items.length ? activeIndex : 0
+  const activeShot = items[safeActiveIndex]
+  const canNavigate = items.length > 1
+  const activeAspectRatio = aspectRatioBySrc[activeShot.src] ?? 16 / 9
+  const clampedAspectRatio = Math.max(0.75, Math.min(2.2, activeAspectRatio))
 
   return (
     <Gallery>

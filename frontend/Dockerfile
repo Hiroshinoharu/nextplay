@@ -12,8 +12,6 @@ COPY frontend/public ./public
 COPY frontend/src ./src
 COPY frontend/vite.config.ts ./vite.config.ts
 COPY frontend/tsconfig*.json ./
-COPY frontend/postcss.config.js ./postcss.config.js
-COPY frontend/tailwind.config.js ./tailwind.config.js
 COPY frontend/eslint.config.js ./eslint.config.js
 RUN npm run build
 

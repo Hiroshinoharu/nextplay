@@ -8,7 +8,7 @@ a React-based frontend, and modern cloud-native deployment using Docker and Kube
 
 ## 🚀 Current Project Overview
 
-- **Frontend:** React + TypeScript (Vite) with Tailwind CSS  
+- **Frontend:** React + TypeScript (Vite) with route-level CSS and styled-components  
 - **Backend Microservices:** Implemented in Go (Fiber framework)  
 - **Machine Learning Service:** Python (FastAPI)  
 - **Containerization:** Docker for each service  
@@ -29,7 +29,7 @@ The repo now includes a working end-to-end recommendation flow: the frontend can
 |`/deploy`| Kubernetes deployment manifests for all services including frontend, backend microservices, and ML service. It aslo contains a intial SQL script to set up my tables|
 |`/deploy/bridge`| Contains files to set up a Docker bridge network for local development and testing|
 |`/deploy/env`| Environment variable files for different services to manage configuration settings This would include API keys, database URLs, and other sensitive information|
-|`/frontend`| React frontend application this is where all my UI is displayed including the main user interface and interaction components with tailwind css|
+|`/frontend`| React frontend application where the user interface lives, built with page CSS, shared component styles, and Vite tooling.|
 |`/kube`| Kubernetes configuration files for setting up the local cluster and services|
 |`/services`| Contains all backend microservices and the ML service. Each service has its own folder with source code and Dockerfile.|
 |`/services/game`| Backend microservice for game data management|
@@ -122,83 +122,31 @@ The repo now includes a working end-to-end recommendation flow: the frontend can
 - Documentation is still evolving, especially around deployment and API behavior.
 
 ## Kubernetes Deployment
-Kubernetes manifests are provided in the `/deploy` directory to deploy all services to a local Docker Desktop Kubernetes cluster. Each service has its own deployment and service definition.
+Kustomize manifests live in `/kube/base`, with desktop-oriented overrides in `/kube/overlays/desktop`.
 
 ## Steps to Run the application Locally
-1. Ensure Docker and Kubernetes are installed and running on your machine.
-2. env file setup: Create `.env` files in the `/deploy/env` directory for each service with necessary environment variables.
+1. Ensure Docker Desktop is running. Kubernetes is only required if you plan to apply the manifests in `/kube`.
+2. Review the existing environment files in `/deploy/env` and update the machine-specific values you need. Docker Compose reads `game.env`, `gateway.env`, `recommender.env`, and `user.env` from that directory.
+3. Start the local stack from the repo root:
    ```bash
-   # Example for game service
-   TOUCH /deploy/env/game.env
-   # Add necessary environment variables in the file
-    DATABASE_URL=postgres://nextplay:nextplay@postgres:5432/nextplay?sslmode=disable
-    PORT=8081
-    IGDB_CLIENT_ID= your_igdb_client_id
-    IGDB_ACCESS_TOKEN=your_igdb_access_token
+   docker compose -f deploy/docker-compose.yml up -d --build
    ```
-   ``` bash
-   # Example for recommender service
-    TOUCH /deploy/env/recommender.env
-    # Add necessary environment variables in the file
-    DATABASE_URL=postgres://nextplay:nextplay@postgres:5432/nextplay?sslmode=disable
-    PORT=8082
-    ```
-    ``` bash
-   # Example for user service
-    TOUCH /deploy/env/user.env
-    # Add necessary environment variables in the file
-    DATABASE_URL=postgres://nextplay:nextplay@postgres:5432/nextplay?sslmode=disable
-    PORT=8083
-   ```
-   ``` bash
-    # Example for gateway service
-     TOUCH /deploy/env/gateway.env
-     # Add necessary environment variables in the file
-     PORT=8084
-     GAME_SERVICE_URL=http://game-service:8081
-     RECOMMENDER_SERVICE_URL=http://recommender-service:8082
-     USER_SERVICE_URL=http://user-service:8083
-    ```
-    ``` bash
-   # Example for frontend service
-    TOUCH /deploy/env/frontend.env
-    # Add necessary environment variables in the file
-    VITE_API_GATEWAY_URL=http://localhost:8084
-   ```
-   ``` bash
-    # Example for Database service
-     TOUCH /deploy/env/db.env
-     # Add necessary environment variables in the file
-     There are no specific environment variables needed for the database in this setup.
-    ```
-3. Clone the repository:
+4. Open the local services:
+   - Frontend: `http://localhost:5173`
+   - Gateway health: `http://localhost:18084/health`
+   - Recommender health: `http://localhost:18082/health`
+   - Game health: `http://localhost:8081/health`
+   - User health: `http://localhost:8083/health`
+5. Check aggregated gateway health when you want downstream status through the public API:
    ```bash
-   git clone https://github.com/Hiroshinoharu/nextplay.git
-   cd nextplay
+   curl http://localhost:18084/api/health/game
+   curl http://localhost:18084/api/health/user
+   curl http://localhost:18084/api/health/recommender
    ```
-4. Change to the deploy directory:
+6. If you run the frontend with Vite instead of Docker, set `VITE_API_URL=http://127.0.0.1:18084/api` in `frontend/.env.local` and use `npm run dev` inside `/frontend`.
+7. Stop the stack:
    ```bash
-   cd deploy
-   ```
-5. Compose the Docker-compose.yml to set up the bridge network and services:
-   ```bash
-   docker-compose up -d
-   ```
-6. To do API endpoint testing, you can use tools like Postman or curl to interact with the services via the API Gateway.
-7. Access the frontend application by navigating to `http://localhost:80` in your web browser.
-8. To see each endpoint health status, you can send a GET request to `/health` on each service's exposed port.
-   ```bash
-   curl http://localhost:<service-port>/health
-   ```
-   This should return a simple health status response from each microservice.
-   ```json
-   {
-     "service": "game",
-     "status": "healthy"
-   }
-9.  To stop the services, run:
-   ```bash
-   docker-compose down
+   docker compose -f deploy/docker-compose.yml down
    ```
 ---
 

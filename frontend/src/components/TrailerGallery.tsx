@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react'
+import { useMemo, useRef, useState, type TouchEvent } from 'react'
 import styled from 'styled-components'
 import {
   FramePanel,
@@ -87,30 +87,26 @@ const TrailerGallery = ({ trailers, gameName = 'game' }: TrailerGalleryProps) =>
   const touchStartX = useRef<number | null>(null)
   const touchStartY = useRef<number | null>(null)
 
-  useEffect(() => {
-    if (!items.length) {
-      setActiveIndex(0)
-      return
-    }
-    setActiveIndex((current) => {
-      if (current < items.length) return current
-      return 0
-    })
-  }, [items])
-
   if (!items.length) return null
 
-  const activeTrailer = items[activeIndex]
+  const safeActiveIndex = activeIndex < items.length ? activeIndex : 0
+  const activeTrailer = items[safeActiveIndex]
   const canNavigate = items.length > 1
 
   const showPrevious = () => {
     if (!canNavigate) return
-    setActiveIndex((current) => (current - 1 + items.length) % items.length)
+    setActiveIndex((current) => {
+      const clampedIndex = current < items.length ? current : 0
+      return (clampedIndex - 1 + items.length) % items.length
+    })
   }
 
   const showNext = () => {
     if (!canNavigate) return
-    setActiveIndex((current) => (current + 1) % items.length)
+    setActiveIndex((current) => {
+      const clampedIndex = current < items.length ? current : 0
+      return (clampedIndex + 1) % items.length
+    })
   }
 
   const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
@@ -156,7 +152,7 @@ const TrailerGallery = ({ trailers, gameName = 'game' }: TrailerGalleryProps) =>
         <FramePanel>
           <TrailerFrame
             src={activeTrailer.embedUrl}
-            title={`${gameName} trailer ${activeIndex + 1}`}
+            title={`${gameName} trailer ${safeActiveIndex + 1}`}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -176,7 +172,7 @@ const TrailerGallery = ({ trailers, gameName = 'game' }: TrailerGalleryProps) =>
       </FrameWrap>
       <Meta>
         <span>
-          Trailer {activeIndex + 1} of {items.length}
+          Trailer {safeActiveIndex + 1} of {items.length}
         </span>
         <MetaLink
           href={toWatchUrl(activeTrailer.sourceUrl, activeTrailer.videoId)}
@@ -192,7 +188,7 @@ const TrailerGallery = ({ trailers, gameName = 'game' }: TrailerGalleryProps) =>
             <ThumbButton
               key={item.key}
               type="button"
-              data-active={index === activeIndex}
+              data-active={index === safeActiveIndex}
               onClick={() => setActiveIndex(index)}
               aria-label={`Play trailer ${index + 1}`}
             >

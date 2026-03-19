@@ -20,6 +20,12 @@ import {
   normalizeStoredQuestionnaireAnswers,
   type QuestionnaireAnswers,
 } from "./recommender/questionnaire";
+import {
+  hasValidReleaseDate,
+  isEpisodicOrLiveContentGame,
+  isNonBaseContentGame,
+  normalizeCatalogImageUrl,
+} from "./utils/catalog";
 import "./discover.css";
 import "./games.css";
 
@@ -273,12 +279,6 @@ const tokenizePreferenceText = (value?: string) => {
     .filter((part) => part.length >= 3);
 };
 
-const normalizeMediaUrl = (url?: string) => {
-  if (!url) return null;
-  if (url.startsWith("//")) return `https:${url}`;
-  return url;
-};
-
 const normalizeFacetText = (value?: string) =>
   collapseWhitespace(value)
     .toLowerCase()
@@ -376,7 +376,7 @@ const rankPlatformOptionsFromCatalog = (question: typeof QUESTIONNAIRE_V1.questi
  * @returns The preferred cover image URL, or null if no suitable image is found
  */
 const getPreferredCoverImage = (game: GameItem) => {
-  const primaryCover = normalizeMediaUrl(game.cover_image);
+  const primaryCover = normalizeCatalogImageUrl(game.cover_image);
   if (primaryCover) return primaryCover;
   const media = Array.isArray(game.media) ? game.media : [];
   const preferred = media.find((item) =>
@@ -384,7 +384,7 @@ const getPreferredCoverImage = (game: GameItem) => {
       collapseWhitespace(item.media_type).toLowerCase(),
     ),
   );
-  return normalizeMediaUrl(preferred?.url);
+  return normalizeCatalogImageUrl(preferred?.url);
 };
 
 const hashString = (value: string) => {
@@ -542,11 +542,6 @@ const NORMALIZED_NSFW_TERMS = NSFW_TERMS.map((term) => normalizeFilterText(term)
   .filter(Boolean);
 
 // A more comprehensive list of NSFW terms to check against game metadata for filtering out adult content from random carousels. This is still not perfect but should catch a wider range of explicit content based on common terminology.
-const NON_BASE_CONTENT_MATCHER =
-  /\b(dlc|downloadable content|expansion(?: pack)?|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|character pass|battle pass|event pass|starter pack|founder'?s pack|cosmetic(?: pack)?|skin(?: pack| set)?|costume(?: pack)?|outfit(?: pack)?|upgrade pack|item pack|consumable pack|currency pack|booster pack|mission pack|limited edition|deluxe edition upgrade|ultimate edition upgrade)\b/i;
-const EPISODIC_LIVE_CONTENT_MATCHER =
-  /\b(episode\s*\d+|season\s*[0-9ivxlcdm]+|chapter\s*[0-9ivxlcdm]+(?:\s*[-:]\s*season\s*[0-9ivxlcdm]+)?|title update|content update|seasonal update|mid[- ]?season|live service|ranked split|split\s*\d+|rotation update|patch\s*v?\d+|hotfix|content drop)\b/i;
-
 const isNsfwGame = (game: GameItem) => {
   if (game.nsfw || game.is_nsfw || game.adult) return true;
   const ageRatingText = String(game.age_rating ?? "");
@@ -560,30 +555,11 @@ const isNsfwGame = (game: GameItem) => {
   );
 };
 
-const isNonBaseContentGame = (game: GameItem) => {
-  const metadataText = [game.name, game.genre, game.description]
-    .filter(Boolean)
-    .join(" ");
-  return NON_BASE_CONTENT_MATCHER.test(metadataText);
-};
-
-const isEpisodicOrSeasonalContentGame = (game: GameItem) => {
-  const metadataText = [game.name, game.genre, game.description]
-    .filter(Boolean)
-    .join(" ");
-  return EPISODIC_LIVE_CONTENT_MATCHER.test(metadataText);
-};
-
-const hasValidReleaseDate = (game: GameItem) => {
-  if (!game.release_date) return false;
-  return !Number.isNaN(new Date(game.release_date).getTime());
-};
-
 const shouldHideFromDiscover = (game: GameItem) =>
   isNsfwGame(game) ||
   isNonBaseContentGame(game) ||
-  isEpisodicOrSeasonalContentGame(game) ||
-  !hasValidReleaseDate(game);
+  isEpisodicOrLiveContentGame(game) ||
+  !hasValidReleaseDate(game.release_date);
 
 const isEligibleFavoriteSearchGame = (game: GameItem) =>
   !shouldHideFromDiscover(game) &&
@@ -785,9 +761,10 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
   const questionnaireTotal = questionnaireQuestionCount + 1;
   const isFavoriteQuestionStep = questionnaireStep === questionnaireQuestionCount;
   const activeQuestion = questionnaireQuestions[questionnaireStep] ?? null;
-  const activeQuestionSelected = activeQuestion
-    ? questionnaireAnswers[activeQuestion.id] ?? []
-    : [];
+  const activeQuestionSelected = useMemo(
+    () => (activeQuestion ? questionnaireAnswers[activeQuestion.id] ?? [] : []),
+    [activeQuestion, questionnaireAnswers],
+  );
   const favoriteCount = favoriteGameIds.length;
   const answeredQuestionCount = useMemo(
     () =>
@@ -1570,6 +1547,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
     logRecommendationExposureBatch,
     questionnaireAnswers,
     questionnaireComplete,
+    recommendationEraPreference,
   ]);
 
   useEffect(() => {

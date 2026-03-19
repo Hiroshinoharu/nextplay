@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import styled from 'styled-components';
 
 type AuthFormProps = {
@@ -59,10 +59,10 @@ const PASSWORD_POLICY_TEXT =
 const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }: AuthFormProps) => {
   const rawBaseUrl = (apiBaseUrl ?? import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '');
   const apiRoot = rawBaseUrl.endsWith('/api') ? rawBaseUrl.slice(0, -4) : rawBaseUrl;
-  const apiUrl = (path: string) => {
+  const apiUrl = useCallback((path: string) => {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
     return `${apiRoot}/api${normalizedPath}`;
-  };
+  }, [apiRoot]);
 
   // State variables for form inputs and status messages
   const [loginIdentifier, setLoginIdentifier] = useState(initialEmail ?? '');
@@ -145,7 +145,7 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [signupEmail, signupName]);
+  }, [apiUrl, signupEmail, signupName]);
 
   const extractToken = (payload: unknown): string => {
     if (typeof payload !== 'object' || payload === null) return '';

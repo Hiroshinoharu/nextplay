@@ -12,6 +12,7 @@ import TrailerGallery from "./components/TrailerGallery";
 import Loader from "./components/Loader";
 import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
+import { isNonBaseContentGame, normalizeCatalogImageUrl } from "./utils/catalog";
 import { type ThemeMode } from "./utils/theme";
 import "./game.css";
 import "./games.css";
@@ -83,21 +84,6 @@ const API_ROOT = RAW_BASE_URL.endsWith("/api")
   ? RAW_BASE_URL.slice(0, -4)
   : RAW_BASE_URL;
 
-// Normalize cover image URLs to ensure they are absolute and use HTTPS
-const normalizeCoverUrl = (url?: string) => {
-  if (!url) return null;
-  const absoluteUrl = url.startsWith("//") ? `https:${url}` : url;
-  // IGDB image URLs include a size token segment (e.g. /t_thumb/, /t_1080p/).
-  // Use t_original to preserve full composition (portrait/tall images especially).
-  if (/images\.igdb\.com\/igdb\/image\/upload\//i.test(absoluteUrl)) {
-    if (/\/t_[^/]+\//i.test(absoluteUrl)) {
-      return absoluteUrl.replace(/\/t_[^/]+\//i, "/t_original/");
-    }
-    return absoluteUrl.replace(/\/upload\//i, "/upload/t_original/");
-  }
-  return absoluteUrl;
-};
-
 // Parse release date strings into Date objects, returning null for invalid or missing dates
 const parseReleaseDate = (value?: string) => {
   if (!value) return null;
@@ -141,16 +127,6 @@ const formatCommaSeparatedText = (value?: string) => {
     : collapseWhitespace(value);
   if (!normalized) return "n/a";
   return normalized;
-};
-
-const NON_BASE_CONTENT_MATCHER =
-  /\b(dlc|downloadable content|expansion(?: pack)?|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|character pass|battle pass|starter pack|founder'?s pack|cosmetic(?: pack)?|skin(?: pack| set)?|costume(?: pack)?|outfit(?: pack)?|upgrade pack|item pack|consumable(?: pack)?|bundle|edition upgrade|currency pack|booster pack|mission pack)\b/i;
-
-const isNonBaseContentGame = (game: GameItem) => {
-  const metadataText = [game.name, game.genre, game.description, game.story]
-    .filter(Boolean)
-    .join(" ");
-  return NON_BASE_CONTENT_MATCHER.test(metadataText);
 };
 
 const buildAssociationTokens = (gameName: string): string[] => {
@@ -546,14 +522,16 @@ function Game({ authUser, theme }: GameProps) {
       (item) =>
         item.media_type === "screenshot" || item.media_type === "artwork",
     )
-    .map((item) => normalizeCoverUrl(item.url))
+    .map((item) => normalizeCatalogImageUrl(item.url, { preferOriginalIgdbSize: true }))
     .filter(Boolean) as string[];
   const trailerFromMedia = mediaItems
     .filter((item) => item.media_type === "trailer")
     .map((item) => item.url?.trim())
     .filter((value): value is string => Boolean(value));
 
-  const detailCover = normalizeCoverUrl(game?.cover_image ?? undefined);
+  const detailCover = normalizeCatalogImageUrl(game?.cover_image ?? undefined, {
+    preferOriginalIgdbSize: true,
+  });
   const trailerUrls = Array.from(
     new Set(
       [game?.trailer_url, ...(game?.trailers ?? []), ...trailerFromMedia]
@@ -562,7 +540,9 @@ function Game({ authUser, theme }: GameProps) {
     ),
   );
   const screenshots = game?.screenshots
-    ?.map(normalizeCoverUrl)
+    ?.map((url) =>
+      normalizeCatalogImageUrl(url, { preferOriginalIgdbSize: true }),
+    )
     .filter(Boolean) as string[] | undefined;
   const mediaGallery =
     screenshots && screenshots.length

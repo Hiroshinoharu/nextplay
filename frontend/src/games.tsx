@@ -11,6 +11,12 @@ import Loader from "./components/Loader";
 import LoadingScreen from "./components/LoadingScreen";
 import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
+import {
+  hasValidReleaseDate,
+  isEpisodicOrLiveContentGame,
+  isNonBaseContentGame,
+  normalizeCatalogImageUrl,
+} from "./utils/catalog";
 import { type ThemeMode } from "./utils/theme";
 import {
   QUESTIONNAIRE_V1,
@@ -106,19 +112,6 @@ const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(
 const API_ROOT = RAW_BASE_URL.endsWith("/api")
   ? RAW_BASE_URL.slice(0, -4)
   : RAW_BASE_URL;
-
-// Normalize media  URLs to ensure they are absolute and use HTTPS
-const normalizeMediaUrl = (url?: string) => {
-  if (!url) return null;
-  const absoluteUrl = url.startsWith("//") ? `https:${url}` : url;
-  if (/images\.igdb\.com\/igdb\/image\/upload\//i.test(absoluteUrl)) {
-    if (/\/t_[^/]+\//i.test(absoluteUrl)) {
-      return absoluteUrl.replace(/\/t_[^/]+\//i, "/t_original/");
-    }
-    return absoluteUrl.replace(/\/upload\//i, "/upload/t_original/");
-  }
-  return absoluteUrl;
-};
 
 // Upgrade IGDB image URLs to a specified size by replacing the size segment in the URL
 const upgradeIgdbSize = (url: string | null, size: string) => {
@@ -220,33 +213,11 @@ const isNsfwGame = (game: GameItem) => {
   );
 };
 
-const NON_BASE_CONTENT_MATCHER =
-  /\b(dlc|downloadable content|expansion(?: pack)?|add[- ]?on|bonus(?: content)?|soundtrack|artbook|season pass|character pass|battle pass|starter pack|founder'?s pack|cosmetic(?: pack)?|skin(?: pack| set)?|costume(?: pack)?|outfit(?: pack)?|upgrade pack|item pack|consumable(?: pack)?|bundle|edition upgrade|currency pack|booster pack|mission pack)\b/i;
-const EPISODIC_LIVE_CONTENT_MATCHER =
-  /\b(episode\s*\d+|season\s*\d+|chapter\s*\d+|title update|content update|live service|patch\s*v?\d+|hotfix)\b/i;
-
-const isNonBaseContentGame = (game: GameItem) => {
-  const metadataText = [game.name, game.genre, game.description, game.story]
-    .filter(Boolean)
-    .join(" ");
-  return NON_BASE_CONTENT_MATCHER.test(metadataText);
-};
-
-const isEpisodicOrSeasonalContentGame = (game: GameItem) => {
-  const metadataText = [game.name, game.genre, game.description, game.story]
-    .filter(Boolean)
-    .join(" ");
-  return EPISODIC_LIVE_CONTENT_MATCHER.test(metadataText);
-};
-
-const hasValidReleaseDate = (game: GameItem) =>
-  Boolean(parseReleaseDate(game.release_date));
-
 const shouldHideFromSearch = (game: GameItem) =>
   isNsfwGame(game) ||
   isNonBaseContentGame(game) ||
-  isEpisodicOrSeasonalContentGame(game) ||
-  !hasValidReleaseDate(game);
+  isEpisodicOrLiveContentGame(game) ||
+  !hasValidReleaseDate(game.release_date);
 
 type HeroMediaSource = "artwork" | "screenshot" | "cover";
 
@@ -830,7 +801,9 @@ function Games({ authUser, theme }: GamesProps) {
     ? truncateText(heroDescriptionSource, 420)
     : "A fresh pick from your library.";
 
-  const featuredCover = normalizeMediaUrl(heroGame?.cover_image ?? undefined);
+  const featuredCover = normalizeCatalogImageUrl(heroGame?.cover_image ?? undefined, {
+    preferOriginalIgdbSize: true,
+  });
   const featuredMedia = useMemo(
     () => (Array.isArray(heroGame?.media) ? heroGame.media : []),
     [heroGame?.media],
@@ -841,7 +814,9 @@ function Games({ authUser, theme }: GamesProps) {
         new Set(
           featuredMedia
             .filter((item) => item.media_type === "screenshot")
-            .map((item) => normalizeMediaUrl(item.url))
+            .map((item) =>
+              normalizeCatalogImageUrl(item.url, { preferOriginalIgdbSize: true }),
+            )
             .filter((url): url is string => Boolean(url)),
         ),
       ),
@@ -853,7 +828,9 @@ function Games({ authUser, theme }: GamesProps) {
         new Set(
           featuredMedia
             .filter((item) => item.media_type === "artwork")
-            .map((item) => normalizeMediaUrl(item.url))
+            .map((item) =>
+              normalizeCatalogImageUrl(item.url, { preferOriginalIgdbSize: true }),
+            )
             .filter((url): url is string => Boolean(url)),
         ),
       ),
@@ -864,7 +841,9 @@ function Games({ authUser, theme }: GamesProps) {
       Array.from(
         new Set(
           (heroGame?.screenshots ?? [])
-            .map((screenshot) => normalizeMediaUrl(screenshot))
+            .map((screenshot) =>
+              normalizeCatalogImageUrl(screenshot, { preferOriginalIgdbSize: true }),
+            )
             .filter((screenshot): screenshot is string => Boolean(screenshot)),
         ),
       ),
@@ -1128,7 +1107,8 @@ function Games({ authUser, theme }: GamesProps) {
   ]);
   // useCallback functions for rendering game items in carousels, including logic to determine the appropriate cover image and description for each game based on available data. These functions are passed as props to the GameCarousel components to ensure consistent rendering of game items across different carousels while allowing for dynamic content based on the specific media and metadata of each game.
   const carouselCover = useCallback(
-    (game: GameItem) => normalizeMediaUrl(game.cover_image),
+    (game: GameItem) =>
+      normalizeCatalogImageUrl(game.cover_image, { preferOriginalIgdbSize: true }),
     [],
   );
   // The getReleaseDescription function formats the release date of a game into a human-readable string, or returns "n/a" if the release date is not available or invalid. This function is used to provide consistent release information for games displayed in the carousels.
