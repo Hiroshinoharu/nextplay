@@ -420,7 +420,7 @@ const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) 
       setPasswordStatus(null);
       setPasswordError(null);
 
-      if (!userId || !authToken) {
+      if (!userId) {
         setPasswordError("You need an active session before changing your password.");
         return;
       }
@@ -440,7 +440,7 @@ const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) 
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${authToken}`,
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
           },
           body: JSON.stringify({
             current_password: currentPassword,
@@ -472,7 +472,7 @@ const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) 
   const handleDeleteAccount = useCallback(async () => {
     setDeleteError(null);
 
-    if (!userId || !authToken) {
+    if (!userId) {
       setDeleteError("You need an active session before deleting your account.");
       return;
     }
@@ -486,7 +486,7 @@ const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) 
       const response = await fetch(`${API_ROOT}/api/users/${userId}`, {
         method: "DELETE",
         headers: {
-          Authorization: `Bearer ${authToken}`,
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
         },
       });
       const payload = (await response.json().catch(() => null)) as {
@@ -858,3 +858,7 @@ const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) 
 };
 
 export default UserPage;
+
+
+
+

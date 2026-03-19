@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import styled from 'styled-components';
+import { normalizeAuthUser } from '../utils/authUser';
 
 type AuthFormProps = {
   apiBaseUrl?: string;
@@ -64,7 +65,6 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
     return `${apiRoot}/api${normalizedPath}`;
   }, [apiRoot]);
 
-  // State variables for form inputs and status messages
   const [loginIdentifier, setLoginIdentifier] = useState(initialEmail ?? '');
   const [loginPassword, setLoginPassword] = useState('');
   const [signupName, setSignupName] = useState('');
@@ -115,6 +115,7 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
 
         const response = await fetch(apiUrl(`/users/availability?${params.toString()}`), {
           signal: controller.signal,
+          credentials: 'include',
         });
         const data = (await response.json().catch(() => null)) as AvailabilityResponse | null;
         if (!response.ok) {
@@ -147,34 +148,8 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
     };
   }, [apiUrl, signupEmail, signupName]);
 
-  const extractToken = (payload: unknown): string => {
-    if (typeof payload !== 'object' || payload === null) return '';
-    const data = payload as Record<string, unknown>;
-    const directToken = data['token'];
-    if (typeof directToken === 'string' && directToken.trim()) {
-      return directToken.trim();
-    }
-    const accessToken = data['access_token'];
-    if (typeof accessToken === 'string' && accessToken.trim()) {
-      return accessToken.trim();
-    }
-    const jwtToken = data['jwt'];
-    if (typeof jwtToken === 'string' && jwtToken.trim()) {
-      return jwtToken.trim();
-    }
-    const nested = data['data'];
-    if (typeof nested === 'object' && nested !== null) {
-      const nestedToken = (nested as Record<string, unknown>)['token'];
-      if (typeof nestedToken === 'string' && nestedToken.trim()) {
-        return nestedToken.trim();
-      }
-    }
-    return '';
-  };
+  const hasAuthIdentity = (payload: unknown) => normalizeAuthUser(payload) !== null;
 
-  const hasToken = (payload: unknown) => extractToken(payload) !== '';
-
-  // handleLogin processes the login form submission, validates inputs, and communicates with the backend API to authenticate the user.
   const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setStatus(null);
@@ -194,6 +169,7 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
     try {
       const response = await fetch(apiUrl('/users/login'), {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -202,8 +178,8 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
         setError(data?.error ?? `Login failed: ${response.status}`);
         return;
       }
-      if(!hasToken(data)) {
-        setError('Login failed: No token received from API.');
+      if (!hasAuthIdentity(data)) {
+        setError('Login failed: No user session was returned by the API.');
         return;
       }
       setStatus('Logged in successfully.');
@@ -240,6 +216,7 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
     try {
       const response = await fetch(apiUrl('/users/register'), {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username: signupName.trim(),
@@ -252,31 +229,12 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
         setError(data?.error ?? `Registration failed: ${response.status}`);
         return;
       }
-      if (hasToken(data)) {
-        setStatus('Registered and logged in successfully.');
-        onAuthSuccess?.(data, 'register');
-        return;
-      } 
-
-
-      // Backwards-compatible fallback: if register does not return a token,
-      // perform a login request to make sure we still obtain one.
-      const loginResponse = await fetch(apiUrl('/users/login'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: signupEmail.trim(), password: signupPassword }),
-      });
-      const loginData = await loginResponse.json().catch(() => null);
-      if (!loginResponse.ok) {
-        setError(loginData?.error ?? 'Account created but automatic sign-in failed. Please log in.');
+      if (!hasAuthIdentity(data)) {
+        setError('Registration failed: No user session was returned by the API.');
         return;
       }
-      if (!hasToken(loginData)) {
-        setError('Account created but no token was returned. Please log in manually.');
-        return;
-      }
-      setStatus('Account created and signed in successfully.');
-      onAuthSuccess?.(loginData, 'register');
+      setStatus('Registered and logged in successfully.');
+      onAuthSuccess?.(data, 'register');
     } catch (err) {
       setError(`${err}`);
     } finally {
@@ -421,13 +379,11 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
               </div>
             </div>
           </label>
-        </div>   
+        </div>
       </div>
     </StyledWrapper>
   );
 }
-
-// Styled Wrapper for the Form Component
 const StyledWrapper = styled.div`
   *, *::before, *::after {
     box-sizing: border-box;
@@ -989,3 +945,4 @@ const StyledWrapper = styled.div`
   }`;
 
 export default Form;
+

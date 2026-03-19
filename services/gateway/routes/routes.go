@@ -11,6 +11,7 @@ func SetUpRoutes(app *fiber.App) {
 	authRateLimiter := middleware.NewAuthRateLimiter()
 
 	api := app.Group("/api")
+	api.Use(middleware.RequireCSRF)
 
 	// --------------------------
 	// HEALTH ROUTES
@@ -31,8 +32,10 @@ func SetUpRoutes(app *fiber.App) {
 	users := api.Group("/users")
 	{
 		users.Get("/availability", authRateLimiter, handlers.CheckUserAvailability)
+		users.Get("/csrf", handlers.GetCSRFToken)
 		users.Post("/register", authRateLimiter, handlers.RegisterUser)
 		users.Post("/login", authRateLimiter, handlers.LoginUser)
+		users.Post("/logout", handlers.LogoutUser)
 
 		securedUsers := users.Group("/:id", middleware.RequireJWT, middleware.RequireSameUserParam("id"))
 
@@ -46,7 +49,6 @@ func SetUpRoutes(app *fiber.App) {
 		securedUsers.Delete("/interactions/:gameId", handlers.DeleteUserInteraction)
 		securedUsers.Get("/interactions/events", handlers.GetUserInteractionEvents)
 		securedUsers.Post("/interactions/events", handlers.CreateUserInteractionEvent)
-
 	}
 
 	// --------------------------
@@ -77,13 +79,11 @@ func SetUpRoutes(app *fiber.App) {
 
 		// Keywords
 		games.Get("/:id/keywords", middleware.RequireJWT, handlers.GetGameKeywords)
-
 		games.Post("/:id/keywords", middleware.RequireServiceAuth, handlers.AddGameKeyword)
 		games.Delete("/:id/keywords/:keywordId", middleware.RequireServiceAuth, handlers.RemoveGameKeyword)
 
 		// Companies
 		games.Get("/:id/companies", middleware.RequireJWT, handlers.GetGameCompanies)
-
 		games.Post("/:id/companies", middleware.RequireServiceAuth, handlers.AddGameCompany)
 		games.Delete("/:id/companies/:companyId", middleware.RequireServiceAuth, handlers.RemoveGameCompany)
 

@@ -6,13 +6,6 @@ resources:
     - ../../base
 patches:
     - path: frontend-service.yaml
-    - path: game-C:\Users\maxce\nextplay\deploy\config\config.yaml-persistentVolumeClaim.yaml
-    - path: gateway-C:\Users\maxce\nextplay\deploy\config\config.yaml-persistentVolumeClaim.yaml
     - path: gateway-service.yaml
-    - path: postgres-C:\Users\maxce\nextplay\deploy\init_db.sql-persistentVolumeClaim.yaml
-    - path: postgres-C:\Users\maxce\nextplay\deploy\migrations-persistentVolumeClaim.yaml
     - path: postgres-postgres_data-persistentVolumeClaim.yaml
     - path: postgres-service.yaml
-    - path: recommender-C:\Users\maxce\nextplay\deploy\config\config.yaml-persistentVolumeClaim.yaml
-    - path: recommender-C:\Users\maxce\nextplay\services\recommender\training\artifacts\current-persistentVolumeClaim.yaml
-    - path: user-C:\Users\maxce\nextplay\deploy\config\config.yaml-persistentVolumeClaim.yaml

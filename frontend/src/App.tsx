@@ -5,7 +5,12 @@ import "./health.css";
 import BrandLogo from "./components/BrandLogo";
 import Button from "./components/Button";
 import SiteFooter from "./components/SiteFooter";
-import { type AuthUser } from "./utils/authUser";
+import { normalizeAuthUser, type AuthUser } from "./utils/authUser";
+import {
+  CSRF_HEADER_NAME,
+  getCSRFCookieValue,
+  shouldAttachCSRFToken,
+} from "./utils/csrf";
 import { getInitialTheme, THEME_STORAGE_KEY, type ThemeMode } from "./utils/theme";
 import Loader from "./components/Loader";
 import LoadingScreen from "./components/LoadingScreen";
@@ -146,49 +151,101 @@ const RouteTransitionLoader = ({
   );
 };
 
-// Coerce unknown payload into AuthUser or null
-const coerceAuthUser = (payload: unknown): AuthUser | null => {
-  // We check for common ID fields (id, user_id, userId) and accept both number and string formats. For username and email, we only accept string values. For steam_linked, we check both possible keys and accept boolean values.
-  if (!payload || typeof payload !== "object") return null;
-  const data = payload as Record<string, unknown>;
-  const idValue = data.id ?? data.user_id ?? data.userId;
-  let id: number | undefined;
-  if (typeof idValue === "number") {
-    id = idValue;
-  } else if (typeof idValue === "string" && idValue.trim()) {
-    const parsed = Number(idValue);
-    if (!Number.isNaN(parsed)) id = parsed;
-  }
-  
-  // For username and email, we only accept string values. For steam_linked, we check both possible keys and accept boolean values.
-  const username =
-    typeof data.username === "string" ? data.username : undefined;
-  const email = typeof data.email === "string" ? data.email : undefined;
-  const steamLinked =
-    typeof data.steam_linked === "boolean"
-      ? data.steam_linked
-      : typeof data.steamLinked === "boolean"
-        ? data.steamLinked
-        : undefined;
-  const token =
-    typeof data.token === "string"
-      ? data.token.trim()
-      : typeof data.access_token === "string"
-        ? data.access_token.trim()
-        : typeof data.jwt === "string"
-          ? data.jwt.trim()
-          : undefined;
+const installSecureFetchDefaults = () => {
+  if (typeof window === "undefined") return;
 
-  if (!id && !username && !email) return null;
-
-  return {
-    id,
-    username,
-    email,
-    steam_linked: steamLinked,
-    token: token || undefined,
+  const currentFetch = window.fetch as typeof window.fetch & {
+    __nextplayCredentialsPatched?: boolean;
   };
+  if (currentFetch.__nextplayCredentialsPatched) return;
+
+  const originalFetch = window.fetch.bind(window);
+  const csrfBootstrapUrl = apiUrl("/users/csrf");
+  const csrfProtectedOrigins = Array.from(
+    new Set([
+      window.location.origin,
+      new URL(API_ROOT || "/", window.location.origin).origin,
+    ]),
+  );
+  let csrfBootstrapPromise: Promise<string> | null = null;
+
+  const ensureCSRFToken = async () => {
+    const existingToken = getCSRFCookieValue();
+    if (existingToken) {
+      return existingToken;
+    }
+
+    if (!csrfBootstrapPromise) {
+      csrfBootstrapPromise = (async () => {
+        try {
+          const response = await originalFetch(csrfBootstrapUrl, {
+            credentials: "include",
+          });
+          if (!response.ok) {
+            return "";
+          }
+
+          const payload = (await response.json().catch(() => null)) as
+            | { csrf_token?: unknown }
+            | null;
+          if (typeof payload?.csrf_token === "string" && payload.csrf_token.trim()) {
+            return payload.csrf_token.trim();
+          }
+          return getCSRFCookieValue();
+        } catch {
+          return "";
+        } finally {
+          csrfBootstrapPromise = null;
+        }
+      })();
+    }
+
+    return csrfBootstrapPromise;
+  };
+
+  const patchedFetch = (async (
+    ...args: Parameters<typeof fetch>
+  ): Promise<Response> => {
+    const [input, init] = args;
+    const requestMethod = init?.method ?? (input instanceof Request ? input.method : "GET");
+    const requestUrl =
+      input instanceof Request ? input.url : input instanceof URL ? input.toString() : String(input);
+    const requestInit: RequestInit = {
+      ...init,
+      credentials:
+        init?.credentials ??
+        (input instanceof Request ? input.credentials : undefined) ??
+        "include",
+    };
+    const headers = new Headers(input instanceof Request ? input.headers : undefined);
+    if (init?.headers) {
+      const initHeaders = new Headers(init.headers);
+      initHeaders.forEach((value, key) => {
+        headers.set(key, value);
+      });
+    }
+
+    if (shouldAttachCSRFToken(requestUrl, requestMethod, csrfProtectedOrigins)) {
+      let csrfToken = getCSRFCookieValue();
+      if (!csrfToken) {
+        csrfToken = await ensureCSRFToken();
+      }
+      if (csrfToken && !headers.has(CSRF_HEADER_NAME)) {
+        headers.set(CSRF_HEADER_NAME, csrfToken);
+      }
+    }
+
+    return originalFetch(input, {
+      ...requestInit,
+      headers,
+    });
+  }) as typeof window.fetch & { __nextplayCredentialsPatched?: boolean };
+
+  patchedFetch.__nextplayCredentialsPatched = true;
+  window.fetch = patchedFetch;
 };
+
+installSecureFetchDefaults();
 
 type HomeProps = {
   authUser: AuthUser | null;
@@ -591,14 +648,25 @@ function App() {
     try {
       const stored = localStorage.getItem(AUTH_STORAGE_KEY);
       if (!stored) return null;
-      return coerceAuthUser(JSON.parse(stored));
+      const user = normalizeAuthUser(JSON.parse(stored));
+      if (user) {
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+      } else {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+      }
+      return user;
     } catch {
+      try {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+      } catch {
+        // Ignore storage errors
+      }
       return null;
     }
   });
 
   const handleAuthSuccess = (payload: unknown) => {
-    const user = coerceAuthUser(payload);
+    const user = normalizeAuthUser(payload);
     if (!user) return;
     setAuthUser(user);
     try {
@@ -608,7 +676,7 @@ function App() {
     }
   };
 
-  const handleSignOut = useCallback(() => {
+  const clearClientSession = useCallback(() => {
     setTheme("dark");
     setAuthUser(null);
     try {
@@ -624,10 +692,15 @@ function App() {
     }
   }, []);
 
-  const sessionUser = useMemo(() => {
-    const token = authUser?.token?.trim();
-    return token ? { ...authUser, token } : null;
-  }, [authUser]);
+  const handleSignOut = useCallback(() => {
+    void fetch(apiUrl("/users/logout"), {
+      method: "POST",
+      credentials: "include",
+    }).catch(() => undefined);
+    clearClientSession();
+  }, [clearClientSession]);
+
+  const sessionUser = authUser;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -682,11 +755,12 @@ function App() {
       const response = await originalFetch(...args);
       if (
         response.status === 401 &&
-        sessionUser &&
+        response.headers.get("x-nextplay-auth-error") === "session-invalid" &&
+        authUser &&
         !unauthorizedRedirectingRef.current
       ) {
         unauthorizedRedirectingRef.current = true;
-        handleSignOut();
+        clearClientSession();
         navigate("/", { replace: true });
       }
       return response;
@@ -694,8 +768,9 @@ function App() {
 
     return () => {
       window.fetch = originalFetch;
+      unauthorizedRedirectingRef.current = false;
     };
-  }, [handleSignOut, navigate, sessionUser]);
+  }, [authUser, clearClientSession, navigate]);
 
   const shouldShowRouteLoader =
     !showBootLoadingScreen && location.key !== "default";
@@ -917,3 +992,9 @@ function App() {
 }
 
 export default App;
+
+
+
+
+
+

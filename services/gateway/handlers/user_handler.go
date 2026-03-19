@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	gatewayauth "github.com/maxceban/nextplay/services/gateway/auth"
 )
 
 // GetUserByID handles GET /api/users/:id
@@ -18,7 +19,7 @@ func GetUserByID(c *fiber.Ctx) error {
 func RegisterUser(c *fiber.Ctx) error {
 	userClient := userClientFromCtx(c)
 	resp, err := userClient.RegisterUser(c.Body())
-	return sendProxyJSON(c, resp, err)
+	return sendAuthProxyJSON(c, resp, err)
 }
 
 // CheckUserAvailability handles GET /api/users/availability
@@ -36,7 +37,23 @@ func CheckUserAvailability(c *fiber.Ctx) error {
 func LoginUser(c *fiber.Ctx) error {
 	userClient := userClientFromCtx(c)
 	resp, err := userClient.LoginUser(c.Body())
-	return sendProxyJSON(c, resp, err)
+	return sendAuthProxyJSON(c, resp, err)
+}
+
+// GetCSRFToken handles GET /api/users/csrf.
+func GetCSRFToken(c *fiber.Ctx) error {
+	token, err := gatewayauth.EnsureCSRFCookie(c)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate csrf token"})
+	}
+	return c.JSON(fiber.Map{"csrf_token": token})
+}
+
+// LogoutUser handles POST /api/users/logout
+func LogoutUser(c *fiber.Ctx) error {
+	gatewayauth.ClearCSRFCookie(c)
+	gatewayauth.ClearSessionCookie(c)
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 // UpdateUser handles PUT /api/users/:id
@@ -102,4 +119,77 @@ func CreateUserInteractionEvent(c *fiber.Ctx) error {
 	userClient := userClientFromCtx(c)
 	resp, err := userClient.CreateUserInteractionEvent(id, c.Body())
 	return sendProxyJSON(c, resp, err)
+}
+
+func sendAuthProxyJSON(c *fiber.Ctx, payload interface{}, err error) error {
+	if err != nil {
+		return writeProxyError(c, err)
+	}
+
+	token := extractAuthToken(payload)
+	if token == "" {
+		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": "upstream auth response missing token"})
+	}
+
+	gatewayauth.SetSessionCookie(c, token)
+	csrfToken, csrfErr := gatewayauth.NewCSRFToken()
+	if csrfErr != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to generate csrf token"})
+	}
+	gatewayauth.SetCSRFCookie(c, csrfToken)
+	return c.JSON(stripAuthToken(payload))
+}
+
+func extractAuthToken(payload interface{}) string {
+	switch data := payload.(type) {
+	case map[string]interface{}:
+		return extractAuthTokenFromMap(data)
+	case fiber.Map:
+		return extractAuthTokenFromMap(map[string]interface{}(data))
+	default:
+		return ""
+	}
+}
+
+func extractAuthTokenFromMap(data map[string]interface{}) string {
+	for _, key := range []string{"token", "access_token", "jwt"} {
+		if value, ok := data[key].(string); ok && strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func stripAuthToken(payload interface{}) interface{} {
+	switch data := payload.(type) {
+	case map[string]interface{}:
+		sanitized := make(map[string]interface{}, len(data))
+		for key, value := range data {
+			if isAuthTokenKey(key) {
+				continue
+			}
+			sanitized[key] = value
+		}
+		return sanitized
+	case fiber.Map:
+		sanitized := fiber.Map{}
+		for key, value := range data {
+			if isAuthTokenKey(key) {
+				continue
+			}
+			sanitized[key] = value
+		}
+		return sanitized
+	default:
+		return payload
+	}
+}
+
+func isAuthTokenKey(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "token", "access_token", "jwt":
+		return true
+	default:
+		return false
+	}
 }

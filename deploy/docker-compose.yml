@@ -16,8 +16,8 @@ services:
       - ./migrations:/docker-entrypoint-initdb.d/migrations/migrate_igdb_db.sql:ro # Run migrations on first startup
       - ./migrations:/docker-entrypoint-initdb.d/migrations/add_total_rating.sql:ro # Additional migration
       - ./migrations:/docker-entrypoint-initdb.d/migrations/add_popularity.sql:ro # Additional migration
-    ports:
-      - "5432:5432" # Expose DB so you can connect from your host (DBeaver, psql, etc.)
+    expose:
+      - "5432" # Internal-only database port for other Compose services
     # Healthcheck ensures Postgres is fully ready before other services start
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nextplay"] # Built-in readiness test
@@ -155,9 +155,15 @@ services:
       CONFIG_FILE: /config/config.yaml
       PORT: "8084"
       GATEWAY_SERVICE_TOKEN: "${GATEWAY_SERVICE_TOKEN:-nextplay-dev-service-token}"
+      APP_ENV: "${APP_ENV:-development}"
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174}"
       AUTH_RATE_LIMIT_MAX: "${AUTH_RATE_LIMIT_MAX:-10}"
       AUTH_RATE_LIMIT_WINDOW_SECONDS: "${AUTH_RATE_LIMIT_WINDOW_SECONDS:-60}"
+      SESSION_COOKIE_NAME: "${SESSION_COOKIE_NAME:-nextplay_session}"
+      SESSION_COOKIE_MAX_AGE_SECONDS: "${SESSION_COOKIE_MAX_AGE_SECONDS:-86400}"
+      SESSION_COOKIE_SECURE: "${SESSION_COOKIE_SECURE:-false}"
+      CSRF_COOKIE_NAME: "${CSRF_COOKIE_NAME:-nextplay_csrf}"
+      CSRF_HEADER_NAME: "${CSRF_HEADER_NAME:-X-CSRF-Token}"
     volumes:
       - ./config/config.yaml:/config/config.yaml:ro
     depends_on:
@@ -193,5 +199,6 @@ services:
 
 volumes:
   postgres_data:
+
 
 

@@ -28,18 +28,16 @@ spec:
                   image: deploy-recommender
                   imagePullPolicy: IfNotPresent
                   env:
-                    - name: CONFIG_FILE
-                      value: "/config/config.yaml"
                     - name: DATABASE_URL
-                      value: "postgres://nextplay:nextplay@postgres:5432/nextplay?sslmode=disable"
+                      value: "postgres://nextplay:nextplay@postgres.deploy.svc.cluster.local:5432/nextplay?sslmode=disable"
+                    - name: GAME_SERVICE_URL
+                      value: "http://game.deploy.svc.cluster.local:8081"
                     - name: GATEWAY_SERVICE_TOKEN
                       value: "nextplay-dev-service-token"
-                    - name: MODEL_MANIFEST_PATH
-                      value: "/models/recommender/current/artifact_manifest.json"
-                    - name: MODEL_PATH
-                      value: "/models/recommender/current/model.keras"
+                    - name: GATEWAY_SERVICE_URL
+                      value: "http://gateway.deploy.svc.cluster.local:8084"
                     - name: MODEL_REQUIRED
-                      value: "true"
+                      value: "false"
                     - name: MODEL_VERSION
                       value: "20260313T164930Z"
                     - name: PORT
@@ -70,28 +68,15 @@ spec:
                       value: "2.5"
                     - name: RANK_WEIGHT_MODEL_SEED_BOOST
                       value: "3.0"
+                    - name: USER_SERVICE_URL
+                      value: "http://user.deploy.svc.cluster.local:8083"
                   livenessProbe:
                     exec:
-                        command: ['curl -f http://recommender:8082/health']
+                        command: ['curl', '-f', 'http://localhost:8082/health']
+                    initialDelaySeconds: 10
                     periodSeconds: 5
                     timeoutSeconds: 3
                     failureThreshold: 5
                   ports:
                     - name: recommende-8082
                       containerPort: 8082
-                  volumeMounts:
-                    - name: config-config-yaml
-                      mountPath: /config/config.yaml
-                      readOnly: true
-                    - name: models-recommender-current
-                      mountPath: /models/recommender/current
-                      readOnly: true
-            volumes:
-                - name: config-config-yaml
-                  hostPath:
-                    path: C:\Users\maxce\nextplay\deploy\config\config.yaml
-                  readOnly: true
-                - name: models-recommender-current
-                  hostPath:
-                    path: C:\Users\maxce\nextplay\services\recommender\training\artifacts\current
-                  readOnly: true

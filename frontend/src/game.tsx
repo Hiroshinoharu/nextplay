@@ -336,7 +336,7 @@ function Game({ authUser, theme }: GameProps) {
   // This function checks for authentication, sends a POST request to save the interaction, updates local state with the new interaction data, and provides feedback to the user through toast messages. It also handles loading state to prevent multiple simultaneous saves and ensures that the review draft is updated with the latest review text.
   const saveInteraction = useCallback(
     async (next: InteractionInput, sucessMessage: string) => {
-      if (!userInteractionsUrl || !authToken) {
+      if (!userInteractionsUrl) {
         showToast("You must be logged in to perform this action.");
         return false;
       }
@@ -353,7 +353,7 @@ function Game({ authUser, theme }: GameProps) {
             method: "DELETE",
             signal: controller.signal,
             headers: {
-              Authorization: `Bearer ${authToken}`,
+              ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
             },
           });
           if (!deleteResponse.ok && deleteResponse.status !== 404) {
@@ -376,7 +376,7 @@ function Game({ authUser, theme }: GameProps) {
           signal: controller.signal,
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${authToken}`,
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
           },
           body: JSON.stringify(next),
         });
@@ -445,7 +445,7 @@ function Game({ authUser, theme }: GameProps) {
       try {
         const response = await fetch(userInteractionsUrl, {
           signal: controller.signal,
-          headers: { Authorization: `Bearer ${authToken}` },
+          ...(authToken ? { headers: { Authorization: `Bearer ${authToken}` } } : {}),
         });
         if (!response.ok) {
           if (response.status !== 404) {
@@ -1112,3 +1112,7 @@ function Game({ authUser, theme }: GameProps) {
 }
 
 export default Game;
+
+
+
+

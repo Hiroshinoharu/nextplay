@@ -32,12 +32,10 @@ spec:
                       value: "10"
                     - name: AUTH_RATE_LIMIT_WINDOW_SECONDS
                       value: "60"
-                    - name: CONFIG_FILE
-                      value: "/config/config.yaml"
                     - name: CORS_ALLOWED_ORIGINS
                       value: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
                     - name: GAME_SERVICE_URL
-                      value: "http://game:8081"
+                      value: "http://game.deploy.svc.cluster.local:8081"
                     - name: GATEWAY_SERVICE_TOKEN
                       value: "nextplay-dev-service-token"
                     - name: GATEWAY_UPSTREAM_TIMEOUT_SECONDS
@@ -47,24 +45,16 @@ spec:
                     - name: PORT
                       value: "8084"
                     - name: RECOMMENDER_SERVICE_URL
-                      value: "http://recommender:8082"
+                      value: "http://recommender.deploy.svc.cluster.local:8082"
                     - name: USER_SERVICE_URL
-                      value: "http://user:8083"
+                      value: "http://user.deploy.svc.cluster.local:8083"
                   livenessProbe:
                     exec:
-                        command: ['curl -f http://gateway:8084/health']
+                        command: ['curl', '-f', 'http://localhost:8084/health']
+                    initialDelaySeconds: 10
                     periodSeconds: 5
                     timeoutSeconds: 3
                     failureThreshold: 5
                   ports:
                     - name: gateway-8084
                       containerPort: 8084
-                  volumeMounts:
-                    - name: config-config-yaml
-                      mountPath: /config/config.yaml
-                      readOnly: true
-            volumes:
-                - name: config-config-yaml
-                  hostPath:
-                    path: C:\Users\maxce\nextplay\deploy\config\config.yaml
-                  readOnly: true

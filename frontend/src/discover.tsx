@@ -718,13 +718,11 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
   }, [authUser?.id]);
   const questionnaireFacetsQuery = useQuery({
     queryKey: ["discover-questionnaire-facets", authUser?.id ?? "guest"],
-    enabled: Boolean(authToken),
+    enabled: Boolean(authUser?.id),
     staleTime: 1000 * 60 * 10,
     queryFn: async (): Promise<QuestionnaireFacetsResponse> => {
       const response = await fetch(`${API_ROOT}/api/games/questionnaire-facets`, {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
+        ...(authToken ? { headers: { Authorization: `Bearer ${authToken}` } } : {}),
       });
       if (!response.ok) {
         throw new Error(`Questionnaire facets failed: ${response.status}`);
@@ -1325,13 +1323,13 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
       trace: RecommendationTrace | null,
       metadata?: Record<string, unknown>,
     ) => {
-      if (!recommendationEventsUrl || !authToken || !trace) return false;
+      if (!recommendationEventsUrl || !trace) return false;
       try {
         const response = await fetch(recommendationEventsUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${authToken}`,
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
           },
           body: JSON.stringify({
             game_id: gameId,
@@ -3387,3 +3385,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
 }
 
 export default DiscoverPage;
+
+
+
+

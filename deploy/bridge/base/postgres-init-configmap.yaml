@@ -1,0 +1,307 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: postgres-initdb-scripts
+    namespace: deploy
+data:
+    001-init_db.sql: |
+        -- ============================================================
+        -- NEXTPLAY DATABASE SCHEMA (PostgreSQL Modernized Version)
+        -- Author: Max Ceban
+        -- Purpose: Core relational schema for game, user, and metadata
+        -- ============================================================
+
+        DROP TABLE IF EXISTS game_series CASCADE;
+        DROP TABLE IF EXISTS game_media CASCADE;
+        DROP TABLE IF EXISTS game_genre CASCADE;
+        DROP TABLE IF EXISTS game_keywords CASCADE;
+        DROP TABLE IF EXISTS game_franchise CASCADE;
+        DROP TABLE IF EXISTS game_platform CASCADE;
+        DROP TABLE IF EXISTS game_companies CASCADE;
+        DROP TABLE IF EXISTS user_interactions CASCADE;
+        DROP TABLE IF EXISTS app_user CASCADE;
+        DROP TABLE IF EXISTS keyword CASCADE;
+        DROP TABLE IF EXISTS genre CASCADE;
+        DROP TABLE IF EXISTS games CASCADE;
+        DROP TABLE IF EXISTS series CASCADE;
+        DROP TABLE IF EXISTS platform CASCADE;
+        DROP TABLE IF EXISTS franchise CASCADE;
+        DROP TABLE IF EXISTS company CASCADE;
+
+        CREATE TABLE company (
+            company_id SERIAL PRIMARY KEY,
+            igdb_id INT UNIQUE,
+            company_name TEXT NOT NULL,
+            company_logo BYTEA,
+            company_description TEXT,
+            country TEXT,
+            date_started DATE,
+            games_contributed TEXT,
+            website TEXT
+        );
+
+        CREATE TABLE franchise (
+            franchise_id SERIAL PRIMARY KEY,
+            igdb_id INT UNIQUE,
+            name TEXT
+        );
+
+        CREATE TABLE platform (
+            platform_id SERIAL PRIMARY KEY,
+            igdb_id INT UNIQUE,
+            platform_name TEXT,
+            manufacturer TEXT,
+            icon_url TEXT,
+            description TEXT,
+            product_url TEXT
+        );
+
+        CREATE VIEW platforms AS
+            SELECT * FROM platform;
+
+        CREATE TABLE series (
+            series_id SERIAL PRIMARY KEY,
+            igdb_id INT UNIQUE,
+            name TEXT
+        );
+
+        CREATE TABLE genre (
+            genre_id SERIAL PRIMARY KEY,
+            igdb_id INT UNIQUE,
+            genre_name TEXT
+        );
+
+        CREATE TABLE games (
+            game_id SERIAL PRIMARY KEY,
+            igdb_id INT UNIQUE,
+            game_name TEXT,
+            game_description TEXT,
+            release_date DATE,
+            genre TEXT,
+            publishers TEXT,
+            cover_image_url TEXT,
+            aggregated_rating FLOAT,
+            aggregated_rating_count INT,
+            story TEXT
+        );
+
+        CREATE TABLE keyword (
+            keyword_id SERIAL PRIMARY KEY,
+            igdb_id INT UNIQUE,
+            keyword_name TEXT
+        );
+
+        CREATE TABLE app_user (
+            user_id SERIAL PRIMARY KEY,
+            username TEXT NOT NULL,
+            password TEXT NOT NULL,
+            email TEXT NOT NULL,
+            steam_linked BOOLEAN DEFAULT FALSE
+        );
+
+        CREATE TABLE user_interactions (
+            user_id INT NOT NULL,
+            game_id INT NOT NULL,
+            rating FLOAT,
+            review TEXT,
+            liked BOOLEAN,
+            favorited BOOLEAN,
+            timestamp TIMESTAMPTZ,
+            PRIMARY KEY (user_id, game_id),
+            FOREIGN KEY (user_id) REFERENCES app_user(user_id),
+            FOREIGN KEY (game_id) REFERENCES games(game_id)
+        );
+
+        CREATE TABLE recommendation_events (
+            event_id SERIAL PRIMARY KEY,
+            user_id INT NOT NULL,
+            game_id INT NOT NULL,
+            request_id TEXT NOT NULL DEFAULT '',
+            event_type TEXT NOT NULL,
+            model_version TEXT,
+            ranking_profile TEXT,
+            strategy TEXT,
+            outcome TEXT,
+            recommendation_rank INT,
+            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            FOREIGN KEY (user_id) REFERENCES app_user(user_id),
+            FOREIGN KEY (game_id) REFERENCES games(game_id)
+        );
+
+        CREATE INDEX recommendation_events_user_created_idx
+            ON recommendation_events (user_id, created_at DESC);
+
+        CREATE INDEX recommendation_events_request_idx
+            ON recommendation_events (request_id);
+    010-migrate_igdb_db.sql: |
+        BEGIN;
+
+        ALTER TABLE games ADD COLUMN IF NOT EXISTS igdb_id INT;
+        ALTER TABLE platform ADD COLUMN IF NOT EXISTS igdb_id INT;
+        ALTER TABLE keyword ADD COLUMN IF NOT EXISTS igdb_id INT;
+        ALTER TABLE company ADD COLUMN IF NOT EXISTS igdb_id INT;
+        ALTER TABLE series ADD COLUMN IF NOT EXISTS igdb_id INT;
+        ALTER TABLE franchise ADD COLUMN IF NOT EXISTS igdb_id INT;
+
+        ALTER TABLE company ADD COLUMN IF NOT EXISTS company_name TEXT;
+
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = 'games'
+              AND column_name = 'cover_image_url'
+              AND data_type = 'bytea'
+          ) THEN
+            IF NOT EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_name = 'games'
+                AND column_name = 'cover_image_url_text'
+            ) THEN
+              ALTER TABLE games ADD COLUMN cover_image_url_text TEXT;
+            END IF;
+
+            UPDATE games
+            SET cover_image_url_text = convert_from(cover_image_url, 'UTF8')
+            WHERE cover_image_url IS NOT NULL
+              AND cover_image_url_text IS NULL;
+
+            ALTER TABLE games RENAME COLUMN cover_image_url TO cover_image_blob;
+            ALTER TABLE games RENAME COLUMN cover_image_url_text TO cover_image_url;
+          END IF;
+        END$$;
+
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = 'platform'
+              AND column_name = 'icon_url'
+              AND data_type = 'bytea'
+          ) THEN
+            IF NOT EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_name = 'platform'
+                AND column_name = 'icon_url_text'
+            ) THEN
+              ALTER TABLE platform ADD COLUMN icon_url_text TEXT;
+            END IF;
+
+            UPDATE platform
+            SET icon_url_text = convert_from(icon_url, 'UTF8')
+            WHERE icon_url IS NOT NULL
+              AND icon_url_text IS NULL;
+
+            ALTER TABLE platform RENAME COLUMN icon_url TO icon_blob;
+            ALTER TABLE platform RENAME COLUMN icon_url_text TO icon_url;
+          END IF;
+        END$$;
+
+        CREATE TABLE IF NOT EXISTS genre (
+            genre_id SERIAL PRIMARY KEY,
+            igdb_id INT,
+            genre_name TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS game_genre (
+            game_id INT NOT NULL,
+            genre_id INT NOT NULL,
+            PRIMARY KEY (game_id, genre_id),
+            FOREIGN KEY (game_id) REFERENCES games(game_id),
+            FOREIGN KEY (genre_id) REFERENCES genre(genre_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS game_media (
+            media_id SERIAL PRIMARY KEY,
+            game_id INT NOT NULL,
+            igdb_id INT,
+            media_type TEXT NOT NULL,
+            url TEXT NOT NULL,
+            sort_order INT,
+            FOREIGN KEY (game_id) REFERENCES games(game_id)
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS games_igdb_id_uq ON games(igdb_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS platform_igdb_id_uq ON platform(igdb_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS keyword_igdb_id_uq ON keyword(igdb_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS company_igdb_id_uq ON company(igdb_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS series_igdb_id_uq ON series(igdb_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS franchise_igdb_id_uq ON franchise(igdb_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS genre_igdb_id_uq ON genre(igdb_id);
+
+        COMMIT;
+    020-add_total_rating.sql: |
+        ALTER TABLE games ADD COLUMN IF NOT EXISTS total_rating FLOAT;
+        ALTER TABLE games ADD COLUMN IF NOT EXISTS total_rating_count INT;
+    030-add_popularity.sql: |
+        ALTER TABLE games ADD COLUMN IF NOT EXISTS popularity FLOAT;
+    040-create_recommendation_events.sql: |
+        CREATE TABLE IF NOT EXISTS recommendation_events (
+            event_id SERIAL PRIMARY KEY,
+            user_id INT NOT NULL,
+            game_id INT NOT NULL,
+            request_id TEXT NOT NULL DEFAULT '',
+            event_type TEXT NOT NULL,
+            model_version TEXT,
+            ranking_profile TEXT,
+            strategy TEXT,
+            outcome TEXT,
+            recommendation_rank INT,
+            metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            FOREIGN KEY (user_id) REFERENCES app_user(user_id),
+            FOREIGN KEY (game_id) REFERENCES games(game_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS recommendation_events_user_created_idx
+            ON recommendation_events (user_id, created_at DESC);
+
+        CREATE INDEX IF NOT EXISTS recommendation_events_request_idx
+            ON recommendation_events (request_id);
+    050-rename_platforms_table.sql: |
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relkind = 'r'
+              AND c.relname = 'platforms'
+              AND n.nspname = 'public'
+          ) AND NOT EXISTS (
+            SELECT 1
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relkind = 'r'
+              AND c.relname = 'platform'
+              AND n.nspname = 'public'
+          ) THEN
+            ALTER TABLE public.platforms RENAME TO platform;
+          END IF;
+
+          IF NOT EXISTS (
+            SELECT 1
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relname = 'platforms'
+              AND n.nspname = 'public'
+          ) AND EXISTS (
+            SELECT 1
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relkind = 'r'
+              AND c.relname = 'platform'
+              AND n.nspname = 'public'
+          ) THEN
+            CREATE VIEW public.platforms AS
+              SELECT * FROM public.platform;
+          END IF;
+        END$$;
+    060-drop_user_preference_tables.sql: |
+        DROP TABLE IF EXISTS user_keyword_preferences CASCADE;
+        DROP TABLE IF EXISTS user_platform_preferences CASCADE;

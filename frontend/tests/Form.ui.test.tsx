@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 import React from "react";
 import { act } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import Form from "../src/components/Form";
 import { cleanup, render } from "./render";
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("Form", () => {

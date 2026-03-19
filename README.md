@@ -36,7 +36,7 @@ NextPlay is a game discovery and recommendation platform built as a small servic
 | Frontend (Docker) | `http://localhost:5173` | Nginx-served production build |
 | Frontend (Vite dev) | `http://127.0.0.1:5174` | `npm run dev` in `frontend/` |
 | Gateway | `http://localhost:18084` | Public API entrypoint |
-| PostgreSQL | `localhost:5432` | Optional local DB access for tooling |
+| PostgreSQL | Compose network only | Reach it with `docker compose exec postgres psql ...` or temporarily add a host port when needed |
 | Internal services | Compose network only | User, game, and recommender are reachable through the gateway or from other containers |
 
 ## Current State
@@ -75,7 +75,7 @@ docker compose -f deploy/docker-compose.yml up -d --build
 ```text
 Frontend:     http://localhost:5173
 Gateway:      http://localhost:18084/health
-PostgreSQL:   localhost:5432 (optional local tooling access)
+PostgreSQL:   internal only (`docker compose exec postgres psql -U nextplay -d nextplay`)
 ```
 
 4. Check aggregated downstream health through the gateway:
@@ -125,7 +125,7 @@ VITE_API_URL=http://127.0.0.1:18084/api
 
 The frontend should usually talk to the gateway under `/api`.
 
-- Auth: `POST /api/users/register`, `POST /api/users/login`
+- Auth: `POST /api/users/register`, `POST /api/users/login`, `POST /api/users/logout`
 - User profile: `/api/users/:id`
 - User interactions: `/api/users/:id/interactions*`
 - Games: `/api/games*`
@@ -134,10 +134,14 @@ The frontend should usually talk to the gateway under `/api`.
 
 ### Authentication
 
-JWT auth is used for user-facing protected routes.
+The gateway terminates browser auth and stores the JWT in an `HttpOnly` session cookie.
 
-- `POST /users/register` and `POST /users/login` return a token.
-- Send `Authorization: Bearer <token>` on protected gateway requests.
+- `POST /api/users/register` and `POST /api/users/login` issue the session cookie.
+- `GET /api/users/csrf` returns and refreshes the CSRF token used by browser clients.
+- `POST /api/users/logout` clears the session cookie.
+- Browser clients should use same-origin requests or `credentials: "include"`; they do not need to read or persist the JWT.
+- Unsafe browser requests send `X-CSRF-Token` with the matching CSRF cookie to protect the session-backed flow.
+- Non-browser clients can still send `Authorization: Bearer <token>` on protected gateway requests.
 - The gateway also enforces same-user access on protected `/api/users/:id/...` routes.
 
 ### Internal write routes
@@ -149,9 +153,11 @@ Gateway write operations for game/admin-style flows use service-to-service auth.
 
 ### Security defaults
 
-- Docker Compose publishes only the frontend and gateway; the user, game, and recommender services stay on the internal Compose network.
+- Docker Compose publishes only the frontend and gateway; PostgreSQL, user, game, and recommender stay on the internal Compose network by default.
 - Internal game writes and recommender requests require `X-Service-Token` between services.
-- Gateway CORS is allowlisted through `CORS_ALLOWED_ORIGINS` instead of `*`.
+- Browser auth now uses an `HttpOnly` session cookie instead of browser-readable local storage.
+- Unsafe session-cookie requests require a matching CSRF token header and cookie.
+- Gateway CORS is allowlisted through `CORS_ALLOWED_ORIGINS` instead of `*`, with credentialed requests enabled for approved frontend origins.
 - Auth-sensitive routes are rate-limited at the gateway.
 - The frontend Nginx config sets baseline browser hardening headers and a restrictive CSP.
 
@@ -212,3 +218,5 @@ Kubernetes manifests live under `kube/base`, with desktop-oriented overlays unde
 - recommendation quality work is ongoing around calibration, richer data, and rollout controls;
 - observability, security hardening, and deployment operations still need expansion;
 - the frontend needs more product depth beyond the current discovery and recommendation flow.
+
+

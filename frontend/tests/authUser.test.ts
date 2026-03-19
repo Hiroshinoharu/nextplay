@@ -1,6 +1,49 @@
 import { describe, expect, it } from "vitest";
 
-import { getUserDisplayName, getUserInitials } from "../src/utils/authUser";
+import {
+  getUserDisplayName,
+  getUserInitials,
+  hasAuthIdentity,
+  normalizeAuthUser,
+} from "../src/utils/authUser";
+
+describe("normalizeAuthUser", () => {
+  it("keeps the stable auth identity fields", () => {
+    expect(
+      normalizeAuthUser({
+        id: "42",
+        username: "NextPlayer",
+        email: "player@example.com",
+        steam_linked: true,
+      }),
+    ).toEqual({
+      id: 42,
+      username: "NextPlayer",
+      email: "player@example.com",
+      steam_linked: true,
+    });
+  });
+
+  it("drops token-like fields from persisted auth data", () => {
+    expect(
+      normalizeAuthUser({
+        id: 42,
+        email: "player@example.com",
+        token: "jwt-token",
+        access_token: "jwt-token",
+      }),
+    ).toEqual({
+      id: 42,
+      email: "player@example.com",
+      steam_linked: undefined,
+    });
+  });
+
+  it("rejects payloads without a usable auth identity", () => {
+    expect(normalizeAuthUser({ token: "jwt-token" })).toBeNull();
+    expect(hasAuthIdentity({ token: "jwt-token" })).toBe(false);
+  });
+});
 
 describe("getUserDisplayName", () => {
   it("prefers username over email", () => {

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	gatewayauth "github.com/maxceban/nextplay/services/gateway/auth"
 	"github.com/maxceban/nextplay/services/gateway/clients"
 	"github.com/maxceban/nextplay/services/shared/observability"
 )
@@ -38,19 +39,29 @@ func sendProxyJSON(c *fiber.Ctx, payload interface{}, err error) error {
 
 // Helper to create UserClient with Authorization header from request context
 func userClientFromCtx(c *fiber.Ctx) *clients.UserClient {
-	return clients.NewUserClientWithHeaders(c.Get("Authorization"), requestIDFromCtx(c))
+	return clients.NewUserClientWithHeaders(requestAuthorizationHeader(c), requestIDFromCtx(c))
 }
 
 func requestIDFromCtx(c *fiber.Ctx) string {
 	return observability.RequestID(c)
 }
 
+func requestAuthorizationHeader(c *fiber.Ctx) string {
+	if authHeader, ok := c.Locals("auth_header").(string); ok && strings.TrimSpace(authHeader) != "" {
+		return strings.TrimSpace(authHeader)
+	}
+	return gatewayauth.AuthorizationHeaderValue(
+		c.Get("Authorization"),
+		c.Cookies(gatewayauth.SessionCookieName()),
+	)
+}
+
 func forwardingHeaders(c *fiber.Ctx) map[string]string {
 	headers := map[string]string{
 		observability.HeaderRequestID: requestIDFromCtx(c),
 	}
-	if auth := c.Get("Authorization"); auth != "" {
-		headers["Authorization"] = auth
+	if authHeader := requestAuthorizationHeader(c); authHeader != "" {
+		headers["Authorization"] = authHeader
 	}
 	if serviceToken := gatewayServiceToken(); serviceToken != "" {
 		headers["X-Service-Token"] = serviceToken

@@ -28,10 +28,8 @@ spec:
                   image: deploy-user
                   imagePullPolicy: IfNotPresent
                   env:
-                    - name: CONFIG_FILE
-                      value: "/config/config.yaml"
                     - name: DATABASE_URL
-                      value: "postgres://nextplay:nextplay@postgres:5432/nextplay?sslmode=disable"
+                      value: "postgres://nextplay:nextplay@postgres.deploy.svc.cluster.local:5432/nextplay?sslmode=disable"
                     - name: JWT_SECRET
                       value: "FOHnngwPWbmYHSDAguUNItjx7WDmhFcqWLv0kI7cRX8="
                     - name: PASSWORD_PEPPER
@@ -40,19 +38,11 @@ spec:
                       value: "8083"
                   livenessProbe:
                     exec:
-                        command: ['curl -f http://user:8083/health']
+                        command: ['curl', '-f', 'http://localhost:8083/health']
+                    initialDelaySeconds: 20
                     periodSeconds: 5
                     timeoutSeconds: 3
                     failureThreshold: 5
                   ports:
                     - name: user-8083
                       containerPort: 8083
-                  volumeMounts:
-                    - name: config-config-yaml
-                      mountPath: /config/config.yaml
-                      readOnly: true
-            volumes:
-                - name: config-config-yaml
-                  hostPath:
-                    path: C:\Users\maxce\nextplay\deploy\config\config.yaml
-                  readOnly: true

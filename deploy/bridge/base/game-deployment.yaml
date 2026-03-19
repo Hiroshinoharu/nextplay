@@ -28,10 +28,8 @@ spec:
                   image: deploy-game
                   imagePullPolicy: IfNotPresent
                   env:
-                    - name: CONFIG_FILE
-                      value: "/config/config.yaml"
                     - name: DATABASE_URL
-                      value: "postgres://nextplay:nextplay@postgres:5432/nextplay?sslmode=disable"
+                      value: "postgres://nextplay:nextplay@postgres.deploy.svc.cluster.local:5432/nextplay?sslmode=disable"
                     - name: ETL_GATEWAY_WRITE_ENABLED
                       value: "0"
                     - name: ETL_GATEWAY_WRITE_LIMIT
@@ -39,7 +37,7 @@ spec:
                     - name: GATEWAY_SERVICE_TOKEN
                       value: "nextplay-dev-service-token"
                     - name: GATEWAY_SERVICE_URL
-                      value: "http://gateway:8084"
+                      value: "http://gateway.deploy.svc.cluster.local:8084"
                     - name: IGDB_ACCESS_TOKEN
                       value: "u9qt9fupddzrykcr6zo99op85sku9y"
                     - name: IGDB_CLIENT_ID
@@ -70,19 +68,11 @@ spec:
                       value: "8081"
                   livenessProbe:
                     exec:
-                        command: ['curl -f http://game:8081/health']
+                        command: ['curl', '-f', 'http://localhost:8081/health']
+                    initialDelaySeconds: 20
                     periodSeconds: 5
                     timeoutSeconds: 3
                     failureThreshold: 5
                   ports:
                     - name: game-8081
                       containerPort: 8081
-                  volumeMounts:
-                    - name: config-config-yaml
-                      mountPath: /config/config.yaml
-                      readOnly: true
-            volumes:
-                - name: config-config-yaml
-                  hostPath:
-                    path: C:\Users\maxce\nextplay\deploy\config\config.yaml
-                  readOnly: true
