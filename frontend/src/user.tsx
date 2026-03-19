@@ -80,6 +80,85 @@ const formatReleaseDate = (value?: string) => {
   });
 };
 
+type PasswordVisibilityIconProps = {
+  visible: boolean;
+};
+
+const PasswordVisibilityIcon = ({ visible }: PasswordVisibilityIconProps) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path
+      d="M2.25 12s3.75-6 9.75-6 9.75 6 9.75 6-3.75 6-9.75 6-9.75-6-9.75-6Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle
+      cx="12"
+      cy="12"
+      r="3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    />
+    {visible ? null : (
+      <path
+        d="M4 4l16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    )}
+  </svg>
+);
+
+type UserPasswordFieldProps = {
+  id: string;
+  name: string;
+  label: string;
+  autoComplete: string;
+  value: string;
+  onChange: (value: string) => void;
+  visible: boolean;
+  onToggle: () => void;
+};
+
+const UserPasswordField = ({
+  id,
+  name,
+  label,
+  autoComplete,
+  value,
+  onChange,
+  visible,
+  onToggle,
+}: UserPasswordFieldProps) => (
+  <div className="user-field">
+    <label htmlFor={id}>{label}</label>
+    <div className="user-password-field">
+      <input
+        id={id}
+        name={name}
+        type={visible ? "text" : "password"}
+        autoComplete={autoComplete}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <button
+        type="button"
+        className="user-password-field__toggle"
+        aria-label={visible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+        aria-pressed={visible}
+        onClick={onToggle}
+      >
+        <PasswordVisibilityIcon visible={visible} />
+      </button>
+    </div>
+  </div>
+);
+
 const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) => {
   const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState("");
@@ -93,6 +172,9 @@ const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordStatus, setPasswordStatus] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSaving, setPasswordSaving] = useState(false);
@@ -110,6 +192,9 @@ const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) 
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
     setPasswordStatus(null);
     setPasswordError(null);
     setDeleteConfirmation("");
@@ -307,8 +392,8 @@ const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) 
     deleteConfirmation.trim().toUpperCase() === DELETE_CONFIRMATION_TEXT;
   const themeSummary =
     theme === "dark"
-      ? "Torch off: the page stays in dark mode with neon contrast."
-      : "Torch lit: the page switches to a brighter light mode shell.";
+      ? "Dark mode stays on with the low-glare background and higher contrast accents."
+      : "Light mode brightens the page while keeping the same layout and controls.";
 
   const handleSearchSubmit = useCallback(() => {
     const query = searchInput.trim();
@@ -340,15 +425,11 @@ const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) 
         return;
       }
 
-      const trimmedCurrentPassword = currentPassword.trim();
-      const trimmedNewPassword = newPassword.trim();
-      const trimmedConfirmPassword = confirmPassword.trim();
-
-      if (!trimmedCurrentPassword || !trimmedNewPassword || !trimmedConfirmPassword) {
+      if (!currentPassword || !newPassword || !confirmPassword) {
         setPasswordError("Fill in your current password, new password, and confirmation.");
         return;
       }
-      if (trimmedNewPassword !== trimmedConfirmPassword) {
+      if (newPassword !== confirmPassword) {
         setPasswordError("New password and confirmation do not match.");
         return;
       }
@@ -362,8 +443,8 @@ const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) 
             Authorization: `Bearer ${authToken}`,
           },
           body: JSON.stringify({
-            current_password: trimmedCurrentPassword,
-            new_password: trimmedNewPassword,
+            current_password: currentPassword,
+            new_password: newPassword,
           }),
         });
         const payload = (await response.json().catch(() => null)) as {
@@ -646,7 +727,7 @@ const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) 
                 <div className="user-settings-card__header">
                   <div>
                     <h3>Appearance</h3>
-                    <p>Torch off keeps dark mode. Light the torch to switch this page into light mode.</p>
+                    <p>Use the torch to preview this page in dark or light mode.</p>
                   </div>
                   <span className="user-settings-badge">{theme === "dark" ? "Dark" : "Light"}</span>
                 </div>
@@ -665,7 +746,7 @@ const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) 
                     <div className="user-theme-preview">
                       <span className="user-theme-preview__swatch" aria-hidden="true" />
                       <div>
-                        <strong>{theme === "dark" ? "Night raid" : "Daylight base"}</strong>
+                        <strong>{theme === "dark" ? "Dark mode" : "Light mode"}</strong>
                         <p>
                           The choice is stored locally, so this page keeps the same look the next
                           time you open it.
@@ -684,40 +765,37 @@ const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) 
                   </div>
                 </div>
                 <form className="user-settings-form" onSubmit={handlePasswordChange}>
-                  <div className="user-field">
-                    <label htmlFor="user-current-password">Current password</label>
-                    <input
-                      id="user-current-password"
-                      name="current_password"
-                      type="password"
-                      autoComplete="current-password"
-                      value={currentPassword}
-                      onChange={(event) => setCurrentPassword(event.target.value)}
-                    />
-                  </div>
+                  <UserPasswordField
+                    id="user-current-password"
+                    name="current_password"
+                    label="Current password"
+                    autoComplete="current-password"
+                    value={currentPassword}
+                    onChange={setCurrentPassword}
+                    visible={showCurrentPassword}
+                    onToggle={() => setShowCurrentPassword((current) => !current)}
+                  />
                   <div className="user-form-row">
-                    <div className="user-field">
-                      <label htmlFor="user-new-password">New password</label>
-                      <input
-                        id="user-new-password"
-                        name="new_password"
-                        type="password"
-                        autoComplete="new-password"
-                        value={newPassword}
-                        onChange={(event) => setNewPassword(event.target.value)}
-                      />
-                    </div>
-                    <div className="user-field">
-                      <label htmlFor="user-confirm-password">Confirm new password</label>
-                      <input
-                        id="user-confirm-password"
-                        name="confirm_password"
-                        type="password"
-                        autoComplete="new-password"
-                        value={confirmPassword}
-                        onChange={(event) => setConfirmPassword(event.target.value)}
-                      />
-                    </div>
+                    <UserPasswordField
+                      id="user-new-password"
+                      name="new_password"
+                      label="New password"
+                      autoComplete="new-password"
+                      value={newPassword}
+                      onChange={setNewPassword}
+                      visible={showNewPassword}
+                      onToggle={() => setShowNewPassword((current) => !current)}
+                    />
+                    <UserPasswordField
+                      id="user-confirm-password"
+                      name="confirm_password"
+                      label="Confirm new password"
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      onChange={setConfirmPassword}
+                      visible={showConfirmPassword}
+                      onToggle={() => setShowConfirmPassword((current) => !current)}
+                    />
                   </div>
                   <p className="user-inline-note">{PASSWORD_POLICY_TEXT}</p>
                   {passwordError ? (

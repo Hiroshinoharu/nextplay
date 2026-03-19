@@ -609,11 +609,18 @@ function App() {
   };
 
   const handleSignOut = useCallback(() => {
+    setTheme("dark");
     setAuthUser(null);
     try {
+      localStorage.setItem(THEME_STORAGE_KEY, "dark");
       localStorage.removeItem(AUTH_STORAGE_KEY);
     } catch {
       // Ignore storage errors
+    }
+
+    if (typeof document !== "undefined") {
+      document.documentElement.dataset.theme = "dark";
+      document.body.dataset.theme = "dark";
     }
   }, []);
 

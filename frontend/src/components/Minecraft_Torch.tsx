@@ -104,9 +104,9 @@ const MinecraftTorch = ({
 };
 
 const StyledWrapper = styled.div<{ $checked: boolean; $disabled: boolean }>`
-  --torch-head-size: clamp(28px, 3.8vw, 34px);
+  --torch-head-size: clamp(26px, 3.4vw, 32px);
   --torch-stick-width: calc(var(--torch-head-size) * 0.88);
-  --torch-stick-height: clamp(126px, 17vw, 164px);
+  --torch-stick-height: clamp(118px, 15vw, 150px);
   --torch-lift: ${({ $checked }) => ($checked ? '-4px' : '0px')};
 
   .container input {
@@ -121,10 +121,11 @@ const StyledWrapper = styled.div<{ $checked: boolean; $disabled: boolean }>`
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: flex-start;
     position: relative;
-    width: min(100%, 220px);
+    width: min(100%, 172px);
     min-height: 100%;
-    padding: 0 0 52px;
+    padding: 6px 0 44px;
     cursor: ${({ $disabled }) => ($disabled ? 'not-allowed' : 'pointer')};
     user-select: none;
     opacity: ${({ $disabled }) => ($disabled ? 0.55 : 1)};
@@ -138,17 +139,28 @@ const StyledWrapper = styled.div<{ $checked: boolean; $disabled: boolean }>`
 
   .simple-text {
     position: absolute;
+    left: 50%;
     bottom: 0;
-    width: min(100%, 190px);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 118px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid ${({ $checked }) => ($checked ? 'rgba(255, 216, 0, 0.22)' : 'rgba(140, 243, 122, 0.22)')};
+    background: ${({ $checked }) => ($checked ? 'rgba(58, 45, 8, 0.48)' : 'rgba(8, 22, 34, 0.76)')};
+    transform: translateX(-50%);
     text-align: center;
-    color: ${({ $checked }) => ($checked ? '#fff1ac' : 'rgba(226, 242, 255, 0.88)')};
+    white-space: nowrap;
+    color: ${({ $checked }) => ($checked ? '#fff3b4' : 'rgba(226, 242, 255, 0.92)')};
     text-shadow: ${({ $checked }) =>
-      $checked ? '0 0 12px rgba(255, 216, 0, 0.45)' : '0 0 10px rgba(14, 165, 233, 0.18)'};
-    font-size: clamp(12px, 1.4vw, 13px);
-    font-weight: 800;
-    font-family: monospace;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+      $checked ? '0 0 10px rgba(255, 216, 0, 0.24)' : '0 0 10px rgba(14, 165, 233, 0.1)'};
+    box-shadow: 0 12px 20px rgba(0, 0, 0, 0.16);
+    font-size: 13px;
+    font-weight: 700;
+    font-family: inherit;
+    letter-spacing: 0.02em;
+    line-height: 1;
   }
 
   .torch {
@@ -156,8 +168,8 @@ const StyledWrapper = styled.div<{ $checked: boolean; $disabled: boolean }>`
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    width: min(100%, 148px);
-    height: calc(var(--torch-stick-height) + var(--torch-head-size) + 12px);
+    width: min(100%, 128px);
+    height: calc(var(--torch-stick-height) + var(--torch-head-size) + 10px);
     filter: ${({ $checked }) => ($checked ? 'saturate(1)' : 'saturate(0.88) brightness(0.96)')};
     transform: translateY(var(--torch-lift));
     transition: filter 220ms ease, transform 220ms ease;
@@ -442,12 +454,12 @@ const StyledWrapper = styled.div<{ $checked: boolean; $disabled: boolean }>`
 
   @media (max-width: 640px) {
     .container {
-      width: min(100%, 190px);
-      padding-bottom: 48px;
+      width: min(100%, 152px);
+      padding-bottom: 38px;
     }
 
     .torch {
-      width: min(100%, 132px);
+      width: min(100%, 116px);
     }
   }
 `;

@@ -206,6 +206,11 @@ const GameCarousel = ({
   }, [displayGames.length, isLoadingMore, safeGames.length])
 
   useEffect(() => {
+    hasTriggeredNoOverflowLoadRef.current = false
+  }, [canLoadMore, carouselItems.length])
+
+
+  useEffect(() => {
     const row = rowRef.current
     if (!row || !onLoadMore || !canLoadMore || isLoadingMore) return
     if (hasTriggeredNoOverflowLoadRef.current) return

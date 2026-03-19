@@ -830,6 +830,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
       }),
     [questionnaireAnswers, questionnaireQuestions],
   );
+
   useEffect(() => {
     setDismissedQuestionnaireBanner(false);
   }, [questionnaireStorageKey]);

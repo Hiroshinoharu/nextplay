@@ -19,6 +19,40 @@ type AvailabilityResponse = {
   error?: string;
 };
 
+type PasswordVisibilityIconProps = {
+  visible: boolean;
+};
+
+const PasswordVisibilityIcon = ({ visible }: PasswordVisibilityIconProps) => (
+  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path
+      d="M2.25 12s3.75-6 9.75-6 9.75 6 9.75 6-3.75 6-9.75 6-9.75-6-9.75-6Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle
+      cx="12"
+      cy="12"
+      r="3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    />
+    {visible ? null : (
+      <path
+        d="M4 4l16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    )}
+  </svg>
+);
+
 const PASSWORD_POLICY_TEXT =
   'Password must be at least 8 characters and include upper-case, lower-case, number, and special character.';
 
@@ -36,6 +70,8 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
   const [signupName, setSignupName] = useState('');
   const [signupEmail, setSignupEmail] = useState(initialEmail ?? '');
   const [signupPassword, setSignupPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -143,11 +179,11 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
     event.preventDefault();
     setStatus(null);
     setError(null);
-    if (!loginIdentifier.trim() || !loginPassword.trim()) {
+    if (!loginIdentifier.trim() || !loginPassword) {
       setError('Enter your email/username and password.');
       return;
     }
-    const payload: Record<string, string> = { password: loginPassword.trim() };
+    const payload: Record<string, string> = { password: loginPassword };
     if (loginIdentifier.includes('@')) {
       payload.email = loginIdentifier.trim();
     } else if (loginIdentifier.trim()) {
@@ -183,7 +219,7 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
     event.preventDefault();
     setStatus(null);
     setError(null);
-    if (!signupName.trim() || !signupEmail.trim() || !signupPassword.trim()) {
+    if (!signupName.trim() || !signupEmail.trim() || !signupPassword) {
       setError('Name, email, and password are required.');
       return;
     }
@@ -208,7 +244,7 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
         body: JSON.stringify({
           username: signupName.trim(),
           email: signupEmail.trim(),
-          password: signupPassword.trim(),
+          password: signupPassword,
         }),
       });
       const data = await response.json().catch(() => null);
@@ -228,7 +264,7 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
       const loginResponse = await fetch(apiUrl('/users/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: signupEmail.trim(), password: signupPassword.trim() }),
+        body: JSON.stringify({ email: signupEmail.trim(), password: signupPassword }),
       });
       const loginData = await loginResponse.json().catch(() => null);
       if (!loginResponse.ok) {
@@ -279,14 +315,28 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
                       value={loginIdentifier}
                       onChange={event => setLoginIdentifier(event.target.value)}
                     />
-                    <input
-                      className="flip-card__input"
-                      name="password"
-                      placeholder="Password"
-                      type="password"
-                      value={loginPassword}
-                      onChange={event => setLoginPassword(event.target.value)}
-                    />
+                    <div className="flip-card__field">
+                      <input
+                        className="flip-card__input flip-card__input--password"
+                        name="password"
+                        placeholder="Password"
+                        type={showLoginPassword ? 'text' : 'password'}
+                        value={loginPassword}
+                        onChange={event => setLoginPassword(event.target.value)}
+                      />
+                      <button
+                        className="flip-card__password-toggle"
+                        type="button"
+                        aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                        aria-pressed={showLoginPassword}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setShowLoginPassword((current) => !current);
+                        }}
+                      >
+                        <PasswordVisibilityIcon visible={showLoginPassword} />
+                      </button>
+                    </div>
                     <button className="flip-card__btn" type="submit" disabled={isLoading}>
                       {isLoading ? 'Working...' : 'Let`s go!'}
                     </button>
@@ -326,14 +376,28 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
                         {signupEmailExists ? 'Email already exists.' : 'Email is available.'}
                       </div>
                     )}
-                    <input
-                      className="flip-card__input"
-                      name="password"
-                      placeholder="Password"
-                      type="password"
-                      value={signupPassword}
-                      onChange={event => setSignupPassword(event.target.value)}
-                    />
+                    <div className="flip-card__field">
+                      <input
+                        className="flip-card__input flip-card__input--password"
+                        name="password"
+                        placeholder="Password"
+                        type={showSignupPassword ? 'text' : 'password'}
+                        value={signupPassword}
+                        onChange={event => setSignupPassword(event.target.value)}
+                      />
+                      <button
+                        className="flip-card__password-toggle"
+                        type="button"
+                        aria-label={showSignupPassword ? 'Hide password' : 'Show password'}
+                        aria-pressed={showSignupPassword}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          setShowSignupPassword((current) => !current);
+                        }}
+                      >
+                        <PasswordVisibilityIcon visible={showSignupPassword} />
+                      </button>
+                    </div>
                     <div className="auth-policy">
                       <strong>Policy</strong>
                       <span>{PASSWORD_POLICY_TEXT}</span>
@@ -577,6 +641,11 @@ const StyledWrapper = styled.div`
     width: 100%;
   }
 
+  .flip-card__field {
+    position: relative;
+    width: min(260px, 100%);
+  }
+
   .flip-card__input,
   .flip-card__btn {
     pointer-events: auto;
@@ -591,7 +660,7 @@ const StyledWrapper = styled.div`
   }
 
   .flip-card__input {
-    width: min(260px, 100%);
+    width: 100%;
     height: 40px;
     border-radius: 5px;
     border: 1px solid var(--main-color);
@@ -602,6 +671,10 @@ const StyledWrapper = styled.div`
     color: var(--font-color);
     padding: 5px 10px;
     outline: none;
+  }
+
+  .flip-card__input--password {
+    padding-right: 42px;
   }
 
   .flip-card__input::placeholder {
@@ -615,6 +688,40 @@ const StyledWrapper = styled.div`
       0 0 0 1px rgba(14, 229, 203, 0.45),
       0 0 22px rgba(14, 229, 203, 0.3),
       0 0 14px rgba(140, 243, 122, 0.2);
+  }
+
+  .flip-card__password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--font-color-sub);
+    cursor: pointer;
+    transform: translateY(-50%);
+    transition: color 180ms ease, background-color 180ms ease;
+  }
+
+  .flip-card__password-toggle:hover {
+    color: var(--font-color);
+    background: rgba(140, 243, 122, 0.12);
+  }
+
+  .flip-card__password-toggle:focus-visible {
+    outline: 2px solid var(--input-focus);
+    outline-offset: 2px;
+  }
+
+  .flip-card__password-toggle svg {
+    width: 18px;
+    height: 18px;
   }
 
   .landing[data-theme='light'] & .flip-card__front,
@@ -739,6 +846,10 @@ const StyledWrapper = styled.div`
     .title {
       font-size: 22px;
       margin: 10px 0;
+    }
+
+    .flip-card__field {
+      width: 100%;
     }
 
     .flip-card__input {

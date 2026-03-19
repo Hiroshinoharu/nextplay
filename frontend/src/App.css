@@ -102,15 +102,18 @@ body[data-theme="light"] {
 .landing[data-theme="light"] {
   color: #18354a;
   background:
-    radial-gradient(circle at 14% 14%, rgba(133, 197, 103, 0.16), transparent 48%),
-    radial-gradient(circle at 84% 10%, rgba(121, 199, 230, 0.2), transparent 46%),
-    linear-gradient(155deg, #f5fbff 0%, #ebf5fc 48%, #deedf7 100%);
+    radial-gradient(circle at 14% 14%, rgba(133, 197, 103, 0.14), transparent 48%),
+    radial-gradient(circle at 84% 10%, rgba(121, 199, 230, 0.16), transparent 46%),
+    linear-gradient(145deg, rgba(248, 252, 255, 0.9), rgba(230, 241, 248, 0.76)),
+    url('/landing-bg.webp') no-repeat center top / cover;
+  background-attachment: scroll;
+  background-position: center top;
 }
 
 .landing[data-theme="light"]::after {
   background:
-    radial-gradient(circle at 22% 18%, rgba(255, 255, 255, 0.9), transparent 30%),
-    radial-gradient(circle at 82% 10%, rgba(173, 221, 199, 0.28), transparent 26%);
+    radial-gradient(circle at 22% 18%, rgba(255, 255, 255, 0.62), transparent 30%),
+    radial-gradient(circle at 82% 10%, rgba(173, 221, 199, 0.2), transparent 26%);
 }
 .landing::after {
   content: '';
@@ -1135,7 +1138,6 @@ body[data-theme="light"] {
   }
 }
 
-
 .landing__footer-simple {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.9fr);
@@ -1184,6 +1186,76 @@ body[data-theme="light"] {
 .landing[data-theme="light"] .landing__footer-copy,
 .landing[data-theme="light"] .landing__footer-note {
   color: rgba(24, 53, 74, 0.95);
+}
+html[data-theme="light"] .landing__footer,
+body[data-theme="light"] .landing__footer,
+.search-page[data-theme="light"] .landing__footer,
+.game-page[data-theme="light"] .landing__footer,
+.games-page[data-theme="light"] .landing__footer,
+.user-page[data-theme="light"] .landing__footer {
+  border-color: rgba(59, 143, 62, 0.14);
+  color: #18354a;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.99), rgba(242, 249, 253, 0.97)),
+    radial-gradient(circle at top right, rgba(59, 143, 62, 0.08), transparent 45%);
+  box-shadow: 0 14px 26px rgba(31, 67, 92, 0.08);
+}
+
+html[data-theme="light"] .landing__footer-brand p,
+body[data-theme="light"] .landing__footer-brand p,
+.search-page[data-theme="light"] .landing__footer-brand p,
+.game-page[data-theme="light"] .landing__footer-brand p,
+.games-page[data-theme="light"] .landing__footer-brand p,
+.user-page[data-theme="light"] .landing__footer-brand p,
+html[data-theme="light"] .landing__footer-copy,
+body[data-theme="light"] .landing__footer-copy,
+.search-page[data-theme="light"] .landing__footer-copy,
+.game-page[data-theme="light"] .landing__footer-copy,
+.games-page[data-theme="light"] .landing__footer-copy,
+.user-page[data-theme="light"] .landing__footer-copy,
+html[data-theme="light"] .landing__footer-note,
+body[data-theme="light"] .landing__footer-note,
+.search-page[data-theme="light"] .landing__footer-note,
+.game-page[data-theme="light"] .landing__footer-note,
+.games-page[data-theme="light"] .landing__footer-note,
+.user-page[data-theme="light"] .landing__footer-note,
+html[data-theme="light"] .landing__footer-bottom,
+body[data-theme="light"] .landing__footer-bottom,
+.search-page[data-theme="light"] .landing__footer-bottom,
+.game-page[data-theme="light"] .landing__footer-bottom,
+.games-page[data-theme="light"] .landing__footer-bottom,
+.user-page[data-theme="light"] .landing__footer-bottom {
+  color: rgba(24, 53, 74, 0.95);
+}
+
+html[data-theme="light"] .landing__footer-eyebrow,
+body[data-theme="light"] .landing__footer-eyebrow,
+.search-page[data-theme="light"] .landing__footer-eyebrow,
+.game-page[data-theme="light"] .landing__footer-eyebrow,
+.games-page[data-theme="light"] .landing__footer-eyebrow,
+.user-page[data-theme="light"] .landing__footer-eyebrow {
+  color: #3b8f3e;
+}
+
+html[data-theme="light"] .landing__footer-title,
+body[data-theme="light"] .landing__footer-title,
+.search-page[data-theme="light"] .landing__footer-title,
+.game-page[data-theme="light"] .landing__footer-title,
+.games-page[data-theme="light"] .landing__footer-title,
+.user-page[data-theme="light"] .landing__footer-title {
+  color: #18354a;
+}
+
+html[data-theme="light"] .landing__footer-badges span,
+body[data-theme="light"] .landing__footer-badges span,
+.search-page[data-theme="light"] .landing__footer-badges span,
+.game-page[data-theme="light"] .landing__footer-badges span,
+.games-page[data-theme="light"] .landing__footer-badges span,
+.user-page[data-theme="light"] .landing__footer-badges span {
+  border-color: rgba(59, 143, 62, 0.18);
+  background: rgba(59, 143, 62, 0.12);
+  color: #18354a;
+  font-weight: 700;
 }
 
 @media (max-width: 640px) {

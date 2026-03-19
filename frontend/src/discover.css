@@ -53,6 +53,9 @@
   --games-card-info-text: #18354a;
   --games-card-info-title: #18354a;
   --games-card-info-description: rgba(24, 53, 74, 0.82);
+  --games-result-button-bg: rgba(255, 255, 255, 0.92);
+  --games-result-button-text: #18354a;
+  --games-result-button-primary-text: #18354a;
   background:
     radial-gradient(circle at 12% 12%, rgba(133, 197, 103, 0.16), transparent 46%),
     radial-gradient(circle at 84% 10%, rgba(121, 199, 230, 0.2), transparent 44%),
@@ -60,8 +63,10 @@
 }
 
 .search-page[data-theme="light"] .search-header,
-.search-page[data-theme="light"] .discover-questionnaire,
-.search-page[data-theme="light"] .discover-results-panel,
+.search-page[data-theme="light"] .games-questionnaire-banner,
+.search-page[data-theme="light"] .games-questionnaire,
+.search-page[data-theme="light"] .games-search-grid-section,
+.search-page[data-theme="light"] .games-result--discover-dialog,
 .search-page[data-theme="light"] .discover-algorithm-verdict .games-result,
 .search-page[data-theme="light"] .landing__footer {
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.95), rgba(239, 248, 255, 0.9));
@@ -463,6 +468,33 @@
 
 .search-page[data-theme="light"] .discover-questionnaire-status__label {
   color: rgba(24, 53, 74, 0.76);
+}
+
+.search-page[data-theme="light"] .discover-questionnaire-compact__card {
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.98), rgba(235, 245, 252, 0.94));
+  border-color: rgba(59, 143, 62, 0.16);
+  box-shadow: 0 12px 22px rgba(31, 67, 92, 0.08);
+}
+
+.search-page[data-theme="light"] .discover-questionnaire-selection {
+  border-top-color: rgba(59, 143, 62, 0.12);
+}
+
+.search-page[data-theme="light"] .discover-questionnaire-selection__chip,
+.search-page[data-theme="light"] .discover-questionnaire-compact__chip {
+  border-color: rgba(59, 143, 62, 0.18);
+  background: rgba(255, 255, 255, 0.94);
+  color: #18354a;
+}
+
+.search-page[data-theme="light"] .discover-questionnaire-selection__chip--muted {
+  border-color: rgba(90, 152, 201, 0.24);
+  background: rgba(236, 246, 255, 0.92);
+}
+
+.search-page[data-theme="light"] .discover-questionnaire-selection__empty,
+.search-page[data-theme="light"] .discover-questionnaire-compact__empty {
+  color: rgba(24, 53, 74, 0.72);
 }
 
 .search-page[data-theme="light"] .discover-algorithm-verdict .games-result__actions .games-result__button {
