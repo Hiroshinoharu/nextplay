@@ -1,170 +1,210 @@
-# 🎮 NextPlay
+# NextPlay
 
-**NextPlay** is a microservices-based video game recommender system currently under development.  
-The system is designed to provide personalized game recommendations by combining a modular backend,  
-a React-based frontend, and modern cloud-native deployment using Docker and Kubernetes.
+NextPlay is a game discovery and recommendation platform built as a small service-oriented system. The repo contains a React frontend, Go API services, and a Python recommender service, along with Docker Compose and Kubernetes assets for local and deployment-oriented workflows.
 
----
+## Stack
 
-## 🚀 Current Project Overview
+- Frontend: React 19, TypeScript, Vite, styled-components
+- Gateway: Go, Fiber
+- Game service: Go, Fiber, PostgreSQL-backed catalog APIs
+- User service: Go, Fiber, PostgreSQL-backed auth and profile APIs
+- Recommender service: Python, FastAPI, Keras-based model serving with fallback logic
+- Local infra: Docker Compose, PostgreSQL
+- Deployment assets: Kubernetes manifests under `kube/`
 
-- **Frontend:** React + TypeScript (Vite) with route-level CSS and styled-components  
-- **Backend Microservices:** Implemented in Go (Fiber framework)  
-- **Machine Learning Service:** Python (FastAPI)  
-- **Containerization:** Docker for each service  
-- **Orchestration:** Kubernetes (Docker Desktop cluster)  
+## Repository Layout
 
-The repo now includes a working end-to-end recommendation flow: the frontend can submit questionnaire-driven recommendation requests through the gateway, the recommender can serve a trained `.keras` model artifact with fallback behavior, and the Go services expose authenticated user and game APIs for the UI. Database coverage, IGDB enrichment, and production hardening are still in progress.
+| Path | Purpose |
+| --- | --- |
+| `frontend/` | React/Vite UI for discovery, auth, games, and recommendations |
+| `services/gateway/` | Public API gateway and auth/proxy middleware |
+| `services/game/` | Game catalog APIs, relationship APIs, and ETL entrypoint |
+| `services/user/` | User auth, profile, and interaction APIs |
+| `services/recommender/` | Recommendation API, training pipeline, and model artifacts |
+| `services/shared/` | Shared config and observability helpers for Go services |
+| `deploy/` | Docker Compose, config, migrations, and local infra files |
+| `kube/` | Kubernetes base and overlay manifests |
 
----
+## Architecture
 
-## System Architecture
+![System Architecture](System%20Architecture.drawio.png)
 
-![System Architecture Diagram](<System Architecture.drawio.png>)
+## Service Map
 
-## 📁 Directory Structure
+| Component | Local URL | Notes |
+| --- | --- | --- |
+| Frontend (Docker) | `http://localhost:5173` | Nginx-served production build |
+| Frontend (Vite dev) | `http://127.0.0.1:5174` | `npm run dev` in `frontend/` |
+| Gateway | `http://localhost:18084` | Public API entrypoint |
+| Recommender | `http://localhost:18082` | FastAPI service |
+| Game service | `http://localhost:8081` | Internal/read API service |
+| User service | `http://localhost:8083` | Internal/auth API service |
+| PostgreSQL | `localhost:5432` | Default local database |
 
-|Folder| Description|
-|---|---|
-|`/deploy`| Kubernetes deployment manifests for all services including frontend, backend microservices, and ML service. It aslo contains a intial SQL script to set up my tables|
-|`/deploy/bridge`| Contains files to set up a Docker bridge network for local development and testing|
-|`/deploy/env`| Environment variable files for different services to manage configuration settings This would include API keys, database URLs, and other sensitive information|
-|`/frontend`| React frontend application where the user interface lives, built with page CSS, shared component styles, and Vite tooling.|
-|`/kube`| Kubernetes configuration files for setting up the local cluster and services|
-|`/services`| Contains all backend microservices and the ML service. Each service has its own folder with source code and Dockerfile.|
-|`/services/game`| Backend microservice for game data management|
-|`/services/recommender`| Backend microservice for handling recommendation logic|
-|`/services/user`| Backend microservice for user management and authentication|
-|`/services/gateway`| API gateway routing requests between microservices|
+## Current State
 
-## Microservices Overview
+The repo is beyond the skeleton stage. The main flow already works end to end:
 
-### 🎮 Game Service
-**Purpose:** Manages game data including fetching, storing, and updating game information.
+- the frontend can authenticate users, browse games, and submit questionnaire-driven recommendation requests;
+- the gateway proxies authenticated user and game APIs and exposes aggregated health checks;
+- the game and user services provide real CRUD and relationship endpoints backed by PostgreSQL;
+- the recommender can load a trained `.keras` artifact and fall back to non-model ranking behavior when needed;
+- CI runs Go builds/tests, recommender validation/training checks, and frontend lint/test/build gates.
 
-**Endpoints Implemented:**
-- `GET /health`
-- `GET /games`, `GET /games/search`, `GET /games/popular`, `GET /games/top`, `GET /games/:id`, `GET /games/:id/related-content`
-- Relationship endpoints for platforms, keywords, companies, franchise, and series
-- Service-auth protected write routes for ETL/admin flows
+The remaining work is mostly around product depth and operational hardening rather than basic wiring.
 
-**Docker setup:** Dockerfile included for containerization.
+## Local Development
 
-**Status:** Read-heavy game APIs and relationship management are implemented; IGDB-backed ingestion and broader catalog operations still need hardening.
+### Prerequisites
 
-### 📞 Recommender Service
-**Purpose:** Handles recommendation logic and interfaces with the ML service.
+- Docker Desktop for the full local stack
+- Node.js 20+ for frontend development
+- Go 1.24.5 for local Go builds/tests
+- Python 3.11 for recommender development and training tasks
 
-**Endpoints Implemented:**
-- `GET /health` - Health check endpoint
-- `POST /recommend` - User recommendations with model-first inference and fallback support
-- `GET /recommend/user/{user_id}` - User-specific recommendations
-- `GET /recommend/item/{item_id}` - Similar-item recommendations
-- `POST /recommend/item` - Similar-item recommendations with request body controls
+### Run the Full Stack with Docker Compose
 
-**Docker setup:** Dockerfile included for containerization.
+1. Review the env files in `deploy/env/`.
+   - Compose reads `game.env`, `gateway.env`, `recommender.env`, and `user.env`.
+2. Start the stack from the repo root:
 
-**Status:** Core recommendation endpoints, trained-model artifact loading, offline evaluation gates, and rule-based fallback behavior are implemented; threshold calibration and rollout operations still need hardening.
+```bash
+docker compose -f deploy/docker-compose.yml up -d --build
+```
 
-### 🧑 User Service
-**Purpose:** Manages user data and authentication.
+3. Check the main endpoints:
 
-**Endpoints Implemented:**
-- `GET /health`
-- `POST /users/register`, `POST /users/login`
-- Authenticated profile CRUD on `/users/:id`
-- Authenticated interaction, keyword preference, and platform preference routes under `/users/:id/*`
+```text
+Frontend:     http://localhost:5173
+Gateway:      http://localhost:18084/health
+Recommender:  http://localhost:18082/health
+Game:         http://localhost:8081/health
+User:         http://localhost:8083/health
+```
 
-**Docker setup:** Dockerfile included for containerization.
+4. Check aggregated downstream health through the gateway:
 
-**Status:** JWT-based auth and user-preference APIs are implemented; broader account and product features still need expansion.
+```bash
+curl http://localhost:18084/api/health/
+curl http://localhost:18084/api/health/game
+curl http://localhost:18084/api/health/user
+curl http://localhost:18084/api/health/recommender
+```
 
-**Auth (JWT):**
-- Set `JWT_SECRET` for the user service.
-- `POST /users/login` and `POST /users/register` return a `token`.
-- Pass `Authorization: Bearer <token>` for `/users/:id` and all `/users/:id/*` routes.
+5. Stop the stack when finished:
 
-### 🛡️ API Gateway
-**Purpose:** Routes requests between frontend and backend microservices.
+```bash
+docker compose -f deploy/docker-compose.yml down
+```
 
-**Endpoints Implemented:**
-- `GET /health`
-- Aggregated downstream health routes under `/api/health/*`
-- Proxied user, game, and recommender routes under `/api/*`
-- JWT enforcement for user-facing routes and service-token enforcement for internal write routes
+### Run the Game ETL Manually
 
-**Docker setup:** Dockerfile included for containerization.
+The ETL service is configured as an optional Compose profile.
 
-**Status:** Gateway routing, auth middleware, and proxy helpers are implemented; observability and production policy still need expansion.
+```bash
+docker compose -f deploy/docker-compose.yml run --rm game-etl
+```
 
-### 🖥️ Frontend Service
-**Purpose:** Provides the user interface for interacting with the NextPlay system.
+### Run the Frontend Against the Local Gateway
 
-**Features Implemented:**
-- React/Vite UI for landing, login, user, game, games, and discover flows
-- Questionnaire-driven recommendation requests against `/api/recommend`
-- Authenticated fetches to gateway-backed user and game APIs
-- Docker setup: Dockerfile included for containerization.
+If you want Vite instead of the Dockerized frontend:
 
-**Status:** The frontend supports the current discovery and recommendation flow; polish, content breadth, and additional product features remain.
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-## Current Implementation Status
-- All microservices expose health endpoints, and the gateway also exposes aggregated downstream health checks.
-- Game, user, and gateway services contain implemented authenticated API routes beyond service skeletons.
-- Recommender service includes trained-model artifact loading, manifest validation, offline evaluation gates, and rule-based fallback execution.
-- Dockerfiles are provided for containerization of each service, and deploy manifests are present for local stack startup.
-- The frontend is wired to the gateway for login, game discovery, questionnaire capture, and recommendation rendering.
-- No full IGDB-backed production catalog sync or complete product hardening yet.
-- Current recommender limitations are operational rather than foundational: threshold calibration, richer training data, monitoring integrations, and launch operations still need to be finalized for sustained rollouts.
-- Comprehensive testing and CI/CD pipelines are in place and can be viewed on GitHub Actions.
-- Monitoring, logging, and security hardening are still incomplete.
-- Scalability and load balancing configurations are not yet optimized.
-- Documentation is still evolving, especially around deployment and API behavior.
+The dev server runs on `http://127.0.0.1:5174` and proxies `/api` to `http://127.0.0.1:18084`.
 
-## Kubernetes Deployment
-Kustomize manifests live in `/kube/base`, with desktop-oriented overrides in `/kube/overlays/desktop`.
+To override the backend target, create `frontend/.env.local`:
 
-## Steps to Run the application Locally
-1. Ensure Docker Desktop is running. Kubernetes is only required if you plan to apply the manifests in `/kube`.
-2. Review the existing environment files in `/deploy/env` and update the machine-specific values you need. Docker Compose reads `game.env`, `gateway.env`, `recommender.env`, and `user.env` from that directory.
-3. Start the local stack from the repo root:
-   ```bash
-   docker compose -f deploy/docker-compose.yml up -d --build
-   ```
-4. Open the local services:
-   - Frontend: `http://localhost:5173`
-   - Gateway health: `http://localhost:18084/health`
-   - Recommender health: `http://localhost:18082/health`
-   - Game health: `http://localhost:8081/health`
-   - User health: `http://localhost:8083/health`
-5. Check aggregated gateway health when you want downstream status through the public API:
-   ```bash
-   curl http://localhost:18084/api/health/game
-   curl http://localhost:18084/api/health/user
-   curl http://localhost:18084/api/health/recommender
-   ```
-6. If you run the frontend with Vite instead of Docker, set `VITE_API_URL=http://127.0.0.1:18084/api` in `frontend/.env.local` and use `npm run dev` inside `/frontend`.
-7. Stop the stack:
-   ```bash
-   docker compose -f deploy/docker-compose.yml down
-   ```
----
+```bash
+VITE_API_URL=http://127.0.0.1:18084/api
+```
 
-## Current Limitations
-- Some product areas are still partial, but the main game, user, gateway, and recommender API surfaces are implemented.
-- No complete production database/content pipeline or IGDB-backed catalog sync yet.
-- Recommender ML capabilities exist (trained `.keras` artifacts, offline evaluation gates, reproducible retraining entrypoint, artifact/serving compatibility checks), but production calibration and launch operations still need completion.
-- The frontend still needs more depth in account, social, and content-management interactions.
-- Monitoring and logging solutions are not yet integrated end-to-end.
-- Authentication and authorization exist for current JWT-protected routes, but security hardening is still incomplete.
-- Scalability and load balancing configurations are not yet optimized.
-- No user analytics or tracking implemented.
-- Localization and internationalization features are not included.
+## API Notes
 
-## 🚧 Future Work
-- Expand IGDB-backed ingestion and catalog freshness workflows.
-- Improve recommendation quality with richer training data and calibrated rollout thresholds.
-- Add more user-facing features on top of the existing authenticated API surface.
-- Add database integration and stronger operational tooling.
-- Integrate monitoring and logging solutions for better observability.
+### User-facing gateway routes
 
+The frontend should usually talk to the gateway under `/api`.
+
+- Auth: `POST /api/users/register`, `POST /api/users/login`
+- User profile: `/api/users/:id`
+- User interactions: `/api/users/:id/interactions*`
+- Games: `/api/games*`
+- Recommendations: `/api/recommend*`
+- Health: `/api/health*`
+
+### Authentication
+
+JWT auth is used for user-facing protected routes.
+
+- `POST /users/register` and `POST /users/login` return a token.
+- Send `Authorization: Bearer <token>` on protected gateway or user-service requests.
+- The gateway also enforces same-user access on protected `/api/users/:id/...` routes.
+
+### Internal write routes
+
+Gateway write operations for game/admin-style flows use service-to-service auth.
+
+- Send `X-Service-Token: <token>`
+- Configure the expected token with `GATEWAY_SERVICE_TOKEN` or `SERVICE_TOKEN`
+
+## Testing and Verification
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run lint
+npm run test
+npm run build
+```
+
+### Go Services
+
+```bash
+cd services/gateway && go test ./...
+cd services/game && go test ./...
+cd services/user && go test ./...
+```
+
+### Recommender
+
+Install dependencies first:
+
+```bash
+pip install -r services/recommender/requirements.txt
+```
+
+Then run the main training/evaluation checks used by CI:
+
+```bash
+pytest -q services/recommender/tests/training/test_offline_eval.py
+pytest -q services/recommender/tests/training/test_retrain.py
+pytest -q services/recommender/tests/training/test_dataset_pipeline.py
+python -c "import sys; sys.path.append('services'); import recommender.main"
+```
+
+## CI
+
+GitHub Actions runs the following in `.github/workflows/ci.yml`:
+
+- `go build .` for `gateway`, `game`, and `user`
+- recommender import validation and training-related pytest coverage
+- frontend `npm run lint`
+- frontend `npm run test`
+- frontend `npm run build`
+
+## Kubernetes
+
+Kubernetes manifests live under `kube/base`, with desktop-oriented overlays under `kube/overlays/desktop`.
+
+## Known Gaps
+
+- catalog ingestion and freshness workflows still need more operational polish;
+- recommendation quality work is ongoing around calibration, richer data, and rollout controls;
+- observability, security hardening, and deployment operations still need expansion;
+- the frontend needs more product depth beyond the current discovery and recommendation flow.
