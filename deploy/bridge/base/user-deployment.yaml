@@ -54,5 +54,5 @@ spec:
             volumes:
                 - name: config-config-yaml
                   hostPath:
-                    path: /Users/maxceban/Documents/nextplay/deploy/config/config.yaml
+                    path: C:\Users\maxce\nextplay\deploy\config\config.yaml
                   readOnly: true

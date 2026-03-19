@@ -36,10 +36,8 @@ NextPlay is a game discovery and recommendation platform built as a small servic
 | Frontend (Docker) | `http://localhost:5173` | Nginx-served production build |
 | Frontend (Vite dev) | `http://127.0.0.1:5174` | `npm run dev` in `frontend/` |
 | Gateway | `http://localhost:18084` | Public API entrypoint |
-| Recommender | `http://localhost:18082` | FastAPI service |
-| Game service | `http://localhost:8081` | Internal/read API service |
-| User service | `http://localhost:8083` | Internal/auth API service |
-| PostgreSQL | `localhost:5432` | Default local database |
+| PostgreSQL | `localhost:5432` | Optional local DB access for tooling |
+| Internal services | Compose network only | User, game, and recommender are reachable through the gateway or from other containers |
 
 ## Current State
 
@@ -77,9 +75,7 @@ docker compose -f deploy/docker-compose.yml up -d --build
 ```text
 Frontend:     http://localhost:5173
 Gateway:      http://localhost:18084/health
-Recommender:  http://localhost:18082/health
-Game:         http://localhost:8081/health
-User:         http://localhost:8083/health
+PostgreSQL:   localhost:5432 (optional local tooling access)
 ```
 
 4. Check aggregated downstream health through the gateway:
@@ -141,7 +137,7 @@ The frontend should usually talk to the gateway under `/api`.
 JWT auth is used for user-facing protected routes.
 
 - `POST /users/register` and `POST /users/login` return a token.
-- Send `Authorization: Bearer <token>` on protected gateway or user-service requests.
+- Send `Authorization: Bearer <token>` on protected gateway requests.
 - The gateway also enforces same-user access on protected `/api/users/:id/...` routes.
 
 ### Internal write routes
@@ -150,6 +146,14 @@ Gateway write operations for game/admin-style flows use service-to-service auth.
 
 - Send `X-Service-Token: <token>`
 - Configure the expected token with `GATEWAY_SERVICE_TOKEN` or `SERVICE_TOKEN`
+
+### Security defaults
+
+- Docker Compose publishes only the frontend and gateway; the user, game, and recommender services stay on the internal Compose network.
+- Internal game writes and recommender requests require `X-Service-Token` between services.
+- Gateway CORS is allowlisted through `CORS_ALLOWED_ORIGINS` instead of `*`.
+- Auth-sensitive routes are rate-limited at the gateway.
+- The frontend Nginx config sets baseline browser hardening headers and a restrictive CSP.
 
 ## Testing and Verification
 

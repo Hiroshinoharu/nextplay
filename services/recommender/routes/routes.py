@@ -1,4 +1,6 @@
-from fastapi import FastAPI, Request
+import os
+
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 
 from ..handlers.recommend import (
     recommend,
@@ -7,6 +9,26 @@ from ..handlers.recommend import (
     recommend_similar_post,
 )
 from ..models.response import SimilarResponse, UserRecommendResponse
+
+
+def _expected_service_token() -> str:
+    return (os.getenv("GATEWAY_SERVICE_TOKEN") or os.getenv("SERVICE_TOKEN") or "").strip()
+
+
+async def require_service_token(request: Request) -> None:
+    expected_token = _expected_service_token()
+    if not expected_token:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="service auth not configured",
+        )
+
+    provided_token = request.headers.get("X-Service-Token", "").strip()
+    if provided_token != expected_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="unauthorized service token",
+        )
 
 
 def register_routes(app: FastAPI):
@@ -32,8 +54,9 @@ def register_routes(app: FastAPI):
             },
         }
 
-    app.post("/recommend", response_model=UserRecommendResponse)(recommend)
-    app.get("/recommend/user/{user_id}", response_model=UserRecommendResponse)(recommend_for_user)
-    app.get("/recommend/item/{item_id}", response_model=SimilarResponse)(recommend_similar)
-    app.post("/recommend/item", response_model=SimilarResponse)(recommend_similar_post)
+    protected = [Depends(require_service_token)]
 
+    app.post("/recommend", response_model=UserRecommendResponse, dependencies=protected)(recommend)
+    app.get("/recommend/user/{user_id}", response_model=UserRecommendResponse, dependencies=protected)(recommend_for_user)
+    app.get("/recommend/item/{item_id}", response_model=SimilarResponse, dependencies=protected)(recommend_similar)
+    app.post("/recommend/item", response_model=SimilarResponse, dependencies=protected)(recommend_similar_post)

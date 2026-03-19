@@ -33,8 +33,8 @@ services:
     build:
       context: ..
       dockerfile: services/user/Dockerfile # Build Dockerfile located in services/user
-    ports:
-      - "8083:8083"
+    expose:
+      - "8083" # Internal-only service port
     env_file:
       - env/user.env
     environment:
@@ -58,13 +58,14 @@ services:
     build:
       context: ..
       dockerfile: services/game/Dockerfile # Build Dockerfile located in services/game
-    ports:
-      - "8081:8081"
+    expose:
+      - "8081" # Internal-only service port
     env_file:
       - env/game.env
     environment:
       CONFIG_FILE: /config/config.yaml
       PORT: "8081"
+      GATEWAY_SERVICE_TOKEN: "${GATEWAY_SERVICE_TOKEN:-nextplay-dev-service-token}"
     volumes:
       - ./config/config.yaml:/config/config.yaml:ro
     depends_on:
@@ -103,13 +104,14 @@ services:
     build:
       context: .. # Build from the root directory
       dockerfile: services/recommender/Dockerfile # Specify recommender Dockerfile 
-    ports:
-      - "18082:8082"
+    expose:
+      - "8082" # Internal-only service port
     env_file:
       - env/recommender.env
     environment:
       CONFIG_FILE: /config/config.yaml
       PORT: "8082"
+      GATEWAY_SERVICE_TOKEN: "${GATEWAY_SERVICE_TOKEN:-nextplay-dev-service-token}"
       # Hybrid ranking weights: defaults below = balanced profile.
       # Override these via environment or Make targets for A/B tuning.
       RANK_WEIGHT_LIKED_KEYWORD: "${RANK_WEIGHT_LIKED_KEYWORD:-4.0}"
@@ -152,6 +154,10 @@ services:
     environment:      
       CONFIG_FILE: /config/config.yaml
       PORT: "8084"
+      GATEWAY_SERVICE_TOKEN: "${GATEWAY_SERVICE_TOKEN:-nextplay-dev-service-token}"
+      CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174}"
+      AUTH_RATE_LIMIT_MAX: "${AUTH_RATE_LIMIT_MAX:-10}"
+      AUTH_RATE_LIMIT_WINDOW_SECONDS: "${AUTH_RATE_LIMIT_WINDOW_SECONDS:-60}"
     volumes:
       - ./config/config.yaml:/config/config.yaml:ro
     depends_on:
@@ -187,3 +193,5 @@ services:
 
 volumes:
   postgres_data:
+
+

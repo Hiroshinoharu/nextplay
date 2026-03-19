@@ -17,5 +17,3 @@ spec:
           port: 5432
           protocol: TCP
           targetPort: postgres-5432
-
-# check if there is at least one published port

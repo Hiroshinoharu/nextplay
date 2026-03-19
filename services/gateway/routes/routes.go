@@ -8,6 +8,7 @@ import (
 
 // SetUpRoutes registers gateway routes, middleware, and downstream proxy handlers.
 func SetUpRoutes(app *fiber.App) {
+	authRateLimiter := middleware.NewAuthRateLimiter()
 
 	api := app.Group("/api")
 
@@ -29,15 +30,15 @@ func SetUpRoutes(app *fiber.App) {
 	// --------------------------
 	users := api.Group("/users")
 	{
-		users.Get("/availability", handlers.CheckUserAvailability)
-		users.Post("/register", handlers.RegisterUser)
-		users.Post("/login", handlers.LoginUser)
+		users.Get("/availability", authRateLimiter, handlers.CheckUserAvailability)
+		users.Post("/register", authRateLimiter, handlers.RegisterUser)
+		users.Post("/login", authRateLimiter, handlers.LoginUser)
 
 		securedUsers := users.Group("/:id", middleware.RequireJWT, middleware.RequireSameUserParam("id"))
 
 		securedUsers.Get("/", handlers.GetUserByID)
 		securedUsers.Put("/", handlers.UpdateUser)
-		securedUsers.Patch("/password", handlers.ChangePassword)
+		securedUsers.Patch("/password", authRateLimiter, handlers.ChangePassword)
 		securedUsers.Delete("/", handlers.DeleteUser)
 
 		securedUsers.Get("/interactions", handlers.GetUserInteraction)

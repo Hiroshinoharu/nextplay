@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"os"
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/maxceban/nextplay/services/gateway/clients"
 	"github.com/maxceban/nextplay/services/shared/observability"
@@ -49,5 +52,15 @@ func forwardingHeaders(c *fiber.Ctx) map[string]string {
 	if auth := c.Get("Authorization"); auth != "" {
 		headers["Authorization"] = auth
 	}
+	if serviceToken := gatewayServiceToken(); serviceToken != "" {
+		headers["X-Service-Token"] = serviceToken
+	}
 	return headers
+}
+
+func gatewayServiceToken() string {
+	if token := strings.TrimSpace(os.Getenv("GATEWAY_SERVICE_TOKEN")); token != "" {
+		return token
+	}
+	return strings.TrimSpace(os.Getenv("SERVICE_TOKEN"))
 }

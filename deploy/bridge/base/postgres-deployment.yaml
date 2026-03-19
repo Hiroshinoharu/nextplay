@@ -68,17 +68,17 @@ spec:
                     claimName: postgres-postgres-data
                 - name: docker-entrypoint-initdb-d-init-db-sql
                   hostPath:
-                    path: /Users/maxceban/Documents/nextplay/deploy/init_db.sql
+                    path: C:\Users\maxce\nextplay\deploy\init_db.sql
                   readOnly: true
                 - name: docker-entrypoint-initdb-d-migrations-migrate-igdb-db-sql
                   hostPath:
-                    path: /Users/maxceban/Documents/nextplay/deploy/migrations
+                    path: C:\Users\maxce\nextplay\deploy\migrations
                   readOnly: true
                 - name: docker-entrypoint-initdb-d-migrations-add-total-rating-sql
                   hostPath:
-                    path: /Users/maxceban/Documents/nextplay/deploy/migrations
+                    path: C:\Users\maxce\nextplay\deploy\migrations
                   readOnly: true
                 - name: docker-entrypoint-initdb-d-migrations-add-popularity-sql
                   hostPath:
-                    path: /Users/maxceban/Documents/nextplay/deploy/migrations
+                    path: C:\Users\maxce\nextplay\deploy\migrations
                   readOnly: true

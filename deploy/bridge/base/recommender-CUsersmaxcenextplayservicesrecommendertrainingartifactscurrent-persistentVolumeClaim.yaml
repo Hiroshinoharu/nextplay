@@ -1,0 +1,18 @@
+#! recommender-C:\Users\maxce\nextplay\services\recommender\training\artifacts\current-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: recommender-c--users-maxce-nextplay-services-recommender-training-artifacts-current
+    namespace: deploy
+    labels:
+        com.docker.compose.service: recommender
+        com.docker.compose.volume: C:\Users\maxce\nextplay\services\recommender\training\artifacts\current
+spec:
+    accessModes:
+        # TODO would need to check which services use this volume
+        - ReadOnlyMany
+    volumeMode: Filesystem
+    resources:
+        requests:
+            storage: 100Mi

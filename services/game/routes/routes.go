@@ -3,6 +3,7 @@ package routes
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/maxceban/nextplay/services/game/handlers"
+	"github.com/maxceban/nextplay/services/game/middleware"
 )
 
 // SetUpRoutes registers the game service routes and relationship endpoints.
@@ -20,9 +21,9 @@ func SetUpRoutes(app *fiber.App) {
 	games.Get("/questionnaire-facets", handlers.GetQuestionnaireFacets)
 	games.Get("/:id", handlers.GetGameByID) // Get one game by ID
 	games.Get("/:id/related-content", handlers.GetRelatedAddOnContent)
-	games.Post("/", handlers.CreateGame)      // Add a new game (local only)
-	games.Put("/:id", handlers.UpdateGame)    // Update a game by ID
-	games.Delete("/:id", handlers.DeleteGame) // Delete a game by ID
+	games.Post("/", middleware.RequireServiceAuth, handlers.CreateGame)
+	games.Put("/:id", middleware.RequireServiceAuth, handlers.UpdateGame)
+	games.Delete("/:id", middleware.RequireServiceAuth, handlers.DeleteGame)
 
 	// ------------------------------------
 	// GAME → PLATFORMS
@@ -30,8 +31,8 @@ func SetUpRoutes(app *fiber.App) {
 	platforms := games.Group("/:id/platforms")
 
 	platforms.Get("/", handlers.GetGamePlatforms) // List platforms for a game
-	platforms.Post("/", handlers.AddGamePlatform) // Add platform mapping
-	platforms.Delete("/:platformId", handlers.RemoveGamePlatform)
+	platforms.Post("/", middleware.RequireServiceAuth, handlers.AddGamePlatform)
+	platforms.Delete("/:platformId", middleware.RequireServiceAuth, handlers.RemoveGamePlatform)
 
 	// ------------------------------------
 	// GAME → KEYWORDS
@@ -39,8 +40,8 @@ func SetUpRoutes(app *fiber.App) {
 	keywords := games.Group("/:id/keywords")
 
 	keywords.Get("/", handlers.GetGameKeywords) // List keywords for a game
-	keywords.Post("/", handlers.AddGameKeyword) // Add keyword mapping
-	keywords.Delete("/:keywordId", handlers.RemoveGameKeyword)
+	keywords.Post("/", middleware.RequireServiceAuth, handlers.AddGameKeyword)
+	keywords.Delete("/:keywordId", middleware.RequireServiceAuth, handlers.RemoveGameKeyword)
 
 	// ------------------------------------
 	// GAME → COMPANIES
@@ -48,8 +49,8 @@ func SetUpRoutes(app *fiber.App) {
 	companies := games.Group("/:id/companies")
 
 	companies.Get("/", handlers.GetGameCompanies)
-	companies.Post("/", handlers.AddGameCompany)
-	companies.Delete("/:companyId", handlers.RemoveGameCompany)
+	companies.Post("/", middleware.RequireServiceAuth, handlers.AddGameCompany)
+	companies.Delete("/:companyId", middleware.RequireServiceAuth, handlers.RemoveGameCompany)
 
 	// ------------------------------------
 	// GAME → FRANCHISES
@@ -57,8 +58,8 @@ func SetUpRoutes(app *fiber.App) {
 	franchises := games.Group("/:id/franchise")
 
 	franchises.Get("/", handlers.GetGameFranchises)
-	franchises.Post("/", handlers.AddGameFranchise)
-	franchises.Delete("/:franchiseId", handlers.RemoveGameFranchise)
+	franchises.Post("/", middleware.RequireServiceAuth, handlers.AddGameFranchise)
+	franchises.Delete("/:franchiseId", middleware.RequireServiceAuth, handlers.RemoveGameFranchise)
 
 	// ------------------------------------
 	// GAME → SERIES
@@ -66,6 +67,6 @@ func SetUpRoutes(app *fiber.App) {
 	series := games.Group("/:id/series")
 
 	series.Get("/", handlers.GetGameSeries)
-	series.Post("/", handlers.AddGameSeries)
-	series.Delete("/:seriesId", handlers.RemoveGameSeries)
+	series.Post("/", middleware.RequireServiceAuth, handlers.AddGameSeries)
+	series.Delete("/:seriesId", middleware.RequireServiceAuth, handlers.RemoveGameSeries)
 }

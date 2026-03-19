@@ -32,8 +32,44 @@ spec:
                       value: "/config/config.yaml"
                     - name: DATABASE_URL
                       value: "postgres://nextplay:nextplay@postgres:5432/nextplay?sslmode=disable"
+                    - name: GATEWAY_SERVICE_TOKEN
+                      value: "nextplay-dev-service-token"
+                    - name: MODEL_MANIFEST_PATH
+                      value: "/models/recommender/current/artifact_manifest.json"
+                    - name: MODEL_PATH
+                      value: "/models/recommender/current/model.keras"
+                    - name: MODEL_REQUIRED
+                      value: "true"
+                    - name: MODEL_VERSION
+                      value: "20260313T164930Z"
                     - name: PORT
                       value: "8082"
+                    - name: RANK_CAP_POPULARITY
+                      value: "1.2"
+                    - name: RANK_CAP_RATING
+                      value: "1.0"
+                    - name: RANK_WEIGHT_ANSWER_TOKEN
+                      value: "1.2"
+                    - name: RANK_WEIGHT_DISLIKED_KEYWORD
+                      value: "5.5"
+                    - name: RANK_WEIGHT_DISLIKED_PLATFORM
+                      value: "4.0"
+                    - name: RANK_WEIGHT_FAVORITE_GENRE
+                      value: "1.6"
+                    - name: RANK_WEIGHT_FAVORITE_KEYWORD
+                      value: "2.2"
+                    - name: RANK_WEIGHT_FAVORITE_PLATFORM
+                      value: "1.3"
+                    - name: RANK_WEIGHT_FAVORITE_SEED_BOOST
+                      value: "4.0"
+                    - name: RANK_WEIGHT_FAVORITE_TEXT_SIM
+                      value: "4.8"
+                    - name: RANK_WEIGHT_LIKED_KEYWORD
+                      value: "4.0"
+                    - name: RANK_WEIGHT_LIKED_PLATFORM
+                      value: "2.5"
+                    - name: RANK_WEIGHT_MODEL_SEED_BOOST
+                      value: "3.0"
                   livenessProbe:
                     exec:
                         command: ['curl -f http://recommender:8082/health']
@@ -47,8 +83,15 @@ spec:
                     - name: config-config-yaml
                       mountPath: /config/config.yaml
                       readOnly: true
+                    - name: models-recommender-current
+                      mountPath: /models/recommender/current
+                      readOnly: true
             volumes:
                 - name: config-config-yaml
                   hostPath:
-                    path: /Users/maxceban/Documents/nextplay/deploy/config/config.yaml
+                    path: C:\Users\maxce\nextplay\deploy\config\config.yaml
+                  readOnly: true
+                - name: models-recommender-current
+                  hostPath:
+                    path: C:\Users\maxce\nextplay\services\recommender\training\artifacts\current
                   readOnly: true

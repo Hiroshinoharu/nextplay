@@ -8,19 +8,23 @@ resources:
     - frontend-deployment.yaml
     - frontend-expose.yaml
     - frontend-service.yaml
+    - game-C:\Users\maxce\nextplay\deploy\config\config.yaml-persistentVolumeClaim.yaml
     - game-deployment.yaml
     - game-expose.yaml
-    - game-service.yaml
+    - gateway-C:\Users\maxce\nextplay\deploy\config\config.yaml-persistentVolumeClaim.yaml
     - gateway-deployment.yaml
     - gateway-expose.yaml
     - gateway-service.yaml
+    - postgres-C:\Users\maxce\nextplay\deploy\init_db.sql-persistentVolumeClaim.yaml
+    - postgres-C:\Users\maxce\nextplay\deploy\migrations-persistentVolumeClaim.yaml
     - postgres-deployment.yaml
     - postgres-expose.yaml
     - postgres-postgres_data-persistentVolumeClaim.yaml
     - postgres-service.yaml
+    - recommender-C:\Users\maxce\nextplay\deploy\config\config.yaml-persistentVolumeClaim.yaml
+    - recommender-C:\Users\maxce\nextplay\services\recommender\training\artifacts\current-persistentVolumeClaim.yaml
     - recommender-deployment.yaml
     - recommender-expose.yaml
-    - recommender-service.yaml
+    - user-C:\Users\maxce\nextplay\deploy\config\config.yaml-persistentVolumeClaim.yaml
     - user-deployment.yaml
     - user-expose.yaml
-    - user-service.yaml

@@ -13,8 +13,8 @@ spec:
         com.docker.compose.project: deploy
         com.docker.compose.service: gateway
     ports:
-        - name: gateway-8084
-          port: 8084
+        - name: gateway-18084
+          port: 18084
           protocol: TCP
           targetPort: gateway-8084
 

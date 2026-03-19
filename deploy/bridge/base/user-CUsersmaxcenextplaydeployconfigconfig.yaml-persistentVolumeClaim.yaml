@@ -1,0 +1,18 @@
+#! user-C:\Users\maxce\nextplay\deploy\config\config.yaml-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: user-c--users-maxce-nextplay-deploy-config-config-yaml
+    namespace: deploy
+    labels:
+        com.docker.compose.service: user
+        com.docker.compose.volume: C:\Users\maxce\nextplay\deploy\config\config.yaml
+spec:
+    accessModes:
+        # TODO would need to check which services use this volume
+        - ReadOnlyMany
+    volumeMode: Filesystem
+    resources:
+        requests:
+            storage: 100Mi

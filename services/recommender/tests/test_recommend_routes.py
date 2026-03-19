@@ -1,3 +1,4 @@
+import os
 from fastapi.testclient import TestClient
 import pytest
 
@@ -11,7 +12,8 @@ from services.recommender.handlers.recommend import (
 )
 from services.recommender.models.model_schema import ModelCandidateScore, ModelOutputSchema
 
-client = TestClient(app)
+TEST_SERVICE_TOKEN = os.environ.get('GATEWAY_SERVICE_TOKEN', 'test-service-token')
+client = TestClient(app, headers={'X-Service-Token': TEST_SERVICE_TOKEN})
 
 
 class _Resp:
@@ -711,3 +713,4 @@ def test_recommend_route_uses_full_interaction_history_to_personalize():
     for attr in ("service_urls", "http", "inference_service", "model"):
         if hasattr(app.state, attr):
             delattr(app.state, attr)
+

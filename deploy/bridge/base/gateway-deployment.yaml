@@ -28,10 +28,20 @@ spec:
                   image: deploy-gateway
                   imagePullPolicy: IfNotPresent
                   env:
+                    - name: AUTH_RATE_LIMIT_MAX
+                      value: "10"
+                    - name: AUTH_RATE_LIMIT_WINDOW_SECONDS
+                      value: "60"
                     - name: CONFIG_FILE
                       value: "/config/config.yaml"
+                    - name: CORS_ALLOWED_ORIGINS
+                      value: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
                     - name: GAME_SERVICE_URL
                       value: "http://game:8081"
+                    - name: GATEWAY_SERVICE_TOKEN
+                      value: "nextplay-dev-service-token"
+                    - name: GATEWAY_UPSTREAM_TIMEOUT_SECONDS
+                      value: "60"
                     - name: JWT_SECRET
                       value: "FOHnngwPWbmYHSDAguUNItjx7WDmhFcqWLv0kI7cRX8="
                     - name: PORT
@@ -56,5 +66,5 @@ spec:
             volumes:
                 - name: config-config-yaml
                   hostPath:
-                    path: /Users/maxceban/Documents/nextplay/deploy/config/config.yaml
+                    path: C:\Users\maxce\nextplay\deploy\config\config.yaml
                   readOnly: true

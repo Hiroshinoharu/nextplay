@@ -1,0 +1,9 @@
+#! postgres-C:\Users\maxce\nextplay\deploy\migrations-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: postgres-c--users-maxce-nextplay-deploy-migrations
+    namespace: deploy
+spec:
+    storageClassName: "hostpath" # see docker/desktop-storage-provisioner

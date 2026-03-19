@@ -1,0 +1,9 @@
+#! recommender-C:\Users\maxce\nextplay\deploy\config\config.yaml-persistentVolumeClaim.yaml
+# Generated code, do not edit
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: recommender-c--users-maxce-nextplay-deploy-config-config-yaml
+    namespace: deploy
+spec:
+    storageClassName: "hostpath" # see docker/desktop-storage-provisioner

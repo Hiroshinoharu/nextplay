@@ -4,12 +4,14 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/maxceban/nextplay/services/gateway/clients"
+	"github.com/maxceban/nextplay/services/gateway/middlewares"
 	"github.com/maxceban/nextplay/services/gateway/routes"
 	"github.com/maxceban/nextplay/services/shared/config"
 	"github.com/maxceban/nextplay/services/shared/observability"
@@ -31,6 +33,7 @@ func main() {
 	// ---------------------
 	cfg, err := config.Load(config.Defaults{
 		Port:                  "8084",
+		FrontendURL:           "http://localhost:5173",
 		UserServiceURL:        "http://localhost:8083",
 		GameServiceURL:        "http://localhost:8081",
 		RecommenderServiceURL: "http://localhost:8082",
@@ -67,11 +70,15 @@ func main() {
 		ErrorHandler: globalErrorHandler,
 	})
 
-	// Enable CORS (required for frontend communication)
+	// Enable CORS for known frontend origins.
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
+		AllowOrigins: resolveAllowedOrigins(cfg.FrontendURL),
+		AllowMethods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
 		AllowHeaders: "Content-Type, Authorization",
 	}))
+
+	// Security headers on all responses.
+	app.Use(middleware.SecurityHeaders)
 
 	// Access log + request ID middleware
 	app.Use(observability.AccessLog("gateway"))
@@ -90,6 +97,44 @@ func main() {
 	// Start server
 	log.Println("[Gateway] Listening on port", cfg.Port)
 	app.Listen(":" + cfg.Port)
+}
+
+func resolveAllowedOrigins(configuredFrontendURL string) string {
+	if raw := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS")); raw != "" {
+		origins := uniqueOrigins(strings.Split(raw, ",")...)
+		if len(origins) > 0 {
+			return strings.Join(origins, ",")
+		}
+	}
+
+	origins := uniqueOrigins(
+		configuredFrontendURL,
+		"http://localhost:5173",
+		"http://127.0.0.1:5173",
+		"http://localhost:5174",
+		"http://127.0.0.1:5174",
+	)
+	return strings.Join(origins, ",")
+}
+
+func uniqueOrigins(values ...string) []string {
+	seen := make(map[string]struct{}, len(values))
+	origins := make([]string, 0, len(values))
+	for _, value := range values {
+		origin := strings.TrimSpace(value)
+		if origin == "" {
+			continue
+		}
+		if origin == "*" {
+			return []string{"*"}
+		}
+		if _, ok := seen[origin]; ok {
+			continue
+		}
+		seen[origin] = struct{}{}
+		origins = append(origins, origin)
+	}
+	return origins
 }
 
 // ---------------------------

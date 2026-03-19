@@ -7,5 +7,3 @@ metadata:
     namespace: deploy
 spec:
     type: LoadBalancer
-
-# check if there is at least one published port

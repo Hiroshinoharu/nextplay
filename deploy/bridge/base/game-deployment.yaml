@@ -32,28 +32,36 @@ spec:
                       value: "/config/config.yaml"
                     - name: DATABASE_URL
                       value: "postgres://nextplay:nextplay@postgres:5432/nextplay?sslmode=disable"
+                    - name: ETL_GATEWAY_WRITE_ENABLED
+                      value: "0"
+                    - name: ETL_GATEWAY_WRITE_LIMIT
+                      value: "0"
+                    - name: GATEWAY_SERVICE_TOKEN
+                      value: "nextplay-dev-service-token"
+                    - name: GATEWAY_SERVICE_URL
+                      value: "http://gateway:8084"
                     - name: IGDB_ACCESS_TOKEN
                       value: "u9qt9fupddzrykcr6zo99op85sku9y"
                     - name: IGDB_CLIENT_ID
                       value: "1slvq78fhrvhf8ia04mwwy21o9kh2d"
                     - name: IGDB_MAX_CONCURRENT
-                      value: "1"
+                      value: "2"
                     - name: IGDB_MAX_GAMES
                       value: "0"
                     - name: IGDB_POPULARITY_ALL
                       value: "1"
                     - name: IGDB_POPULARITY_MAX_GAMES
-                      value: "0"
+                      value: "20000"
                     - name: IGDB_POPULARITY_MAX_PAGES
-                      value: "0"
+                      value: "5"
                     - name: IGDB_POPULARITY_POOL
-                      value: "0"
+                      value: "500"
                     - name: IGDB_POPULARITY_SEED
                       value: "1"
                     - name: IGDB_POPULARITY_TYPE
                       value: "3"
                     - name: IGDB_POPULARITY_YEAR
-                      value: "0"
+                      value: "2026"
                     - name: IGDB_RPS
                       value: "2"
                     - name: LOCAL_DATABASE_URL
@@ -76,5 +84,5 @@ spec:
             volumes:
                 - name: config-config-yaml
                   hostPath:
-                    path: /Users/maxceban/Documents/nextplay/deploy/config/config.yaml
+                    path: C:\Users\maxce\nextplay\deploy\config\config.yaml
                   readOnly: true
