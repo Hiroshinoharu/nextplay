@@ -6,6 +6,7 @@ import (
 	"github.com/maxceban/nextplay/services/user/middleware"
 )
 
+// SetUpRoutes registers the user service routes and authentication middleware.
 func SetUpRoutes(app *fiber.App) {
 
 	// ------------------------

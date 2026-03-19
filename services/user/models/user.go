@@ -4,6 +4,7 @@
 
 package models
 
+// User represents an application user returned by the user service.
 type User struct {
 	ID          int64  `json:"id"`
 	Username    string `json:"username"`

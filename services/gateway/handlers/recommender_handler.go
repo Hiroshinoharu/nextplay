@@ -50,6 +50,8 @@ func GetUserRecommendations(c *fiber.Ctx) error {
 }
 
 // GET /api/recommend/item/:id
+// The response will contain a JSON array of recommended items based on the given item ID, which can be used to display information about the recommended items.
+// The response will also contain a status code and any error messages if there are any issues with the request.
 func GetItemRecommendations(c *fiber.Ctx) error {
 	itemID := c.Params("id")
 
@@ -61,6 +63,8 @@ func GetItemRecommendations(c *fiber.Ctx) error {
 }
 
 // POST /api/recommend/item
+// The request body should contain the item features in JSON format.
+// The response will contain the recommended items based on the provided features.
 func PostItemRecommendations(c *fiber.Ctx) error {
 	result, err := clients.NewRecommenderClient().RecommendSimilar(c.Body(), forwardingHeaders(c))
 	if err != nil {

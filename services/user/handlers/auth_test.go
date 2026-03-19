@@ -2,16 +2,16 @@ package handlers
 
 import (
 	"bytes"
-	"database/sql"
+	"encoding/json"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/maxceban/nextplay/services/user/auth"
 	userdb "github.com/maxceban/nextplay/services/user/db"
+	usermodels "github.com/maxceban/nextplay/services/user/models"
 )
 
-// TestCheckAvailabilityRequiresUsernameOrEmail tests that CheckAvailability returns status 400
-// when no username or email is provided.
 func TestCheckAvailabilityRequiresUsernameOrEmail(t *testing.T) {
 	withUserDBReset(t)
 
@@ -29,8 +29,6 @@ func TestCheckAvailabilityRequiresUsernameOrEmail(t *testing.T) {
 	}
 }
 
-// TestCheckAvailabilityRejectsInvalidEmail tests that CheckAvailability returns status 400
-// when an invalid email is provided.
 func TestCheckAvailabilityRejectsInvalidEmail(t *testing.T) {
 	withUserDBReset(t)
 
@@ -48,8 +46,6 @@ func TestCheckAvailabilityRejectsInvalidEmail(t *testing.T) {
 	}
 }
 
-// TestCheckAvailabilityReturnsServerErrorWhenDatabaseMissing tests that CheckAvailability returns status 500
-// when the database is not initialized.
 func TestCheckAvailabilityReturnsServerErrorWhenDatabaseMissing(t *testing.T) {
 	withUserDBReset(t)
 
@@ -67,8 +63,50 @@ func TestCheckAvailabilityReturnsServerErrorWhenDatabaseMissing(t *testing.T) {
 	}
 }
 
-// TestRegisterRejectsInvalidJSON tests that Register returns status 400
-// when an invalid JSON body is provided.
+func TestCheckAvailabilityReturnsAvailabilityPayload(t *testing.T) {
+	withAuthStoreStubs(t)
+	authStoreReady = func() bool { return true }
+	lookupAuthIdentity = func(username, email string) (bool, bool, error) {
+		if username != "max" || email != "max@example.com" {
+			t.Fatalf("unexpected lookup args: %q %q", username, email)
+		}
+		return false, true, nil
+	}
+
+	app := fiber.New()
+	app.Get("/availability", CheckAvailability)
+
+	resp, err := app.Test(httptest.NewRequest("GET", "/availability?username=max&email=max@example.com", nil))
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status %d, got %d", fiber.StatusOK, resp.StatusCode)
+	}
+
+	var body struct {
+		Username struct {
+			Value  string `json:"value"`
+			Exists bool   `json:"exists"`
+		} `json:"username"`
+		Email struct {
+			Value  string `json:"value"`
+			Exists bool   `json:"exists"`
+		} `json:"email"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if body.Username.Value != "max" || body.Username.Exists {
+		t.Fatalf("unexpected username availability payload: %#v", body)
+	}
+	if body.Email.Value != "max@example.com" || !body.Email.Exists {
+		t.Fatalf("unexpected email availability payload: %#v", body)
+	}
+}
+
 func TestRegisterRejectsInvalidJSON(t *testing.T) {
 	withUserDBReset(t)
 
@@ -88,8 +126,6 @@ func TestRegisterRejectsInvalidJSON(t *testing.T) {
 	}
 }
 
-// TestRegisterRejectsInvalidInput tests that Register returns status 400
-// when an invalid username, email or password is provided.
 func TestRegisterRejectsInvalidInput(t *testing.T) {
 	withUserDBReset(t)
 
@@ -110,8 +146,6 @@ func TestRegisterRejectsInvalidInput(t *testing.T) {
 	}
 }
 
-// TestRegisterReturnsServerErrorWhenDatabaseMissing tests that Register returns status 500
-// when the database is not initialized.
 func TestRegisterReturnsServerErrorWhenDatabaseMissing(t *testing.T) {
 	withUserDBReset(t)
 
@@ -132,8 +166,75 @@ func TestRegisterReturnsServerErrorWhenDatabaseMissing(t *testing.T) {
 	}
 }
 
-// TestLoginRejectsInvalidJSON tests that Login returns status 400
-// when an invalid JSON is provided.
+func TestRegisterReturnsCreatedUser(t *testing.T) {
+	withAuthStoreStubs(t)
+	t.Setenv("JWT_SECRET", "test-secret")
+	authStoreReady = func() bool { return true }
+	lookupAuthIdentity = func(username, email string) (bool, bool, error) {
+		return false, false, nil
+	}
+	createAuthUser = func(username, hashedPassword, email string) (usermodels.User, error) {
+		if hashedPassword == "Abcd1234!" {
+			t.Fatal("expected password to be hashed before persistence")
+		}
+		return usermodels.User{ID: 9, Username: username, Email: email, SteamLinked: true}, nil
+	}
+
+	app := fiber.New()
+	app.Post("/register", Register)
+
+	body := `{"username":"max","email":"max@example.com","password":"Abcd1234!"}`
+	req := httptest.NewRequest("POST", "/register", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusCreated {
+		t.Fatalf("expected status %d, got %d", fiber.StatusCreated, resp.StatusCode)
+	}
+
+	var bodyResp struct {
+		ID          int64  `json:"id"`
+		Username    string `json:"username"`
+		Email       string `json:"email"`
+		SteamLinked bool   `json:"steam_linked"`
+		Token       string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&bodyResp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if bodyResp.ID != 9 || bodyResp.Username != "max" || bodyResp.Token == "" {
+		t.Fatalf("unexpected register payload: %#v", bodyResp)
+	}
+}
+
+func TestRegisterRejectsExistingUsername(t *testing.T) {
+	withAuthStoreStubs(t)
+	authStoreReady = func() bool { return true }
+	lookupAuthIdentity = func(username, email string) (bool, bool, error) {
+		return true, false, nil
+	}
+
+	app := fiber.New()
+	app.Post("/register", Register)
+
+	body := `{"username":"max","email":"max@example.com","password":"Abcd1234!"}`
+	req := httptest.NewRequest("POST", "/register", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected status %d, got %d", fiber.StatusConflict, resp.StatusCode)
+	}
+}
+
 func TestLoginRejectsInvalidJSON(t *testing.T) {
 	withUserDBReset(t)
 
@@ -153,8 +254,6 @@ func TestLoginRejectsInvalidJSON(t *testing.T) {
 	}
 }
 
-// TestLoginRejectsInvalidInput tests that Login returns status 400
-// when an invalid username or password is provided.
 func TestLoginRejectsInvalidInput(t *testing.T) {
 	withUserDBReset(t)
 
@@ -175,8 +274,6 @@ func TestLoginRejectsInvalidInput(t *testing.T) {
 	}
 }
 
-// TestLoginReturnsServerErrorWhenDatabaseMissing tests that Login returns status 500
-// when the database connection is missing.
 func TestLoginReturnsServerErrorWhenDatabaseMissing(t *testing.T) {
 	withUserDBReset(t)
 
@@ -197,8 +294,47 @@ func TestLoginReturnsServerErrorWhenDatabaseMissing(t *testing.T) {
 	}
 }
 
-// TestChangePasswordRejectsInvalidJSON tests that ChangePassword returns status 400
-// when an invalid JSON body is provided.
+func TestLoginReturnsAuthenticatedUserByEmail(t *testing.T) {
+	withAuthStoreStubs(t)
+	t.Setenv("JWT_SECRET", "test-secret")
+	authStoreReady = func() bool { return true }
+	hashedPassword, err := auth.HashPassword("Abcd1234!")
+	if err != nil {
+		t.Fatalf("HashPassword returned error: %v", err)
+	}
+	getAuthUserByEmail = func(email string) (usermodels.User, string, error) {
+		return usermodels.User{ID: 7, Username: "max", Email: email, SteamLinked: true}, hashedPassword, nil
+	}
+
+	app := fiber.New()
+	app.Post("/login", Login)
+
+	body := `{"email":"max@example.com","password":"Abcd1234!"}`
+	req := httptest.NewRequest("POST", "/login", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status %d, got %d", fiber.StatusOK, resp.StatusCode)
+	}
+
+	var bodyResp struct {
+		ID    int64  `json:"id"`
+		Email string `json:"email"`
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&bodyResp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if bodyResp.ID != 7 || bodyResp.Email != "max@example.com" || bodyResp.Token == "" {
+		t.Fatalf("unexpected login payload: %#v", bodyResp)
+	}
+}
+
 func TestChangePasswordRejectsInvalidJSON(t *testing.T) {
 	withUserDBReset(t)
 
@@ -218,8 +354,6 @@ func TestChangePasswordRejectsInvalidJSON(t *testing.T) {
 	}
 }
 
-// TestChangePasswordRejectsMissingFields tests that ChangePassword returns status 400
-// when either current_password or new_password is missing from the JSON body.
 func TestChangePasswordRejectsMissingFields(t *testing.T) {
 	withUserDBReset(t)
 
@@ -240,8 +374,6 @@ func TestChangePasswordRejectsMissingFields(t *testing.T) {
 	}
 }
 
-// TestChangePasswordRejectsSamePassword tests that ChangePassword returns status 400
-// when the same current and new password is provided.
 func TestChangePasswordRejectsSamePassword(t *testing.T) {
 	withUserDBReset(t)
 
@@ -262,8 +394,6 @@ func TestChangePasswordRejectsSamePassword(t *testing.T) {
 	}
 }
 
-// TestChangePasswordReturnsServerErrorWhenDatabaseMissing tests that ChangePassword returns status 500
-// when the database connection is missing.
 func TestChangePasswordReturnsServerErrorWhenDatabaseMissing(t *testing.T) {
 	withUserDBReset(t)
 
@@ -284,7 +414,46 @@ func TestChangePasswordReturnsServerErrorWhenDatabaseMissing(t *testing.T) {
 	}
 }
 
-// withUserDBReset is a helper function that resets the userdb.DB to nil before a test, and sets it back to its original value after the test is complete. It is intended to be used with the testing.T.Helper function.
+func TestChangePasswordReturnsSuccess(t *testing.T) {
+	withAuthStoreStubs(t)
+	authStoreReady = func() bool { return true }
+	storedPassword, err := auth.HashPassword("Abcd1234!")
+	if err != nil {
+		t.Fatalf("HashPassword returned error: %v", err)
+	}
+	getAuthPasswordHashByUserID = func(id string) (string, error) {
+		if id != "42" {
+			t.Fatalf("expected user id 42, got %q", id)
+		}
+		return storedPassword, nil
+	}
+	saveAuthPasswordHash = func(id string, hashedPassword string) (int64, error) {
+		if id != "42" {
+			t.Fatalf("expected user id 42, got %q", id)
+		}
+		if hashedPassword == "Newpass123!" {
+			t.Fatal("expected new password to be hashed before persistence")
+		}
+		return 1, nil
+	}
+
+	app := fiber.New()
+	app.Patch("/users/:id/password", ChangePassword)
+
+	body := `{"current_password":"Abcd1234!","new_password":"Newpass123!"}`
+	req := httptest.NewRequest("PATCH", "/users/42/password", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", fiber.MIMEApplicationJSON)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status %d, got %d", fiber.StatusOK, resp.StatusCode)
+	}
+}
+
 func withUserDBReset(t *testing.T) {
 	t.Helper()
 
@@ -295,4 +464,26 @@ func withUserDBReset(t *testing.T) {
 	})
 }
 
-var _ *sql.DB
+func withAuthStoreStubs(t *testing.T) {
+	t.Helper()
+
+	oldAuthStoreReady := authStoreReady
+	oldLookupAuthIdentity := lookupAuthIdentity
+	oldCreateAuthUser := createAuthUser
+	oldGetAuthUserByUsername := getAuthUserByUsername
+	oldGetAuthUserByEmail := getAuthUserByEmail
+	oldUpgradeAuthPasswordHash := upgradeAuthPasswordHash
+	oldGetAuthPasswordHashByUserID := getAuthPasswordHashByUserID
+	oldSaveAuthPasswordHash := saveAuthPasswordHash
+
+	t.Cleanup(func() {
+		authStoreReady = oldAuthStoreReady
+		lookupAuthIdentity = oldLookupAuthIdentity
+		createAuthUser = oldCreateAuthUser
+		getAuthUserByUsername = oldGetAuthUserByUsername
+		getAuthUserByEmail = oldGetAuthUserByEmail
+		upgradeAuthPasswordHash = oldUpgradeAuthPasswordHash
+		getAuthPasswordHashByUserID = oldGetAuthPasswordHashByUserID
+		saveAuthPasswordHash = oldSaveAuthPasswordHash
+	})
+}

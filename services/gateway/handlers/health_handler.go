@@ -10,10 +10,12 @@ import (
 	"github.com/maxceban/nextplay/services/gateway/clients"
 )
 
+// GetGatewayHealth returns the gateway's own liveness status.
 func GetGatewayHealth(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"status": "ok", "gateway": true})
 }
 
+// GetAllHealth aggregates health responses from the gateway's downstream services.
 func GetAllHealth(c *fiber.Ctx) error {
 	results := fiber.Map{}
 	ok := true
@@ -80,14 +82,17 @@ func GetAllHealth(c *fiber.Ctx) error {
 	})
 }
 
+// GetUserHealth proxies the user service health endpoint.
 func GetUserHealth(c *fiber.Ctx) error {
 	return forwardHealth(c, clients.UserServiceURL, "user")
 }
 
+// GetGameHealth proxies the game service health endpoint.
 func GetGameHealth(c *fiber.Ctx) error {
 	return forwardHealth(c, clients.GameServiceURL, "game")
 }
 
+// GetRecommenderHealth proxies the recommender service health endpoint.
 func GetRecommenderHealth(c *fiber.Ctx) error {
 	return forwardHealth(c, clients.RecommenderServiceURL, "recommender")
 }

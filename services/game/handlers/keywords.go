@@ -7,6 +7,7 @@ import (
 	"github.com/maxceban/nextplay/services/game/db"
 )
 
+// GetGameKeywords handles GET /games/:id/keywords requests.
 func GetGameKeywords(c *fiber.Ctx) error {
 	idParam := c.Params("id")
 
@@ -34,11 +35,12 @@ func GetGameKeywords(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"game_id":     gameID,
-		"keywords":    keywordIDs,
+		"game_id":  gameID,
+		"keywords": keywordIDs,
 	})
 }
 
+// AddGameKeyword handles POST /games/:id/keywords requests.
 func AddGameKeyword(c *fiber.Ctx) error {
 	idParam := c.Params("id")
 
@@ -76,6 +78,7 @@ func AddGameKeyword(c *fiber.Ctx) error {
 	})
 }
 
+// RemoveGameKeyword handles DELETE /games/:id/keywords/:keywordId requests.
 func RemoveGameKeyword(c *fiber.Ctx) error {
 	idParam := c.Params("id")
 	keywordParam := c.Params("keywordId")

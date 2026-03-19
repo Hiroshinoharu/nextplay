@@ -15,6 +15,15 @@ import (
 	"github.com/maxceban/nextplay/services/shared/observability"
 )
 
+// main is the entry point for the NextPlay API Gateway service.
+//
+// It loads configuration from environment variables, sets up the HTTP client timeout,
+// registers routes, and starts the server listening on the specified port.
+//
+// The Gateway service is responsible for routing authenticated requests between the frontend
+// and the User, Game, and Recommender services.
+//
+// The service also exposes a health endpoint for monitoring and debugging purposes.
 func main() {
 
 	// ---------------------

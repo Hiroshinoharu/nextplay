@@ -7,6 +7,7 @@ import (
 	"github.com/maxceban/nextplay/services/game/db"
 )
 
+// GetGameFranchises handles GET /games/:id/franchise requests.
 func GetGameFranchises(c *fiber.Ctx) error {
 	idParam := c.Params("id")
 
@@ -34,11 +35,12 @@ func GetGameFranchises(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"game_id":        gameID,
-		"franchises":     franchiseIDs,
+		"game_id":    gameID,
+		"franchises": franchiseIDs,
 	})
 }
 
+// AddGameFranchise handles POST /games/:id/franchise requests.
 func AddGameFranchise(c *fiber.Ctx) error {
 	idParam := c.Params("id")
 
@@ -76,6 +78,7 @@ func AddGameFranchise(c *fiber.Ctx) error {
 	})
 }
 
+// RemoveGameFranchise handles DELETE /games/:id/franchise/:franchiseId requests.
 func RemoveGameFranchise(c *fiber.Ctx) error {
 	id := c.Params("id")
 	franchiseID := c.Params("franchiseId")

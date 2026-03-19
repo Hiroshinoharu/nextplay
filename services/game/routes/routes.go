@@ -5,6 +5,7 @@ import (
 	"github.com/maxceban/nextplay/services/game/handlers"
 )
 
+// SetUpRoutes registers the game service routes and relationship endpoints.
 func SetUpRoutes(app *fiber.App) {
 
 	// ------------------------------------

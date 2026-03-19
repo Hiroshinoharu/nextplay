@@ -11,23 +11,27 @@ import (
 
 const nonBaseContentRegex = `(\m(dlc|downloadable content|expansion|expansion pack|add[- ]?on|bonus( content)?|soundtrack|artbook|season pass|character pass|battle pass|event pass|starter pack|founder.?s pack|cosmetic pack|skin( pack| set)?|costume( pack)?|outfit( pack)?|upgrade pack|item pack|consumable( pack)?|bundle|edition upgrade|currency pack|booster pack|mission pack|title update|content update|seasonal update|mid[- ]?season|live service|ranked split|rotation update|patch( v?[0-9]+)?|hotfix|content drop|episode[[:space:]]*[0-9ivxlcdm]+|season[[:space:]]*[0-9ivxlcdm]+|chapter[[:space:]]*[0-9ivxlcdm]+)\M)`
 
+// QuestionnaireFacetGenre describes an available genre option for the questionnaire flow.
 type QuestionnaireFacetGenre struct {
 	Slug  string `json:"slug"`
 	Label string `json:"label"`
 	Count int    `json:"count"`
 }
 
+// QuestionnaireFacetPlatform describes an available platform option for the questionnaire flow.
 type QuestionnaireFacetPlatform struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Count int    `json:"count"`
 }
 
+// QuestionnaireFacets groups the catalog-backed genre and platform questionnaire options.
 type QuestionnaireFacets struct {
 	Genres    []QuestionnaireFacetGenre    `json:"genres"`
 	Platforms []QuestionnaireFacetPlatform `json:"platforms"`
 }
 
+// GetQuestionnaireFacets returns aggregated genre and platform facets for discovery questions.
 func GetQuestionnaireFacets() (*QuestionnaireFacets, error) {
 	genresRows, err := DB.Query(
 		`

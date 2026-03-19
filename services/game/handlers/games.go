@@ -7,13 +7,11 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/maxceban/nextplay/services/game/db"
 	"github.com/maxceban/nextplay/services/game/models"
 )
 
 // GET /api/games - retrieves a paged list of games
 func GetAllGames(c *fiber.Ctx) error {
-	// Parse query parameters for pagination and filtering options with default values and limits to prevent abuse and ensure reasonable defaults for the frontend and to avoid overwhelming the database with large requests
 	limit := c.QueryInt("limit", 50)
 	if limit <= 0 {
 		limit = 50
@@ -31,7 +29,7 @@ func GetAllGames(c *fiber.Ctx) error {
 	randomOrder := c.Query("random") == "true" || c.Query("random") == "1"
 	excludeNonBaseContent := c.Query("exclude_non_base") == "true" || c.Query("exclude_non_base") == "1"
 
-	games, err := db.GetGames(limit, offset, includeMedia, upcomingOnly, searchQuery, randomOrder, excludeNonBaseContent)
+	games, err := getGamesFromStore(limit, offset, includeMedia, upcomingOnly, searchQuery, randomOrder, excludeNonBaseContent)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -59,7 +57,7 @@ func SearchGamesByName(c *fiber.Ctx) error {
 	mode := strings.TrimSpace(c.Query("mode"))
 	excludeNonBaseContent := c.Query("exclude_non_base") == "true" || c.Query("exclude_non_base") == "1"
 
-	games, err := db.SearchGamesByName(query, mode, limit, offset, includeMedia, excludeNonBaseContent)
+	games, err := searchGamesByNameFromStore(query, mode, limit, offset, includeMedia, excludeNonBaseContent)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -82,7 +80,7 @@ func GetPopularGames(c *fiber.Ctx) error {
 		minRatingCount = 0
 	}
 	includeMedia := c.Query("include_media") == "true" || c.Query("include_media") == "1"
-	games, err := db.GetPopularGames(year, limit, offset, minRatingCount, includeMedia)
+	games, err := getPopularGamesFromStore(year, limit, offset, minRatingCount, includeMedia)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -113,7 +111,7 @@ func GetTopGames(c *fiber.Ctx) error {
 	}
 	includeMedia := c.Query("include_media") == "true" || c.Query("include_media") == "1"
 
-	games, err := db.GetTopGames(limit, offset, minRatingCount, priorVotes, popularityWeight, includeMedia)
+	games, err := getTopGamesFromStore(limit, offset, minRatingCount, priorVotes, popularityWeight, includeMedia)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -122,7 +120,7 @@ func GetTopGames(c *fiber.Ctx) error {
 
 // GET /api/games/questionnaire-facets - retrieves catalog-aware questionnaire facets.
 func GetQuestionnaireFacets(c *fiber.Ctx) error {
-	facets, err := db.GetQuestionnaireFacets()
+	facets, err := getQuestionnaireFacetsFromStore()
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
@@ -131,41 +129,29 @@ func GetQuestionnaireFacets(c *fiber.Ctx) error {
 
 // GET /api/games/:id - retrieves a game by ID
 func GetGameByID(c *fiber.Ctx) error {
-	// Get game ID from URL params
 	idParam := c.Params("id")
-
-	// Convert ID to integer
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid game ID"})
 	}
 
-	// Call DB function to get game details
-
-	// Fetch game details
-	game, err := db.GetGameByID(id)
+	game, err := getGameByIDFromStore(id)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
-
-	// If game not found, return 404
 	if game == nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Game not found"})
 	}
 
-	// Fetch related entity IDs and media for the game
-	platforms, platformNames, keywords, franchises, companies, series, err := db.GetGameRelations(id)
-	// Note: GetGameRelations now also returns platform names for easier frontend display
+	platforms, platformNames, keywords, franchises, companies, series, err := getGameRelationsFromStore(id)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
-	// Fetch media separately
-	media, err := db.GetGameMedia(id)
-	// Note: GetGameMedia is a new function that retrieves media entries for the game
+	media, err := getGameMediaFromStore(id)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
-	// Populate the game struct with related entity IDs, platform names, and media
+
 	game.Platforms = platforms
 	game.PlatformNames = platformNames
 	game.Keywords = keywords
@@ -174,7 +160,6 @@ func GetGameByID(c *fiber.Ctx) error {
 	game.Series = series
 	game.Media = media
 
-	// Return the game details as JSON
 	return c.JSON(game)
 }
 
@@ -195,18 +180,16 @@ func GetRelatedAddOnContent(c *fiber.Ctx) error {
 	}
 	includeMedia := c.Query("include_media") == "true" || c.Query("include_media") == "1"
 
-	games, err := db.GetRelatedAddOnContent(id, limit, includeMedia)
+	games, err := getRelatedAddOnContentFromStore(id, limit, includeMedia)
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.JSON(games)
 }
 
+// CreateGame handles POST /games requests.
 func CreateGame(c *fiber.Ctx) error {
-	// Parse incoming JSON into Game struct
 	var game models.Game
-
-	// Bind JSON body to game struct
 	if err := c.BodyParser(&game); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   "Invalid request body",
@@ -214,8 +197,7 @@ func CreateGame(c *fiber.Ctx) error {
 		})
 	}
 
-	// Call DB function to insert
-	id, err := db.CreateGame(&game)
+	id, err := createGameInStore(&game)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error":   "Failed to create game",
@@ -223,34 +205,29 @@ func CreateGame(c *fiber.Ctx) error {
 		})
 	}
 
-	// Return the created game ID
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "Game created successfully",
 		"game_id": id,
 	})
 }
 
+// UpdateGame handles PUT /games/:id requests.
 func UpdateGame(c *fiber.Ctx) error {
-	// Get game ID from URL params
 	idParam := c.Params("id")
-
-	// Convert ID to integer
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid game ID"})
 	}
 
-	// Parse incoming JSON into Game struct
 	var game models.Game
 	if err := c.BodyParser(&game); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			`error`:   "Invalid request body",
-			`details`: err.Error(),
+			"error":   "Invalid request body",
+			"details": err.Error(),
 		})
 	}
 
-	// Call DB function to update
-	err = db.UpdateGame(id, &game)
+	err = updateGameInStore(id, &game)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -263,25 +240,21 @@ func UpdateGame(c *fiber.Ctx) error {
 		})
 	}
 
-	// Return success message
 	return c.JSON(fiber.Map{
 		"message": "Game updated successfully",
 		"game_id": id,
 	})
 }
 
+// DeleteGame handles DELETE /games/:id requests.
 func DeleteGame(c *fiber.Ctx) error {
-	// Get game ID from URL params
 	idParam := c.Params("id")
-
-	// Convert ID to integer
 	id, err := strconv.Atoi(idParam)
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Invalid game ID"})
 	}
 
-	// Call DB function to delete
-	err = db.DeleteGame(id)
+	err = deleteGameFromStore(id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -294,7 +267,6 @@ func DeleteGame(c *fiber.Ctx) error {
 		})
 	}
 
-	// Return success message
 	return c.JSON(fiber.Map{
 		"message": "Game deleted successfully",
 		"game_id": id,

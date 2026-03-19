@@ -6,6 +6,7 @@ import (
 	"github.com/maxceban/nextplay/services/gateway/middlewares"
 )
 
+// SetUpRoutes registers gateway routes, middleware, and downstream proxy handlers.
 func SetUpRoutes(app *fiber.App) {
 
 	api := app.Group("/api")

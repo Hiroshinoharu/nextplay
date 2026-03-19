@@ -42,8 +42,8 @@ func GetGameSeries(c *fiber.Ctx) error {
 	}
 	// Return the list of series IDs as JSON
 	return c.JSON(fiber.Map{
-		"game_id":    id,
-		"series":     seriesIDs,
+		"game_id": id,
+		"series":  seriesIDs,
 	})
 }
 
@@ -88,6 +88,7 @@ func AddGameSeries(c *fiber.Ctx) error {
 	})
 }
 
+// RemoveGameSeries handles DELETE /games/:id/series/:seriesId requests.
 func RemoveGameSeries(c *fiber.Ctx) error {
 	idParam := c.Params("id")
 	seriesParam := c.Params("seriesId")

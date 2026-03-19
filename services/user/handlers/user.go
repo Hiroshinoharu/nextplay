@@ -33,6 +33,7 @@ func GetUserByID(c *fiber.Ctx) error {
 	return c.JSON(user)
 }
 
+// UpdateUser handles PUT /users/:id requests.
 func UpdateUser(c *fiber.Ctx) error {
 	id := c.Params("id")
 
