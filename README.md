@@ -23,7 +23,10 @@ NextPlay is a game discovery and recommendation platform built as a small servic
 | `services/recommender/` | Recommendation API, training pipeline, and model artifacts |
 | `services/shared/` | Shared config and observability helpers for Go services |
 | `deploy/` | Docker Compose, config, migrations, and local infra files |
+| `docs/` | Consolidated project documentation and moved service/frontend notes |
 | `kube/` | Kubernetes base and overlay manifests |
+
+Documentation index: [docs/README.md](docs/README.md)
 
 ## Architecture
 
@@ -33,10 +36,10 @@ NextPlay is a game discovery and recommendation platform built as a small servic
 
 | Component | Local URL | Notes |
 | --- | --- | --- |
-| Frontend (Docker) | `http://localhost:5173` | Nginx-served production build |
+| Frontend (Docker) | `http://localhost:5173` by default | Nginx-served production build |
 | Frontend (Vite dev) | `http://127.0.0.1:5174` | `npm run dev` in `frontend/` |
-| Gateway | `http://localhost:18084` | Public API entrypoint |
-| PostgreSQL | Compose network only | Reach it with `docker compose exec postgres psql ...` or temporarily add a host port when needed |
+| Gateway | `http://localhost:18084` by default | Public API entrypoint |
+| PostgreSQL | Compose network only by default | Reach it with `docker compose exec postgres psql ...` or use the PostgreSQL host override below when a GUI client needs TCP access |
 | Internal services | Compose network only | User, game, and recommender are reachable through the gateway or from other containers |
 
 ## Current State
@@ -70,6 +73,12 @@ The remaining work is mostly around product depth and operational hardening rath
 docker compose -f deploy/docker-compose.yml up -d --build
 ```
 
+If `5173` or `18084` is already published by the desktop bridge or another local stack, override the host ports:
+
+```bash
+FRONTEND_HOST_PORT=5175 GATEWAY_HOST_PORT=18085 docker compose -f deploy/docker-compose.yml up -d --build
+```
+
 3. Check the main endpoints:
 
 ```text
@@ -77,6 +86,24 @@ Frontend:     http://localhost:5173
 Gateway:      http://localhost:18084/health
 PostgreSQL:   internal only (`docker compose exec postgres psql -U nextplay -d nextplay`)
 ```
+
+If you override the host ports, use those values in the URLs above.
+
+To expose PostgreSQL to desktop clients such as DBeaver or pgAdmin:
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.postgres-host.yml up -d --build
+```
+
+Then connect to `127.0.0.1:5432` with database `nextplay`, username `nextplay`, and password `nextplay`. Do not use `0.0.0.0` as the client host value.
+
+If the stack is already running, recreate only PostgreSQL with the host binding:
+
+```bash
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.postgres-host.yml up -d --force-recreate --no-deps postgres
+```
+
+More detail: [docs/postgres-dbeaver-access.md](docs/postgres-dbeaver-access.md)
 
 4. Check aggregated downstream health through the gateway:
 
@@ -218,5 +245,4 @@ Kubernetes manifests live under `kube/base`, with desktop-oriented overlays unde
 - recommendation quality work is ongoing around calibration, richer data, and rollout controls;
 - observability, security hardening, and deployment operations still need expansion;
 - the frontend needs more product depth beyond the current discovery and recommendation flow.
-
 

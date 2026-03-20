@@ -75,8 +75,7 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [signupNameExists, setSignupNameExists] = useState(false);
-  const [signupEmailExists, setSignupEmailExists] = useState(false);
+  const [availabilityResponse, setAvailabilityResponse] = useState<AvailabilityResponse | null>(null);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
 
@@ -87,20 +86,30 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
     setSignupEmail((current) => current || trimmedEmail);
   }, [initialEmail]);
 
-  useEffect(() => {
-    const trimmedUsername = signupName.trim();
-    const trimmedEmail = signupEmail.trim();
+  const trimmedSignupName = signupName.trim();
+  const trimmedSignupEmail = signupEmail.trim();
 
-    setSignupNameExists(false);
-    setSignupEmailExists(false);
+  const usernameAvailability =
+    trimmedSignupName !== '' &&
+    availabilityResponse?.username?.value?.trim().toLowerCase() === trimmedSignupName.toLowerCase()
+      ? availabilityResponse.username
+      : null;
+  const emailAvailability =
+    trimmedSignupEmail !== '' &&
+    availabilityResponse?.email?.value?.trim().toLowerCase() === trimmedSignupEmail.toLowerCase()
+      ? availabilityResponse.email
+      : null;
+
+  useEffect(() => {
+    setAvailabilityResponse(null);
     setAvailabilityError(null);
 
-    if (!trimmedUsername && !trimmedEmail) {
+    if (!trimmedSignupName && !trimmedSignupEmail) {
       setAvailabilityLoading(false);
       return;
     }
 
-    if (trimmedEmail && !trimmedEmail.includes('@')) {
+    if (trimmedSignupEmail && !trimmedSignupEmail.includes('@')) {
       setAvailabilityLoading(false);
       return;
     }
@@ -110,8 +119,8 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
       setAvailabilityLoading(true);
       try {
         const params = new URLSearchParams();
-        if (trimmedUsername) params.set('username', trimmedUsername);
-        if (trimmedEmail) params.set('email', trimmedEmail);
+        if (trimmedSignupName) params.set('username', trimmedSignupName);
+        if (trimmedSignupEmail) params.set('email', trimmedSignupEmail);
 
         const response = await fetch(apiUrl(`/users/availability?${params.toString()}`), {
           signal: controller.signal,
@@ -119,19 +128,15 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
         });
         const data = (await response.json().catch(() => null)) as AvailabilityResponse | null;
         if (!response.ok) {
-          setAvailabilityError(data?.error ?? `Availability check failed: ${response.status}`);
+          if (response.status === 429) {
+            setAvailabilityError('Checking too quickly. Pause briefly and try again.');
+          } else {
+            setAvailabilityError(data?.error ?? `Availability check failed: ${response.status}`);
+          }
           return;
         }
 
-        const usernameMatches =
-          trimmedUsername !== '' &&
-          data?.username?.value?.trim().toLowerCase() === trimmedUsername.toLowerCase();
-        const emailMatches =
-          trimmedEmail !== '' &&
-          data?.email?.value?.trim().toLowerCase() === trimmedEmail.toLowerCase();
-
-        setSignupNameExists(Boolean(usernameMatches && data?.username?.exists));
-        setSignupEmailExists(Boolean(emailMatches && data?.email?.exists));
+        setAvailabilityResponse(data);
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return;
         setAvailabilityError(`${err}`);
@@ -140,13 +145,13 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
           setAvailabilityLoading(false);
         }
       }
-    }, 320);
+    }, 450);
 
     return () => {
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [apiUrl, signupEmail, signupName]);
+  }, [apiUrl, trimmedSignupEmail, trimmedSignupName]);
 
   const hasAuthIdentity = (payload: unknown) => normalizeAuthUser(payload) !== null;
 
@@ -199,11 +204,11 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
       setError('Name, email, and password are required.');
       return;
     }
-    if (signupNameExists) {
+    if (usernameAvailability?.exists) {
       setError('That username already exists.');
       return;
     }
-    if (signupEmailExists) {
+    if (emailAvailability?.exists) {
       setError('That email is already registered.');
       return;
     }
@@ -316,9 +321,9 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
                       value={signupName}
                       onChange={event => setSignupName(event.target.value)}
                     />
-                    {signupName.trim() && (
-                      <div className={`auth-inline-message ${signupNameExists ? 'error' : 'success'}`}>
-                        {signupNameExists ? 'Username already exists.' : 'Username is available.'}
+                    {usernameAvailability && (
+                      <div className={`auth-inline-message ${usernameAvailability.exists ? 'error' : 'success'}`}>
+                        {usernameAvailability.exists ? 'Username already exists.' : 'Username is available.'}
                       </div>
                     )}
                     <input
@@ -329,9 +334,9 @@ const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }
                       value={signupEmail}
                       onChange={event => setSignupEmail(event.target.value)}
                     />
-                    {signupEmail.trim() && signupEmail.includes('@') && (
-                      <div className={`auth-inline-message ${signupEmailExists ? 'error' : 'success'}`}>
-                        {signupEmailExists ? 'Email already exists.' : 'Email is available.'}
+                    {emailAvailability && (
+                      <div className={`auth-inline-message ${emailAvailability.exists ? 'error' : 'success'}`}>
+                        {emailAvailability.exists ? 'Email already exists.' : 'Email is available.'}
                       </div>
                     )}
                     <div className="flip-card__field">
@@ -945,4 +950,3 @@ const StyledWrapper = styled.div`
   }`;
 
 export default Form;
-

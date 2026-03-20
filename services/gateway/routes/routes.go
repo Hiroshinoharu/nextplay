@@ -3,12 +3,13 @@ package routes
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/maxceban/nextplay/services/gateway/handlers"
-	"github.com/maxceban/nextplay/services/gateway/middlewares"
+	middleware "github.com/maxceban/nextplay/services/gateway/middlewares"
 )
 
 // SetUpRoutes registers gateway routes, middleware, and downstream proxy handlers.
 func SetUpRoutes(app *fiber.App) {
 	authRateLimiter := middleware.NewAuthRateLimiter()
+	availabilityRateLimiter := middleware.NewAvailabilityRateLimiter()
 
 	api := app.Group("/api")
 	api.Use(middleware.RequireCSRF)
@@ -31,7 +32,7 @@ func SetUpRoutes(app *fiber.App) {
 	// --------------------------
 	users := api.Group("/users")
 	{
-		users.Get("/availability", authRateLimiter, handlers.CheckUserAvailability)
+		users.Get("/availability", availabilityRateLimiter, handlers.CheckUserAvailability)
 		users.Get("/csrf", handlers.GetCSRFToken)
 		users.Post("/register", authRateLimiter, handlers.RegisterUser)
 		users.Post("/login", authRateLimiter, handlers.LoginUser)

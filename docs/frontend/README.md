@@ -31,4 +31,10 @@ The frontend uses route-level CSS files plus `styled-components` for reusable in
 
 ## Docker Compose
 
-The containerized frontend is served by Nginx and is exposed at `http://localhost:5173` when you run the stack with `docker compose -f deploy/docker-compose.yml up -d --build` from the repo root.
+The containerized frontend is served by Nginx and is exposed at `http://localhost:5173` by default when you run the stack with `docker compose -f deploy/docker-compose.yml up -d --build` from the repo root.
+
+If that port is already published, override it when you start Compose:
+
+```bash
+FRONTEND_HOST_PORT=5175 GATEWAY_HOST_PORT=18085 docker compose -f deploy/docker-compose.yml up -d --build
+```
