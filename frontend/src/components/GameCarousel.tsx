@@ -10,6 +10,7 @@ type GameCarouselItem = {
   genre?: string
   cover_image?: string
   description?: string
+  platform_names?: string[]
   nsfw?: boolean
   is_nsfw?: boolean
   adult?: boolean
@@ -444,3 +445,4 @@ const GameCarousel = ({
 }
 
 export default memo(GameCarousel)
+

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/lib/pq"
 	"github.com/maxceban/nextplay/services/game/models"
 )
 
@@ -271,6 +272,12 @@ func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool, searchQue
 		g.Series = []int64{}
 		games = append(games, g)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := populatePlatformNames(games); err != nil {
+		return nil, err
+	}
 	return games, nil
 }
 
@@ -420,6 +427,9 @@ func SearchGamesByName(query string, mode string, limit int, offset int, include
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if err := populatePlatformNames(games); err != nil {
+		return nil, err
+	}
 	return games, nil
 }
 
@@ -553,6 +563,9 @@ func GetPopularGames(year, limit, offset, minRatingCount int, includeMedia bool)
 		games = append(games, g)
 	}
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := populatePlatformNames(games); err != nil {
 		return nil, err
 	}
 	return games, nil
@@ -729,6 +742,9 @@ func GetTopGames(limit, offset, minRatingCount, priorVotes int, popularityWeight
 		games = append(games, g)
 	}
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := populatePlatformNames(games); err != nil {
 		return nil, err
 	}
 	return games, nil
@@ -985,6 +1001,9 @@ func GetRelatedAddOnContent(gameID int, limit int, includeMedia bool) ([]models.
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if err := populatePlatformNames(games); err != nil {
+		return nil, err
+	}
 	return games, nil
 }
 
@@ -1178,6 +1197,92 @@ func fetchPlatformNames(gameID int) ([]string, error) {
 		return nil, err
 	}
 	return names, nil
+}
+
+func populatePlatformNames(games []models.Game) error {
+	if len(games) == 0 {
+		return nil
+	}
+
+	gameIDs := make([]int64, 0, len(games))
+	for index := range games {
+		gameIDs = append(gameIDs, games[index].ID)
+	}
+
+	namesByGameID, err := fetchPlatformNamesByGameIDs(gameIDs)
+	if err != nil {
+		return err
+	}
+
+	for index := range games {
+		names, ok := namesByGameID[games[index].ID]
+		if !ok {
+			games[index].PlatformNames = []string{}
+			continue
+		}
+		games[index].PlatformNames = names
+	}
+	return nil
+}
+
+// fetchPlatformNamesByGameIDs retrieves a map of game IDs to platform names for the given game IDs.
+// The returned map contains a list of platform names for each game ID.
+// The returned error is nil if the request is successful, or an error if there is an issue with the request.
+// The function takes a slice of int64 game IDs as input and returns a map of int64 game IDs to a slice of string platform names.
+// The function queries the database for the platform names associated with the given game IDs and returns the result in a map.
+// The function also trims and normalizes the platform names to remove any leading or trailing whitespace and empty strings.
+// The function ignores any platform names that are null or empty strings.
+// The function also ignores any platform names that contain only whitespace characters.
+// The function returns an error if there is an issue with the database query.
+func fetchPlatformNamesByGameIDs(gameIDs []int64) (map[int64][]string, error) {
+	result := make(map[int64][]string, len(gameIDs))
+	for _, gameID := range gameIDs {
+		result[gameID] = []string{}
+	}
+
+	rows, err := DB.Query(`
+			SELECT gp.game_id, p.platform_name
+			FROM game_platform gp
+			INNER JOIN platform p ON p.platform_id = gp.platform_id
+			WHERE gp.game_id = ANY($1)
+			  AND p.platform_name IS NOT NULL
+			  AND TRIM(p.platform_name) <> ''
+			ORDER BY gp.game_id, p.platform_name
+	`, pq.Array(gameIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	seenByGameID := make(map[int64]map[string]struct{}, len(gameIDs))
+	for rows.Next() {
+		var gameID int64
+		var platformName sql.NullString
+		if err := rows.Scan(&gameID, &platformName); err != nil {
+			return nil, err
+		}
+		if !platformName.Valid {
+			continue
+		}
+		normalizedName := strings.TrimSpace(platformName.String)
+		if normalizedName == "" {
+			continue
+		}
+		seenNames, ok := seenByGameID[gameID]
+		if !ok {
+			seenNames = make(map[string]struct{})
+			seenByGameID[gameID] = seenNames
+		}
+		if _, exists := seenNames[normalizedName]; exists {
+			continue
+		}
+		seenNames[normalizedName] = struct{}{}
+		result[gameID] = append(result[gameID], normalizedName)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // Helper function to fetch relation IDs

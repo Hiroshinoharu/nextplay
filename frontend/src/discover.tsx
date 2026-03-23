@@ -36,6 +36,7 @@ type GameItem = {
   genre?: string;
   cover_image?: string;
   description?: string;
+  platform_names?: string[];
   nsfw?: boolean;
   is_nsfw?: boolean;
   adult?: boolean;
@@ -159,6 +160,8 @@ const GENRE_ROWS_STEP = 6;
 const MAX_RECENT_RELEASE_BACKFILL_PAGES = 1;
 const MIN_RECENT_RELEASE_WINDOW_MONTHS = 1;
 const MAX_RECENT_RELEASE_WINDOW_MONTHS = 12;
+const ALL_GENRE_FILTER_VALUE = "";
+const ALL_PLATFORM_FILTER_VALUE = "";
 
 const parseBoundedInt = (
   raw: string | null | undefined,
@@ -461,6 +464,147 @@ const parseGenres = (value?: string) => {
   return Array.from(unique);
 };
 
+const normalizeGenreFilterValue = (value?: string) =>
+  collapseWhitespace(value).toLowerCase();
+
+const parsePlatformNames = (values?: string[]) => {
+  if (!Array.isArray(values)) return [] as string[];
+  const unique = new Set<string>();
+  values
+    .map((value) => collapseWhitespace(value))
+    .filter(Boolean)
+    .forEach((value) => unique.add(value));
+  return Array.from(unique);
+};
+
+const normalizePlatformFilterValue = (value?: string) =>
+  collapseWhitespace(value).toLowerCase();
+
+const buildGenreFilterOptions = (
+  games: GameItem[],
+  selectedGenre?: string,
+) => {
+  const byKey = new Map<string, GenreFilterOption>();
+  games.forEach((game) => {
+    parseGenres(game.genre).forEach((genre) => {
+      const key = normalizeGenreFilterValue(genre);
+      if (!key) return;
+      const existing = byKey.get(key);
+      if (existing) {
+        existing.count += 1;
+        return;
+      }
+      byKey.set(key, {
+        key,
+        label: genre,
+        count: 1,
+      });
+    });
+  });
+
+  const selectedKey = normalizeGenreFilterValue(selectedGenre);
+  const selectedLabel = collapseWhitespace(selectedGenre);
+  if (selectedKey && selectedLabel && !byKey.has(selectedKey)) {
+    byKey.set(selectedKey, {
+      key: selectedKey,
+      label: selectedLabel,
+      count: 0,
+    });
+  }
+
+  return Array.from(byKey.values()).sort(
+    (left, right) =>
+      right.count - left.count || left.label.localeCompare(right.label),
+  );
+};
+
+/**
+ * Builds a list of platform filter options from a list of games and a selected platform.
+ * If no games are provided, but a fallback list of platforms is provided, it will use that instead.
+ * The resulting list will be sorted by count (descending) and then by label (ascending).
+ * @param games - the list of games to generate the options from
+ * @param selectedPlatform - the currently selected platform filter
+ * @param fallbackPlatforms - the fallback list of platforms to use if no games are provided
+ * @returns a list of platform filter options
+ */
+const buildPlatformFilterOptions = (
+  games: GameItem[],
+  selectedPlatform?: string,
+  fallbackPlatforms?: QuestionnaireFacetPlatform[],
+) => {
+  const byKey = new Map<string, GenreFilterOption>();
+  games.forEach((game) => {
+    parsePlatformNames(game.platform_names).forEach((platform) => {
+      const key = normalizePlatformFilterValue(platform);
+      if (!key) return;
+      const existing = byKey.get(key);
+      if (existing) {
+        existing.count += 1;
+        return;
+      }
+      byKey.set(key, {
+        key,
+        label: platform,
+        count: 1,
+      });
+    });
+  });
+
+  if (!byKey.size && Array.isArray(fallbackPlatforms)) {
+    fallbackPlatforms.forEach((platform) => {
+      const label = collapseWhitespace(platform.name);
+      const key = normalizePlatformFilterValue(label);
+      if (!key) return;
+      byKey.set(key, {
+        key,
+        label,
+        count: Math.max(0, platform.count ?? 0),
+      });
+    });
+  }
+
+  const selectedKey = normalizePlatformFilterValue(selectedPlatform);
+  const selectedLabel = collapseWhitespace(selectedPlatform);
+  if (selectedKey && selectedLabel && !byKey.has(selectedKey)) {
+    byKey.set(selectedKey, {
+      key: selectedKey,
+      label: selectedLabel,
+      count: 0,
+    });
+  }
+
+  return Array.from(byKey.values()).sort(
+    (left, right) =>
+      right.count - left.count || left.label.localeCompare(right.label),
+  );
+};
+
+const matchesGenreFilter = (game: GameItem, selectedGenre?: string) => {
+  const selectedKey = normalizeGenreFilterValue(selectedGenre);
+  if (!selectedKey) return true;
+  return parseGenres(game.genre).some(
+    (genre) => normalizeGenreFilterValue(genre) === selectedKey,
+  );
+};
+
+const matchesPlatformFilter = (game: GameItem, selectedPlatform?: string) => {
+  const selectedKey = normalizePlatformFilterValue(selectedPlatform);
+  if (!selectedKey) return true;
+  return parsePlatformNames(game.platform_names).some(
+    (platform) => normalizePlatformFilterValue(platform) === selectedKey,
+  );
+};
+
+const formatPlatformSummary = (platformNames?: string[]) => {
+  const platforms = parsePlatformNames(platformNames);
+  if (!platforms.length) return null;
+  const visiblePlatforms = platforms.slice(0, 3);
+  const remainingCount = platforms.length - visiblePlatforms.length;
+  return remainingCount > 0
+    ? `${visiblePlatforms.join(", ")} +${remainingCount} more`
+    : visiblePlatforms.join(", ");
+};
+
 const sentenceCase = (value: string) =>
   value
     .replace(/[_-]+/g, " ")
@@ -647,6 +791,12 @@ type DiscoverCarousel = {
   rowType?: "genre";
 };
 
+type GenreFilterOption = {
+  key: string;
+  label: string;
+  count: number;
+};
+
 function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -655,6 +805,8 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
   const [searchInput, setSearchInput] = useState<string>(urlQuery);
   const [searchQuery, setSearchQuery] = useState<string>(urlQuery);
   const [searchPage, setSearchPage] = useState<number>(1);
+  const [selectedGenre, setSelectedGenre] = useState<string>(ALL_GENRE_FILTER_VALUE);
+  const [selectedPlatform, setSelectedPlatform] = useState<string>(ALL_PLATFORM_FILTER_VALUE);
   const [rowSnapshots, setRowSnapshots] = useState<Record<string, number[]>>({});
   const [loadingRowTitle, setLoadingRowTitle] = useState<string | null>(null);
   const [visibleGenreRows, setVisibleGenreRows] = useState<number>(INITIAL_GENRE_ROWS);
@@ -905,13 +1057,13 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
       firstIncompleteIndex < 0 && favoriteGameIds.length !== FAVORITE_GAMES_TARGET;
     setShowQuestionnaireResult(false);
     setQuestionnaireValidationMessage(null);
-    setQuestionnaireStep(
-      firstIncompleteIndex >= 0
-        ? firstIncompleteIndex
-        : shouldOpenFavoritesStep
-          ? questionnaireQuestionCount
-          : 0,
-    );
+    let nextQuestionnaireStep = 0;
+    if (firstIncompleteIndex >= 0) {
+      nextQuestionnaireStep = firstIncompleteIndex;
+    } else if (shouldOpenFavoritesStep) {
+      nextQuestionnaireStep = questionnaireQuestionCount;
+    }
+    setQuestionnaireStep(nextQuestionnaireStep);
     setQuestionnaireOpen(true);
   }, [favoriteGameIds.length, questionnaireAnswers, questionnaireQuestionCount, questionnaireQuestions]);
 
@@ -980,6 +1132,15 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
   });
 
   const cards = useMemo(() => searchData?.items ?? [], [searchData?.items]);
+  const filteredCards = useMemo(
+    () =>
+      cards.filter(
+        (game) =>
+          matchesGenreFilter(game, selectedGenre) &&
+          matchesPlatformFilter(game, selectedPlatform),
+      ),
+    [cards, selectedGenre, selectedPlatform],
+  );
   const hasMoreSearchResults = Boolean(searchData?.hasMore);
   const isLiveSearching =
     (searchLoading || searchFetching) && normalizedSearchQuery.length > 0;
@@ -1308,9 +1469,11 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
   }, []);
   const getExploreDescription = useCallback((game: GameItem) => {
     const release = formatReleaseDate(game.release_date);
+    const platforms = formatPlatformSummary(game.platform_names);
     return [
-      release ? `Release: ${release}` : null,
+      release ? `Release: ${release}` : "Release: n/a",
       game.genre ? `Genre: ${game.genre}` : null,
+      platforms ? `Platforms: ${platforms}` : null,
     ]
       .filter(Boolean)
       .join("\n");
@@ -2011,8 +2174,66 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
     }
     return merged;
   }, [randomPoolData?.pages]);
+  const discoverBasePool = useMemo(
+    () => randomPool.filter((game) => !shouldHideFromDiscover(game)),
+    [randomPool],
+  );
+  const filterSourceGames = useMemo(
+    () => (normalizedSearchQuery ? cards : discoverBasePool),
+    [cards, discoverBasePool, normalizedSearchQuery],
+  );
+  const genreFilterOptions = useMemo(
+    () =>
+      buildGenreFilterOptions(
+        filterSourceGames.filter((game) =>
+          matchesPlatformFilter(game, selectedPlatform),
+        ),
+        selectedGenre,
+      ),
+    [filterSourceGames, selectedGenre, selectedPlatform],
+  );
+  const platformFilterOptions = useMemo(
+    () =>
+      buildPlatformFilterOptions(
+        filterSourceGames.filter((game) =>
+          matchesGenreFilter(game, selectedGenre),
+        ),
+        selectedPlatform,
+        questionnaireFacetsQuery.data?.platforms,
+      ),
+    [
+      filterSourceGames,
+      questionnaireFacetsQuery.data?.platforms,
+      selectedGenre,
+      selectedPlatform,
+    ],
+  );
+  const selectedGenreLabel = useMemo(
+    () => collapseWhitespace(selectedGenre) || null,
+    [selectedGenre],
+  );
+  const selectedPlatformLabel = useMemo(
+    () => collapseWhitespace(selectedPlatform) || null,
+    [selectedPlatform],
+  );
+  const activeDiscoverFilterSummary = useMemo(() => {
+    const parts = [
+      selectedGenreLabel ? `Genre: ${selectedGenreLabel}` : null,
+      selectedPlatformLabel ? `Platform: ${selectedPlatformLabel}` : null,
+    ].filter(Boolean);
+    return parts.length ? parts.join(", ") : null;
+  }, [selectedGenreLabel, selectedPlatformLabel]);
+  const hasActiveDiscoverFilters = Boolean(activeDiscoverFilterSummary);
+  const clearDiscoverFilters = useCallback(() => {
+    setSelectedGenre(ALL_GENRE_FILTER_VALUE);
+    setSelectedPlatform(ALL_PLATFORM_FILTER_VALUE);
+  }, []);
   const discoverCarousels = useMemo(() => {
-    const safePool = randomPool.filter((game) => !shouldHideFromDiscover(game));
+    const safePool = discoverBasePool.filter(
+      (game) =>
+        matchesGenreFilter(game, selectedGenre) &&
+        matchesPlatformFilter(game, selectedPlatform),
+    );
     if (!safePool.length) return [] as DiscoverCarousel[];
 
     const getVoteCount = (game: GameItem) =>
@@ -2292,7 +2513,12 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
       ...genreRows,
       ...specialRows,
     ];
-  }, [randomPool, recentReleaseWindowMonths]);
+  }, [
+    discoverBasePool,
+    recentReleaseWindowMonths,
+    selectedGenre,
+    selectedPlatform,
+  ]);
 
   const discoverCarouselsByTitle = useMemo(() => {
     const map = new Map<string, DiscoverCarousel>();
@@ -2442,6 +2668,41 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
     });
   }, [hasMoreSearchResults, searchFetching, searchLoading]);
 
+  let searchResultsCountMessage = `Showing ${cards.length === 0 ? 0 : searchOffset + 1}-${searchOffset + cards.length} on page ${searchPage}.`;
+  if (isLiveSearching) {
+    searchResultsCountMessage = "Searching...";
+  } else if (hasActiveDiscoverFilters) {
+    searchResultsCountMessage = `Showing ${filteredCards.length} ${filteredCards.length === 1 ? "match" : "matches"} on page ${searchPage} for ${activeDiscoverFilterSummary}.`;
+  }
+
+  const discoverFeedSummaryMessage = hasActiveDiscoverFilters
+    ? `Discover feed filtered to ${activeDiscoverFilterSummary}.`
+    : "Showing all games. Enter a query or use the filters to narrow the feed.";
+
+  let discoverToolbarSummaryMessage = "Filter options will appear once games load.";
+  if (hasActiveDiscoverFilters) {
+    discoverToolbarSummaryMessage = `Filtering discover to ${activeDiscoverFilterSummary}.`;
+  } else if (genreFilterOptions.length > 0 || platformFilterOptions.length > 0) {
+    discoverToolbarSummaryMessage = "Select a genre or platform to narrow the current feed.";
+  }
+
+  const showSearchGridLoader = isLiveSearching && cards.length === 0;
+  const showSearchGridResults = !showSearchGridLoader && filteredCards.length > 0;
+  const showSearchGridEmpty = !showSearchGridLoader && !showSearchGridResults;
+  const showRecommendationLoading = questionnaireComplete && recommendationLoading;
+  const showRecommendationError =
+    questionnaireComplete && !recommendationLoading && Boolean(recommendationError);
+  const recommendationReadyGame =
+    questionnaireComplete && !recommendationLoading && !recommendationError
+      ? topRecommendedGame
+      : null;
+  const showFavoriteSearchResults = favoriteSearchInput.trim().length >= 2;
+  const showFavoriteSearchLoading = showFavoriteSearchResults && favoriteSearchLoading;
+  const showFavoriteSearchMatches =
+    showFavoriteSearchResults && !favoriteSearchLoading && favoriteSearchResults.length > 0;
+  const showFavoriteSearchEmpty =
+    showFavoriteSearchResults && !favoriteSearchLoading && favoriteSearchResults.length === 0;
+
   return (
     <div className="search-page" data-theme={theme}>
       <div className="search-shell">
@@ -2491,9 +2752,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
                       Search results for "{normalizedSearchQuery}"
                     </p>
                     <p className="games-search-results__count">
-                      {isLiveSearching
-                        ? "Searching..."
-                        : `Showing ${cards.length === 0 ? 0 : searchOffset + 1}-${searchOffset + cards.length} on page ${searchPage}.`}
+                      {searchResultsCountMessage}
                     </p>
                     {isLiveSearching ? (
                       <Loader
@@ -2505,10 +2764,51 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
                   </>
                 ) : (
                   <p className="games-search-results__count">
-                    Showing all games. Enter a query and press Enter to filter.
+                    {discoverFeedSummaryMessage}
                   </p>
                 )}
               </section>
+              <div className="discover-toolbar" aria-label="Discover filters">
+                <label className="discover-filter" htmlFor="discover-genre-filter">
+                  <span className="discover-filter__label">Genre filter</span>
+                  <select
+                    id="discover-genre-filter"
+                    className="discover-filter__control"
+                    value={selectedGenre}
+                    onChange={(event) => setSelectedGenre(event.target.value)}
+                  >
+                    <option value={ALL_GENRE_FILTER_VALUE}>All genres</option>
+                    {genreFilterOptions.map((option) => (
+                      <option key={option.key} value={option.label}>
+                        {option.count > 0
+                          ? `${option.label} (${option.count})`
+                          : option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="discover-filter" htmlFor="discover-platform-filter">
+                  <span className="discover-filter__label">Platform filter</span>
+                  <select
+                    id="discover-platform-filter"
+                    className="discover-filter__control"
+                    value={selectedPlatform}
+                    onChange={(event) => setSelectedPlatform(event.target.value)}
+                  >
+                    <option value={ALL_PLATFORM_FILTER_VALUE}>All platforms</option>
+                    {platformFilterOptions.map((option) => (
+                      <option key={option.key} value={option.label}>
+                        {option.count > 0
+                          ? `${option.label} (${option.count})`
+                          : option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="discover-toolbar__summary">
+                  {discoverToolbarSummaryMessage}
+                </p>
+              </div>
               <div className="search-quick-actions" aria-label="Discover quick actions">
                 {normalizedSearchQuery ? (
                   <>
@@ -2555,6 +2855,15 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
                     </button>
                   </>
                 )}
+                {hasActiveDiscoverFilters ? (
+                  <button
+                    type="button"
+                    className="search-quick-actions__button"
+                    onClick={clearDiscoverFilters}
+                  >
+                    Clear filters
+                  </button>
+                ) : null}
               </div>
 
               {showQuestionnaireBanner ? (
@@ -2591,15 +2900,16 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
                   className="games-search-grid-section"
                   aria-live="polite"
                 >
-                  {isLiveSearching && cards.length === 0 ? (
+                  {showSearchGridLoader ? (
                     <Loader
                       title="Loading results"
                       subtitle="Pulling in matching games..."
                       theme={theme}
                     />
-                  ) : cards.length ? (
+                  ) : null}
+                  {showSearchGridResults ? (
                     <div className="games-search-grid">
-                      {cards.map((game) => (
+                      {filteredCards.map((game) => (
                         <Card
                           key={`discover-search-grid-${game.id}`}
                           title={game.name || "Untitled"}
@@ -2619,12 +2929,14 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
                         />
                       ))}
                     </div>
-                  ) : (
+                  ) : null}
+                  {showSearchGridEmpty ? (
                     <p className="games-search-grid__empty">
-                      No games matched that query. Try a shorter or broader
-                      term.
+                      {hasActiveDiscoverFilters && cards.length > 0
+                        ? `No games matched the current filters (${activeDiscoverFilterSummary}) on this page. Try another filter or clear them.`
+                        : "No games matched that query. Try a shorter or broader term."}
                     </p>
-                  )}
+                  ) : null}
                   {searchPage > 1 || hasMoreSearchResults ? (
                     <div className="games-pagination">
                       <button
@@ -2666,287 +2978,296 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
                       ]}
                     />
                   ) : null}
-                  {questionnaireComplete ? (
-                    recommendationLoading ? (
-                      <div
-                        ref={recommendationSectionRef}
-                        className="games-recommendation-state"
-                      >
-                        <Loader
-                          title="Refreshing algorithm verdicts"
-                          subtitle="Recomputing recommendations from your answers..."
-                          theme={theme}
-                        />
-                      </div>
-                    ) : recommendationError ? (
-                      <div
-                        ref={recommendationSectionRef}
-                        className="games-recommendation-state games-recommendation-state--error"
-                      >
-                        {recommendationError}
-                      </div>
-                    ) : topRecommendedGame ? (
-                      <section
-                        ref={recommendationSectionRef}
-                        className="games-home-recommendation discover-algorithm-verdict"
-                        aria-label="Algorithm verdicts result"
-                        onTouchStart={handleRecommendationBannerTouchStart}
-                        onTouchEnd={handleRecommendationBannerTouchEnd}
-                      >
-                        <div className="games-result">
-                          <header className="games-result__header">
-                            <p className="games-result__eyebrow">Discover Match Feed</p>
-                            <h2 className="games-result__title">
-                              Queued for your next session.
-                            </h2>
-                          </header>
+                  {showRecommendationLoading ? (
+                    <div
+                      ref={recommendationSectionRef}
+                      className="games-recommendation-state"
+                    >
+                      <Loader
+                        title="Refreshing algorithm verdicts"
+                        subtitle="Recomputing recommendations from your answers..."
+                        theme={theme}
+                      />
+                    </div>
+                  ) : null}
+                  {showRecommendationError ? (
+                    <div
+                      ref={recommendationSectionRef}
+                      className="games-recommendation-state games-recommendation-state--error"
+                    >
+                      {recommendationError}
+                    </div>
+                  ) : null}
+                  {recommendationReadyGame ? (
+                    <section
+                      ref={recommendationSectionRef}
+                      className="games-home-recommendation discover-algorithm-verdict"
+                      aria-label="Algorithm verdicts result"
+                      onTouchStart={handleRecommendationBannerTouchStart}
+                      onTouchEnd={handleRecommendationBannerTouchEnd}
+                    >
+                      <div className="games-result">
+                        <header className="games-result__header">
+                          <p className="games-result__eyebrow">Discover Match Feed</p>
+                          <h2 className="games-result__title">
+                            Queued for your next session.
+                          </h2>
+                        </header>
 
-                          <section className="discover-result-summary" aria-label="Recommendation summary">
-                            <div className="discover-result-summary__stats">
-                              <article className="discover-result-summary__stat">
-                                <span className="discover-result-summary__stat-value">{recommendedGames.length}</span>
-                                <span className="discover-result-summary__stat-label">Picks ready</span>
-                              </article>
-                              <article className="discover-result-summary__stat">
-                                <span className="discover-result-summary__stat-value">{favoriteCount}/{FAVORITE_GAMES_TARGET}</span>
-                                <span className="discover-result-summary__stat-label">Anchor favorites</span>
-                              </article>
-                              <article className="discover-result-summary__stat">
-                                <span className="discover-result-summary__stat-value">{recommendationTrace?.outcome === "fallback_only_mode" ? "Fallback" : "Hybrid"}</span>
-                                <span className="discover-result-summary__stat-label">Engine mode</span>
-                              </article>
-                            </div>
-                            <div className="discover-result-summary__groups">
-                              {renderRecommendationReasonGroups(
-                                "recommend-reason",
-                                "Answer more questions to sharpen the feed.",
-                              )}
-                            </div>
-                          </section>
+                        <section className="discover-result-summary" aria-label="Recommendation summary">
+                          <div className="discover-result-summary__stats">
+                            <article className="discover-result-summary__stat">
+                              <span className="discover-result-summary__stat-value">{recommendedGames.length}</span>
+                              <span className="discover-result-summary__stat-label">Picks ready</span>
+                            </article>
+                            <article className="discover-result-summary__stat">
+                              <span className="discover-result-summary__stat-value">{favoriteCount}/{FAVORITE_GAMES_TARGET}</span>
+                              <span className="discover-result-summary__stat-label">Anchor favorites</span>
+                            </article>
+                            <article className="discover-result-summary__stat">
+                              <span className="discover-result-summary__stat-value">{recommendationTrace?.outcome === "fallback_only_mode" ? "Fallback" : "Hybrid"}</span>
+                              <span className="discover-result-summary__stat-label">Engine mode</span>
+                            </article>
+                          </div>
+                          <div className="discover-result-summary__groups">
+                            {renderRecommendationReasonGroups(
+                              "recommend-reason",
+                              "Answer more questions to sharpen the feed.",
+                            )}
+                          </div>
+                        </section>
 
-                          <section className="games-result__card">
-                            <div className="games-result__poster">
-                              {getPreferredCoverImage(topRecommendedGame) ? (
-                                <img
-                                  src={getPreferredCoverImage(topRecommendedGame) ?? ""}
-                                  alt={topRecommendedGame.name || "Top recommendation cover"}
-                                  loading="lazy"
-                                />
-                              ) : (
-                                <div className="games-result__poster-fallback">No image</div>
-                              )}
-                            </div>
+                        <section className="games-result__card">
+                          <div className="games-result__poster">
+                            {getPreferredCoverImage(recommendationReadyGame) ? (
+                              <img
+                                src={getPreferredCoverImage(recommendationReadyGame) ?? ""}
+                                alt={recommendationReadyGame.name || "Top recommendation cover"}
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="games-result__poster-fallback">No image</div>
+                            )}
+                          </div>
 
-                            <div className="games-result__content">
-                              <span className="games-result__list-item-rank">
-                                #{topRecommendationDisplayRank}
+                          <div className="games-result__content">
+                            <span className="games-result__list-item-rank">
+                              #{topRecommendationDisplayRank}
+                            </span>
+                            <h3>{recommendationReadyGame.name || "Top recommendation"}</h3>
+                            <p className="games-result__summary" title={topRecommendationSummary.full}>{topRecommendationSummary.display}</p>
+                            <div className="games-result__meta">
+                              <span>
+                                {formatReleaseDate(recommendationReadyGame.release_date)
+                                  ? `Release: ${formatReleaseDate(recommendationReadyGame.release_date)}`
+                                  : "Release: n/a"}
                               </span>
-                              <h3>{topRecommendedGame.name || "Top recommendation"}</h3>
-                              <p className="games-result__summary" title={topRecommendationSummary.full}>{topRecommendationSummary.display}</p>
-                              <div className="games-result__meta">
-                                <span>
-                                  {formatReleaseDate(topRecommendedGame.release_date)
-                                    ? `Release: ${formatReleaseDate(topRecommendedGame.release_date)}`
-                                    : "Release: n/a"}
-                                </span>
-                                <span>{`Genre: ${topRecommendedGame.genre ?? "n/a"}`}</span>
-                                {recommendationStrategy ? (
-                                  <span>{`Strategy: ${recommendationStrategy}`}</span>
-                                ) : null}
-                                {recommendationTrace?.rankingProfile ? (
-                                  <span>{`Profile: ${recommendationTrace.rankingProfile}`}</span>
-                                ) : null}
-                              </div>
+                              <span>{`Genre: ${recommendationReadyGame.genre ?? "n/a"}`}</span>
+                              <span>{`Platforms: ${formatPlatformSummary(recommendationReadyGame.platform_names) ?? "n/a"}`}</span>
+                              {recommendationStrategy ? (
+                                <span>{`Strategy: ${recommendationStrategy}`}</span>
+                              ) : null}
+                              {recommendationTrace?.rankingProfile ? (
+                                <span>{`Profile: ${recommendationTrace.rankingProfile}`}</span>
+                              ) : null}
                             </div>
+                          </div>
 
-                            <aside className="games-result__score">
-                              <p>Rank</p>
-                              <div className="games-result__score-pill">
-                                #{topRecommendationDisplayRank}
-                              </div>
-                              <p className="games-result__score-sub">
-                                {`Score: ${effectiveRecommendationScores.get(topRecommendedGame.id) ?? 99}%`}
-                              </p>
-                            </aside>
-                          </section>
+                          <aside className="games-result__score">
+                            <p>Rank</p>
+                            <div className="games-result__score-pill">
+                              #{topRecommendationDisplayRank}
+                            </div>
+                            <p className="games-result__score-sub">
+                              {`Score: ${effectiveRecommendationScores.get(recommendationReadyGame.id) ?? 99}%`}
+                            </p>
+                          </aside>
+                        </section>
 
-                          {additionalRecommendedGames.length > 0 ? (
-                            <section className="games-result__list" aria-label="Additional recommendations">
-                              <div className="games-result__list-header">
-                                <h3>Up next</h3>
-                                <p>{`Showing ${pagedAdditionalRecommendations.length} of ${additionalRecommendedGames.length}`}</p>
-                              </div>
-                              <div className="games-result__list-grid">
-                                {pagedAdditionalRecommendations.map((game, index) => {
-                                  const visibleRank = recommendationDisplayRankById.get(game.id) ??
-                                    (2 + ((currentResultPage - 1) * RESULT_PAGE_SIZE) + index);
-                                  const coverUrl = getPreferredCoverImage(game);
-                                  const modelRank = getRecommendationRank(game.id, visibleRank);
-                                  const isSaved = savedRecommendationIds.includes(game.id);
-                                  return (
-                                    <article
-                                      key={`discover-result-${game.id}`}
-                                      className="games-result__list-item"
+                        {additionalRecommendedGames.length > 0 ? (
+                          <section className="games-result__list" aria-label="Additional recommendations">
+                            <div className="games-result__list-header">
+                              <h3>Up next</h3>
+                              <p>{`Showing ${pagedAdditionalRecommendations.length} of ${additionalRecommendedGames.length}`}</p>
+                            </div>
+                            <div className="games-result__list-grid">
+                              {pagedAdditionalRecommendations.map((game, index) => {
+                                const visibleRank = recommendationDisplayRankById.get(game.id) ??
+                                  (2 + ((currentResultPage - 1) * RESULT_PAGE_SIZE) + index);
+                                const coverUrl = getPreferredCoverImage(game);
+                                const modelRank = getRecommendationRank(game.id, visibleRank);
+                                const isSaved = savedRecommendationIds.includes(game.id);
+                                return (
+                                  <article
+                                    key={`discover-result-${game.id}`}
+                                    className="games-result__list-item"
+                                  >
+                                    <button
+                                      type="button"
+                                      className="games-result__list-item-main"
+                                      onClick={() =>
+                                        openGameDetail(game.id, {
+                                          fromRecommendation: true,
+                                          rank: modelRank,
+                                        })
+                                      }
                                     >
+                                      <span className="games-result__list-item-cover" aria-hidden="true">
+                                        {coverUrl ? (
+                                          <img
+                                            src={coverUrl}
+                                            alt=""
+                                            loading="lazy"
+                                          />
+                                        ) : (
+                                          <span className="games-result__list-item-cover-fallback">No image</span>
+                                        )}
+                                      </span>
+                                      <span className="games-result__list-item-body">
+                                      <span className="games-result__list-item-rank">{`#${visibleRank}`}</span>
+                                      <span className="games-result__list-item-title">{game.name || "Untitled game"}</span>
+                                      <span className="games-result__list-item-meta">
+                                        {formatReleaseDate(game.release_date)
+                                          ? `Release: ${formatReleaseDate(game.release_date)}`
+                                          : "Release: n/a"}
+                                      </span>
+                                      <span className="games-result__list-item-meta">
+                                        {`Score: ${effectiveRecommendationScores.get(game.id) ?? 58}%`}
+                                      </span>
+                                      </span>
+                                    </button>
+                                    <div className="games-result__list-item-actions">
                                       <button
                                         type="button"
-                                        className="games-result__list-item-main"
-                                        onClick={() =>
-                                          openGameDetail(game.id, {
-                                            fromRecommendation: true,
-                                            rank: modelRank,
-                                          })
-                                        }
+                                        className="games-result__chip"
+                                        onClick={() => void handleRecommendationFavorite(game.id, modelRank)}
                                       >
-                                        <span className="games-result__list-item-cover" aria-hidden="true">
-                                          {coverUrl ? (
-                                            <img
-                                              src={coverUrl}
-                                              alt=""
-                                              loading="lazy"
-                                            />
-                                          ) : (
-                                            <span className="games-result__list-item-cover-fallback">No image</span>
-                                          )}
-                                        </span>
-                                        <span className="games-result__list-item-body">
-                                        <span className="games-result__list-item-rank">{`#${visibleRank}`}</span>
-                                        <span className="games-result__list-item-title">{game.name || "Untitled game"}</span>
-                                        <span className="games-result__list-item-meta">
-                                          {formatReleaseDate(game.release_date)
-                                            ? `Release: ${formatReleaseDate(game.release_date)}`
-                                            : "Release: n/a"}
-                                        </span>
-                                        <span className="games-result__list-item-meta">
-                                          {`Score: ${effectiveRecommendationScores.get(game.id) ?? 58}%`}
-                                        </span>
-                                        </span>
+                                        {isSaved ? "Saved" : "Save"}
                                       </button>
-                                      <div className="games-result__list-item-actions">
-                                        <button
-                                          type="button"
-                                          className="games-result__chip"
-                                          onClick={() => void handleRecommendationFavorite(game.id, modelRank)}
-                                        >
-                                          {isSaved ? "Saved" : "Save"}
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="games-result__chip games-result__chip--ghost"
-                                          onClick={() => void handleRecommendationDismiss(game.id, modelRank)}
-                                        >
-                                          Hide
-                                        </button>
-                                      </div>
-                                    </article>
-                                  );
-                                })}
+                                      <button
+                                        type="button"
+                                        className="games-result__chip games-result__chip--ghost"
+                                        onClick={() => void handleRecommendationDismiss(game.id, modelRank)}
+                                      >
+                                        Hide
+                                      </button>
+                                    </div>
+                                  </article>
+                                );
+                              })}
+                            </div>
+                            {resultTotalPages > 1 ? (
+                              <div className="games-pagination games-result__pagination">
+                                <button
+                                  type="button"
+                                  className="games-pagination__button"
+                                  onClick={() => setResultPage((page) => Math.max(1, page - 1))}
+                                  disabled={currentResultPage <= 1}
+                                >
+                                  Previous
+                                </button>
+                                <span className="games-pagination__status">
+                                  Page {currentResultPage} of {resultTotalPages}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="games-pagination__button"
+                                  onClick={() =>
+                                    setResultPage((page) => Math.min(resultTotalPages, page + 1))
+                                  }
+                                  disabled={currentResultPage >= resultTotalPages}
+                                >
+                                  Next
+                                </button>
                               </div>
-                              {resultTotalPages > 1 ? (
-                                <div className="games-pagination games-result__pagination">
-                                  <button
-                                    type="button"
-                                    className="games-pagination__button"
-                                    onClick={() => setResultPage((page) => Math.max(1, page - 1))}
-                                    disabled={currentResultPage <= 1}
-                                  >
-                                    Previous
-                                  </button>
-                                  <span className="games-pagination__status">
-                                    Page {currentResultPage} of {resultTotalPages}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    className="games-pagination__button"
-                                    onClick={() =>
-                                      setResultPage((page) => Math.min(resultTotalPages, page + 1))
-                                    }
-                                    disabled={currentResultPage >= resultTotalPages}
-                                  >
-                                    Next
-                                  </button>
-                                </div>
-                              ) : null}
-                              {canSwipeFeaturedRecommendations ? (
-                                <p className="discover-banner-swipe-hint">
-                                  Swipe left or right on this banner to browse picks.
-                                </p>
-                              ) : null}
-                            </section>
-                          ) : null}
+                            ) : null}
+                            {canSwipeFeaturedRecommendations ? (
+                              <p className="discover-banner-swipe-hint">
+                                Swipe left or right on this banner to browse picks.
+                              </p>
+                            ) : null}
+                          </section>
+                        ) : null}
 
-                          <footer className="games-result__actions">
-                            <button
-                              type="button"
-                              className="games-result__button games-result__button--primary"
-                              onClick={() => {
-                                void runQuestionnaireRecommendation();
-                                recommendationSectionRef.current?.scrollIntoView({
-                                  behavior: "smooth",
-                                  block: "start",
-                                });
-                              }}
-                            >
-                              Refresh picks
-                            </button>
-                            <button
-                              type="button"
-                              className="games-result__button games-result__button--ghost"
-                              onClick={handleQuestionnaireRetake}
-                            >
-                              Retake questionnaire
-                            </button>
-                            <button
-                              type="button"
-                              className="games-result__button games-result__button--ghost"
-                              onClick={() =>
-                                void handleRecommendationFavorite(
-                                  topRecommendedGame.id,
-                                  getRecommendationRank(
-                                    topRecommendedGame.id,
-                                    topRecommendationDisplayRank,
-                                  ),
-                                )
-                              }
-                            >
-                              {savedRecommendationIds.includes(topRecommendedGame.id)
-                                ? "Saved"
-                                : `Save #${topRecommendationDisplayRank}`}
-                            </button>
-                            <button
-                              type="button"
-                              className="games-result__button games-result__button--ghost"
-                              onClick={() =>
-                                void handleRecommendationDismiss(
-                                  topRecommendedGame.id,
-                                  getRecommendationRank(
-                                    topRecommendedGame.id,
-                                    topRecommendationDisplayRank,
-                                  ),
-                                )
-                              }
-                            >
-                              {`Hide #${topRecommendationDisplayRank} pick`}
-                            </button>
-                            <button
-                              type="button"
-                              className="games-result__button games-result__button--ghost"
-                              onClick={() =>
-                                openGameDetail(topRecommendedGame.id, {
-                                  fromRecommendation: true,
-                                  rank: getRecommendationRank(
-                                    topRecommendedGame.id,
-                                    topRecommendationDisplayRank,
-                                  ),
-                                })
-                              }
-                            >
-                              {`Open #${topRecommendationDisplayRank} pick`}
-                            </button>
-                          </footer>
-                        </div>
-                      </section>
-                    ) : null
+                        <footer className="games-result__actions">
+                          <button
+                            type="button"
+                            className="games-result__button games-result__button--primary"
+                            onClick={() => {
+                              void runQuestionnaireRecommendation();
+                              recommendationSectionRef.current?.scrollIntoView({
+                                behavior: "smooth",
+                                block: "start",
+                              });
+                            }}
+                          >
+                            Refresh picks
+                          </button>
+                          <button
+                            type="button"
+                            className="games-result__button games-result__button--ghost"
+                            onClick={handleQuestionnaireRetake}
+                          >
+                            Retake questionnaire
+                          </button>
+                          <button
+                            type="button"
+                            className="games-result__button games-result__button--ghost"
+                            onClick={() =>
+                              void handleRecommendationFavorite(
+                                recommendationReadyGame.id,
+                                getRecommendationRank(
+                                  recommendationReadyGame.id,
+                                  topRecommendationDisplayRank,
+                                ),
+                              )
+                            }
+                          >
+                            {savedRecommendationIds.includes(recommendationReadyGame.id)
+                              ? "Saved"
+                              : `Save #${topRecommendationDisplayRank}`}
+                          </button>
+                          <button
+                            type="button"
+                            className="games-result__button games-result__button--ghost"
+                            onClick={() =>
+                              void handleRecommendationDismiss(
+                                recommendationReadyGame.id,
+                                getRecommendationRank(
+                                  recommendationReadyGame.id,
+                                  topRecommendationDisplayRank,
+                                ),
+                              )
+                            }
+                          >
+                            {`Hide #${topRecommendationDisplayRank} pick`}
+                          </button>
+                          <button
+                            type="button"
+                            className="games-result__button games-result__button--ghost"
+                            onClick={() =>
+                              openGameDetail(recommendationReadyGame.id, {
+                                fromRecommendation: true,
+                                rank: getRecommendationRank(
+                                  recommendationReadyGame.id,
+                                  topRecommendationDisplayRank,
+                                ),
+                              })
+                            }
+                          >
+                            {`Open #${topRecommendationDisplayRank} pick`}
+                          </button>
+                        </footer>
+                      </div>
+                    </section>
+                  ) : null}                  {!randomPoolLoading && visibleDisplayedDiscoverCarousels.length === 0 ? (
+                    <section className="games-search-grid-section discover-empty-state" aria-live="polite">
+                      <p className="games-search-grid__empty">
+                        {hasActiveDiscoverFilters
+                          ? `No games are available for the current filters (${activeDiscoverFilterSummary}). Try another filter or clear them.`
+                          : "No discover lanes are available right now."}
+                      </p>
+                    </section>
                   ) : null}
 
                   {visibleDisplayedDiscoverCarousels.map((section) => {
@@ -2959,10 +3280,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
                       badge={section.badge}
                       games={section.games}
                       onSelect={openGameDetail}
-                      getDescription={(game) => {
-                        const release = formatReleaseDate(game.release_date);
-                        return release ? `Release: ${release}` : "Release: n/a";
-                      }}
+                      getDescription={getExploreDescription}
                       itemWidth={190}
                       onLoadMore={() => loadMoreForRow(section.title)}
                       canLoadMore={localHasMore || Boolean(hasMoreRandomPool)}
@@ -3157,11 +3475,12 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
                       ))}
                     </div>
                   ) : null}
-                  {favoriteSearchInput.trim().length >= 2 ? (
+                  {showFavoriteSearchResults ? (
                     <div className="games-questionnaire__favorites-search-results">
-                      {favoriteSearchLoading ? (
+                      {showFavoriteSearchLoading ? (
                         <p className="games-questionnaire__hint">Searching...</p>
-                      ) : favoriteSearchResults.length > 0 ? (
+                      ) : null}
+                      {showFavoriteSearchMatches ? (
                         <>
                           {favoriteSearchResults.map((game) => (
                             <button
@@ -3213,9 +3532,10 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
                             </button>
                           </div>
                         </>
-                      ) : (
+                      ) : null}
+                      {showFavoriteSearchEmpty ? (
                         <p className="games-questionnaire__hint">No matches found.</p>
-                      )}
+                      ) : null}
                     </div>
                   ) : null}
                 </section>
@@ -3328,6 +3648,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
                         : "Release: n/a"}
                     </span>
                     <span>{`Genre: ${topRecommendedGame.genre ?? "n/a"}`}</span>
+                    <span>{`Platforms: ${formatPlatformSummary(topRecommendedGame.platform_names) ?? "n/a"}`}</span>
                   </div>
                 </div>
                 <aside className="games-result__score">
@@ -3385,6 +3706,9 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
 }
 
 export default DiscoverPage;
+
+
+
 
 
 
