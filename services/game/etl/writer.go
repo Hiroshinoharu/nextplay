@@ -18,20 +18,17 @@ type DBTX interface {
 
 // bulk upserts named entities (like genres, platforms, keywords) into the specified table
 // upsertNamedRows bulk upserts rows with igdb_id and returns a map of igdb_id -> db_id.
-func upsertNamedRows(tx DBTX, table, column string, source map[int]string) (map[int]int, error) {
-	// Prepare output map of igdb_id to db_id (hashmap)
+func upsertNamedRows(tx DBTX, table, column string, source map[int]string, batchSize int) (map[int]int, error) {
 	out := make(map[int]int, len(source))
 	if len(source) == 0 {
 		return out, nil
 	}
 
-	// Resolve naming mismatches across schema variants (e.g. "name" vs "franchise_name").
 	resolvedColumn, err := resolveEntityNameColumn(tx, table, column)
 	if err != nil {
 		return nil, err
 	}
 
-	// Prepare slices for IDs and names
 	ids := make([]int, 0, len(source))
 	names := make([]string, 0, len(source))
 	for igdbID, name := range source {
@@ -46,9 +43,6 @@ func upsertNamedRows(tx DBTX, table, column string, source map[int]string) (map[
 		return out, nil
 	}
 
-	// Construct the SQL query for bulk upsert operation
-	// UNNEST is used to handle arrays of IDs and names
-	// ON CONFLICT ensures existing records are updated
 	idColumn := fmt.Sprintf("%s_id", table)
 	query := fmt.Sprintf(
 		`INSERT INTO %s (igdb_id, %s)
@@ -63,32 +57,35 @@ func upsertNamedRows(tx DBTX, table, column string, source map[int]string) (map[
 		idColumn,
 	)
 
-	// Execute the query and process the results
-	rows, err := tx.Query(query, pq.Array(ids), pq.Array(names))
-	if err != nil {
-		return nil, err
-	}
-	// Lets all the rows close to prevent memory leaks
-	defer rows.Close()
-
-	// Scan the returned rows to build the output map
-	for rows.Next() {
-		// Temporary variables to hold scanned values
-		var igdbID, dbID int
-		// Scan the current row into igdbID and dbID
-		if err := rows.Scan(&igdbID, &dbID); err != nil {
+	batchSize = normalizeBatchSize(batchSize, len(ids))
+	for start := 0; start < len(ids); start += batchSize {
+		end := batchEnd(start, batchSize, len(ids))
+		rows, err := tx.Query(query, pq.Array(ids[start:end]), pq.Array(names[start:end]))
+		if err != nil {
 			return nil, err
 		}
-		// Map the igdbID to the corresponding dbID
-		out[igdbID] = dbID
+
+		for rows.Next() {
+			var igdbID, dbID int
+			if err := rows.Scan(&igdbID, &dbID); err != nil {
+				_ = rows.Close()
+				return nil, err
+			}
+			out[igdbID] = dbID
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		if err := rows.Close(); err != nil {
+			return nil, err
+		}
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
+
 	return out, nil
 }
 
-// resolveEntityNameColumn checks if the preferred name column exists in the specified table, and falls back to "name" if it doesn't. 
+// resolveEntityNameColumn checks if the preferred name column exists in the specified table, and falls back to "name" if it doesn't.
 // This allows the ETL to work with schema variants that may have different naming conventions for entity names (e.g. "franchise_name" vs "name" in the "game_franchise" table).
 func resolveEntityNameColumn(tx DBTX, table, preferred string) (string, error) {
 	if hasColumn(tx, table, preferred) {
@@ -100,7 +97,7 @@ func resolveEntityNameColumn(tx DBTX, table, preferred string) (string, error) {
 	return "", fmt.Errorf("table %q has neither %q nor fallback %q column", table, preferred, "name")
 }
 
-// hasColumn checks if the specified column exists in the given table within the current database schema. 
+// hasColumn checks if the specified column exists in the given table within the current database schema.
 // It queries the information_schema.columns view to determine if the column is present, returning true if found and false otherwise.
 func hasColumn(tx DBTX, table, column string) bool {
 	rows, err := tx.Query(
@@ -123,38 +120,28 @@ func hasColumn(tx DBTX, table, column string) bool {
 // gameUpsertRow represents a single row for upserting a game.
 // It includes all the fields needed for the upsert operation, with pointers for nullable fields. This struct is serialized to JSON and used as input for the batchUpsertGames function.
 type gameUpsertRow struct {
-	IGDBID        int     `json:"igdb_id"`
-	Name          string  `json:"game_name"`
-	Description   *string `json:"game_description"`
-	ReleaseDate   *string `json:"release_date"`
-	Genre         *string `json:"genre"`
-	Publishers    *string `json:"publishers"`
-	Story         *string `json:"story"`
-	CoverImageURL *string `json:"cover_image_url"`
-	AggregatedRating *float64 `json:"aggregated_rating"`
-	AggregatedRatingCount *int `json:"aggregated_rating_count"`
-	TotalRating *float64 `json:"total_rating"`
-	TotalRatingCount *int `json:"total_rating_count"`
-	Popularity *float64 `json:"popularity"`
+	IGDBID                int      `json:"igdb_id"`
+	Name                  string   `json:"game_name"`
+	Description           *string  `json:"game_description"`
+	ReleaseDate           *string  `json:"release_date"`
+	Genre                 *string  `json:"genre"`
+	Publishers            *string  `json:"publishers"`
+	Story                 *string  `json:"story"`
+	CoverImageURL         *string  `json:"cover_image_url"`
+	AggregatedRating      *float64 `json:"aggregated_rating"`
+	AggregatedRatingCount *int     `json:"aggregated_rating_count"`
+	TotalRating           *float64 `json:"total_rating"`
+	TotalRatingCount      *int     `json:"total_rating_count"`
+	Popularity            *float64 `json:"popularity"`
 }
 
-// batchUpsertGames upserts games in a single statement and returns igdb_id -> game_id.
-func batchUpsertGames(tx DBTX, rows []gameUpsertRow) (map[int]int, error) {
+// batchUpsertGames upserts games in batches and returns igdb_id -> game_id.
+func batchUpsertGames(tx DBTX, rows []gameUpsertRow, batchSize int) (map[int]int, error) {
 	out := make(map[int]int, len(rows))
 	if len(rows) == 0 {
 		return out, nil
 	}
 
-	payload, err := json.Marshal(rows)
-	if err != nil {
-		return nil, err
-	}
-
-	// SQL query for bulk upsert of games using JSONB recordset
-	// ON CONFLICT ensures existing records are updated with COALESCE to retain existing data when new data is NULL
-	// RETURNING clause retrieves the igdb_id and game_id of affected rows
-	// The query uses a CTE (Common Table Expression) to parse the JSONB input
-	// and perform the insert/update in one operation
 	query := `
 		WITH data AS (
 			SELECT * FROM jsonb_to_recordset($1::jsonb) AS x(
@@ -219,41 +206,45 @@ func batchUpsertGames(tx DBTX, rows []gameUpsertRow) (map[int]int, error) {
 		RETURNING igdb_id, game_id;
 	`
 
-	// Execute the query with the JSONB payload
-	rowsResult, err := tx.Query(query, payload)
-	if err != nil {
-		return nil, err
-	}
-	// Ensure rows are closed after processing
-	defer rowsResult.Close()
-
-	// Process the returned rows to build the output map
-	for rowsResult.Next() {
-		// Temporary variables to hold scanned values
-		var igdbID, gameID int
-		// Scan the current row into igdbID and gameID
-		if err := rowsResult.Scan(&igdbID, &gameID); err != nil {
+	batchSize = normalizeBatchSize(batchSize, len(rows))
+	for start := 0; start < len(rows); start += batchSize {
+		end := batchEnd(start, batchSize, len(rows))
+		payload, err := json.Marshal(rows[start:end])
+		if err != nil {
 			return nil, err
 		}
-		// Map the igdbID to the corresponding gameID
-		out[igdbID] = gameID
+
+		rowsResult, err := tx.Query(query, payload)
+		if err != nil {
+			return nil, err
+		}
+
+		for rowsResult.Next() {
+			var igdbID, gameID int
+			if err := rowsResult.Scan(&igdbID, &gameID); err != nil {
+				_ = rowsResult.Close()
+				return nil, err
+			}
+			out[igdbID] = gameID
+		}
+		if err := rowsResult.Err(); err != nil {
+			_ = rowsResult.Close()
+			return nil, err
+		}
+		if err := rowsResult.Close(); err != nil {
+			return nil, err
+		}
 	}
-	// Check for any errors encountered during row iteration
-	if err := rowsResult.Err(); err != nil {
-		return nil, err
-	}
+
 	return out, nil
 }
 
-// bulkInsertJoinPairs inserts many join rows in a single statement.
-func bulkInsertJoinPairs(tx DBTX, table, leftCol, rightCol string, leftIDs, rightIDs []int) error {
-	// Validate input lengths
+// bulkInsertJoinPairs inserts many join rows in batches.
+func bulkInsertJoinPairs(tx DBTX, table, leftCol, rightCol string, leftIDs, rightIDs []int, batchSize int) error {
 	if len(leftIDs) == 0 || len(rightIDs) == 0 || len(leftIDs) != len(rightIDs) {
 		return nil
 	}
-	// Construct the SQL query for bulk insert operation
-	// UNNEST is used to handle arrays of left and right IDs
-	// ON CONFLICT DO NOTHING ensures existing records are skipped
+
 	query := fmt.Sprintf(
 		`INSERT INTO %s (%s, %s)
 		 SELECT * FROM UNNEST($1::int[], $2::int[])
@@ -262,25 +253,27 @@ func bulkInsertJoinPairs(tx DBTX, table, leftCol, rightCol string, leftIDs, righ
 		leftCol,
 		rightCol,
 	)
-	// Execute the query with the provided ID arrays
-	_, err := tx.Exec(query, pq.Array(leftIDs), pq.Array(rightIDs))
-	return err
+
+	batchSize = normalizeBatchSize(batchSize, len(leftIDs))
+	for start := 0; start < len(leftIDs); start += batchSize {
+		end := batchEnd(start, batchSize, len(leftIDs))
+		if _, err := tx.Exec(query, pq.Array(leftIDs[start:end]), pq.Array(rightIDs[start:end])); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
-// bulkInsertGameMedia inserts media rows in a single statement, skipping existing rows.
-func bulkInsertGameMedia(tx DBTX, gameIDs, igdbIDs []int, mediaTypes, urls []string, sortOrders []int) error {
-	// Validate input lengths
+// bulkInsertGameMedia inserts media rows in batches, skipping existing rows.
+func bulkInsertGameMedia(tx DBTX, gameIDs, igdbIDs []int, mediaTypes, urls []string, sortOrders []int, batchSize int) error {
 	if len(gameIDs) == 0 {
 		return nil
 	}
-	// Ensure all slices have the same length
 	if len(gameIDs) != len(igdbIDs) || len(gameIDs) != len(mediaTypes) || len(gameIDs) != len(urls) || len(gameIDs) != len(sortOrders) {
 		return fmt.Errorf("media slice length mismatch")
 	}
 
-	// SQL query for bulk insert of game media
-	// Uses CTEs to first deduplicate input data and then insert only new records
-	// LEFT JOIN with game_media table ensures existing records are skipped
 	query := `
 		WITH input AS (
 			SELECT *
@@ -303,13 +296,26 @@ func bulkInsertGameMedia(tx DBTX, gameIDs, igdbIDs []int, mediaTypes, urls []str
 		WHERE gm.media_id IS NULL
 	`
 
-	// Execute the query with the provided arrays
-	_, err := tx.Exec(query, pq.Array(gameIDs), pq.Array(igdbIDs), pq.Array(mediaTypes), pq.Array(urls), pq.Array(sortOrders))
-	return err
+	batchSize = normalizeBatchSize(batchSize, len(gameIDs))
+	for start := 0; start < len(gameIDs); start += batchSize {
+		end := batchEnd(start, batchSize, len(gameIDs))
+		if _, err := tx.Exec(
+			query,
+			pq.Array(gameIDs[start:end]),
+			pq.Array(igdbIDs[start:end]),
+			pq.Array(mediaTypes[start:end]),
+			pq.Array(urls[start:end]),
+			pq.Array(sortOrders[start:end]),
+		); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // bulkInsertGameCompaniesPairs inserts company roles for many games at once.
-func bulkInsertGameCompaniesPairs(tx DBTX, gameIDs, companyIDs []int, isDevelopers, isPublishers []bool) error {
+func bulkInsertGameCompaniesPairs(tx DBTX, gameIDs, companyIDs []int, isDevelopers, isPublishers []bool, batchSize int) error {
 	if len(gameIDs) == 0 || len(companyIDs) == 0 {
 		return nil
 	}
@@ -317,9 +323,6 @@ func bulkInsertGameCompaniesPairs(tx DBTX, gameIDs, companyIDs []int, isDevelope
 		return fmt.Errorf("company join slice length mismatch")
 	}
 
-	// SQL query for bulk insert of game-company relationships
-	// UNNEST is used to handle arrays of game IDs, company IDs, and role flags
-	// ON CONFLICT ensures existing records are updated with new role information
 	query := `
 		INSERT INTO game_companies (
 			game_id,
@@ -337,19 +340,49 @@ func bulkInsertGameCompaniesPairs(tx DBTX, gameIDs, companyIDs []int, isDevelope
 		    is_porting_developer = EXCLUDED.is_porting_developer
 	`
 
-	// Using slices of false for supporting and porting developer roles
-	falses := make([]bool, len(gameIDs))
-	_, err := tx.Exec(query, pq.Array(gameIDs), pq.Array(companyIDs), pq.Array(isDevelopers), pq.Array(isPublishers), pq.Array(falses), pq.Array(falses))
-	return err
+	batchSize = normalizeBatchSize(batchSize, len(gameIDs))
+	for start := 0; start < len(gameIDs); start += batchSize {
+		end := batchEnd(start, batchSize, len(gameIDs))
+		falses := make([]bool, end-start)
+		if _, err := tx.Exec(
+			query,
+			pq.Array(gameIDs[start:end]),
+			pq.Array(companyIDs[start:end]),
+			pq.Array(isDevelopers[start:end]),
+			pq.Array(isPublishers[start:end]),
+			pq.Array(falses),
+			pq.Array(falses),
+		); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func normalizeBatchSize(batchSize, total int) int {
+	if total <= 0 {
+		return 0
+	}
+	if batchSize <= 0 || batchSize > total {
+		return total
+	}
+	return batchSize
+}
+
+func batchEnd(start, batchSize, total int) int {
+	end := start + batchSize
+	if end > total {
+		return total
+	}
+	return end
 }
 
 // joinNames joins names from a map based on a slice of IDs into a comma-separated string.
 func joinNames(ids []int, names map[int]string) string {
-	// Return an empty string if input slices or maps are empty
 	if len(ids) == 0 || len(names) == 0 {
 		return ""
 	}
-	// Collect sanitized names corresponding to the provided IDs
 	parts := make([]string, 0, len(ids))
 	for _, id := range ids {
 		if name := strings.TrimSpace(sanitizeText(names[id])); name != "" {

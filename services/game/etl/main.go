@@ -56,6 +56,15 @@ func run() error {
 	if err := db.Connect(dbURL); err != nil {
 		return fmt.Errorf("failed to connect to DB: %w", err)
 	}
+	batchCfg := loadETLBatchConfig()
+	log.Printf(
+		"ETL DB batch sizes: named=%d games=%d joins=%d companies=%d media=%d",
+		batchCfg.NamedRows,
+		batchCfg.Games,
+		batchCfg.Joins,
+		batchCfg.Companies,
+		batchCfg.Media,
+	)
 
 	maxGames := 300
 	if raw := strings.TrimSpace(os.Getenv("IGDB_MAX_GAMES")); raw != "" {
@@ -463,27 +472,27 @@ func run() error {
 	}()
 
 	// Upsert auxiliary data
-	platformDBIDs, err := upsertNamedRows(tx, "platform", "platform_name", platformNames)
+	platformDBIDs, err := upsertNamedRows(tx, "platform", "platform_name", platformNames, batchCfg.NamedRows)
 	if err != nil {
 		return fmt.Errorf("failed to upsert platforms: %w", err)
 	}
-	keywordDBIDs, err := upsertNamedRows(tx, "keyword", "keyword_name", keywordNames)
+	keywordDBIDs, err := upsertNamedRows(tx, "keyword", "keyword_name", keywordNames, batchCfg.NamedRows)
 	if err != nil {
 		return fmt.Errorf("failed to upsert keywords: %w", err)
 	}
-	franchiseDBIDs, err := upsertNamedRows(tx, "franchise", "franchise_name", franchiseNames)
+	franchiseDBIDs, err := upsertNamedRows(tx, "franchise", "franchise_name", franchiseNames, batchCfg.NamedRows)
 	if err != nil {
 		return fmt.Errorf("failed to upsert franchises: %w", err)
 	}
-	seriesDBIDs, err := upsertNamedRows(tx, "series", "series_name", seriesNames)
+	seriesDBIDs, err := upsertNamedRows(tx, "series", "series_name", seriesNames, batchCfg.NamedRows)
 	if err != nil {
 		return fmt.Errorf("failed to upsert series: %w", err)
 	}
-	genreDBIDs, err := upsertNamedRows(tx, "genre", "genre_name", genreNames)
+	genreDBIDs, err := upsertNamedRows(tx, "genre", "genre_name", genreNames, batchCfg.NamedRows)
 	if err != nil {
 		return fmt.Errorf("failed to upsert genres: %w", err)
 	}
-	companyDBIDs, err := upsertNamedRows(tx, "company", "company_name", companyNames)
+	companyDBIDs, err := upsertNamedRows(tx, "company", "company_name", companyNames, batchCfg.NamedRows)
 	if err != nil {
 		return fmt.Errorf("failed to upsert companies: %w", err)
 	}
@@ -618,9 +627,10 @@ func run() error {
 	if duplicateRows > 0 {
 		log.Printf("Deduplicated %d duplicate game rows by igdb_id", duplicateRows)
 	}
+	log.Printf("Prepared %d deduplicated game rows for database upsert", len(gameRows))
 
 	// Bulk upsert games
-	gameIDByIGDB, err := batchUpsertGames(tx, gameRows)
+	gameIDByIGDB, err := batchUpsertGames(tx, gameRows, batchCfg.Games)
 	if err != nil {
 		return fmt.Errorf("failed to bulk upsert games: %w", err)
 	}
@@ -795,25 +805,25 @@ func run() error {
 	}
 
 	// Bulk insert joins and media
-	if err := bulkInsertJoinPairs(tx, "game_platform", "game_id", "platform_id", platformLeft, platformRight); err != nil {
+	if err := bulkInsertJoinPairs(tx, "game_platform", "game_id", "platform_id", platformLeft, platformRight, batchCfg.Joins); err != nil {
 		return fmt.Errorf("failed to bulk link platforms: %w", err)
 	}
-	if err := bulkInsertJoinPairs(tx, "game_keywords", "game_id", "keyword_id", keywordLeft, keywordRight); err != nil {
+	if err := bulkInsertJoinPairs(tx, "game_keywords", "game_id", "keyword_id", keywordLeft, keywordRight, batchCfg.Joins); err != nil {
 		return fmt.Errorf("failed to bulk link keywords: %w", err)
 	}
-	if err := bulkInsertJoinPairs(tx, "game_genre", "game_id", "genre_id", genreLeft, genreRight); err != nil {
+	if err := bulkInsertJoinPairs(tx, "game_genre", "game_id", "genre_id", genreLeft, genreRight, batchCfg.Joins); err != nil {
 		return fmt.Errorf("failed to bulk link genres: %w", err)
 	}
-	if err := bulkInsertJoinPairs(tx, "game_franchise", "game_id", "franchise_id", franchiseLeft, franchiseRight); err != nil {
+	if err := bulkInsertJoinPairs(tx, "game_franchise", "game_id", "franchise_id", franchiseLeft, franchiseRight, batchCfg.Joins); err != nil {
 		return fmt.Errorf("failed to bulk link franchises: %w", err)
 	}
-	if err := bulkInsertJoinPairs(tx, "game_series", "game_id", "series_id", seriesLeft, seriesRight); err != nil {
+	if err := bulkInsertJoinPairs(tx, "game_series", "game_id", "series_id", seriesLeft, seriesRight, batchCfg.Joins); err != nil {
 		return fmt.Errorf("failed to bulk link series: %w", err)
 	}
-	if err := bulkInsertGameCompaniesPairs(tx, companyGameIDs, companyIDs, companyIsDeveloper, companyIsPublisher); err != nil {
+	if err := bulkInsertGameCompaniesPairs(tx, companyGameIDs, companyIDs, companyIsDeveloper, companyIsPublisher, batchCfg.Companies); err != nil {
 		return fmt.Errorf("failed to bulk link companies: %w", err)
 	}
-	if err := bulkInsertGameMedia(tx, mediaGameIDs, mediaIgdbIDs, mediaTypes, mediaURLs, mediaSortOrders); err != nil {
+	if err := bulkInsertGameMedia(tx, mediaGameIDs, mediaIgdbIDs, mediaTypes, mediaURLs, mediaSortOrders, batchCfg.Media); err != nil {
 		return fmt.Errorf("failed to bulk insert media: %w", err)
 	}
 
