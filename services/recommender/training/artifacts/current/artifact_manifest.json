@@ -1,0 +1,17 @@
+{
+    "model_version": "20260313T164930Z",
+    "feature_schema_version": "recommender_feature_schema_v1",
+    "candidate_index_map_path": "candidate_index_map.json",
+    "popularity_prior_path": "popularity_prior.json",
+    "training_config": {
+        "train_ratio": 0.8,
+        "validation_ratio": 0.1,
+        "k": 10,
+        "epochs": 12,
+        "batch_size": 64,
+        "model_format": ".keras"
+    },
+    "random_seed": 42,
+    "dataset_hash": "18a6b8ed0c438eb03a4ccd30fd8a1412d073210ea6f6b50d837f049941c8c60d",
+    "git_commit": "3239f32d49253e2665d46521c95c4002d4f53082"
+}

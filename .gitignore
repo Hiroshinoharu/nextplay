@@ -44,9 +44,7 @@ coverage.xml
 services/recommender/training/input_interactions.csv
 services/recommender/training/user_interactions_*.csv
 services/recommender/training/runs/
-services/recommender/training/artifacts/current/model.keras
-services/recommender/training/artifacts/current/artifact_manifest.json
-services/recommender/training/artifacts/current/candidate_index_map.json
+# The active serving bundle is committed so hosted builds can include it.
 
 # === Docker ===
 # Ignore build artifacts and cache
