@@ -88,17 +88,13 @@ func Load(defaults Defaults) (Config, error) {
 
 // Loads basic dotenv (optional) using ENV_FILE if provided.
 func loadDotEnvCandidateFiles() {
-	// If ENV_FILE is set, load that single file
 	if path := strings.TrimSpace(os.Getenv("ENV_FILE")); path != "" {
 		_ = godotenv.Load(path)
 		return
 	}
 
-	// Otherwise try default local files
-	for _, file := range []string{".env"} {
-		if _, err := os.Stat(file); err == nil {
-			_ = godotenv.Load(file)
-		}
+	if path, ok := findFileUpward(".env"); ok {
+		_ = godotenv.Load(path)
 	}
 }
 
@@ -108,11 +104,31 @@ func loadDotEnvForEnv(env string) {
 		return
 	}
 
-	for _, file := range []string{".env." + env} {
-		if _, err := os.Stat(file); err == nil {
-			_ = godotenv.Load(file)
-		}
+	if path, ok := findFileUpward(".env." + env); ok {
+		_ = godotenv.Load(path)
 	}
+}
+
+func findFileUpward(name string) (string, bool) {
+	start, err := os.Getwd()
+	if err != nil {
+		return "", false
+	}
+
+	dir := start
+	for {
+		candidate := filepath.Join(dir, name)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+
+	return "", false
 }
 
 // getEnv retrieves an environment variable or returns a fallback value.

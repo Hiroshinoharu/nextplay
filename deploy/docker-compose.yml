@@ -1,85 +1,77 @@
-version: '3.9'
-
 services:
-  # -------------------------------------------------------
-  #  POSTGRES DATABASE SERVICE
-  # -------------------------------------------------------
   postgres:
-    image: postgres:16 # Use the official PostgreSQL version 16 image
+    image: postgres:16
     environment:
-      POSTGRES_USER: nextplay       # Database username
-      POSTGRES_PASSWORD: nextplay   # Database password
-      POSTGRES_DB: nextplay         # Database name to create on startup
+      POSTGRES_USER: "${POSTGRES_USER:-nextplay}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
+      POSTGRES_DB: "${POSTGRES_DB:-nextplay}"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro # Initialize DB with schema
-      - ./migrations:/docker-entrypoint-initdb.d/migrations/migrate_igdb_db.sql:ro # Run migrations on first startup
-      - ./migrations:/docker-entrypoint-initdb.d/migrations/add_total_rating.sql:ro # Additional migration
-      - ./migrations:/docker-entrypoint-initdb.d/migrations/add_popularity.sql:ro # Additional migration
+      - ./init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+      - ./migrations:/docker-entrypoint-initdb.d/migrations/migrate_igdb_db.sql:ro
+      - ./migrations:/docker-entrypoint-initdb.d/migrations/add_total_rating.sql:ro
+      - ./migrations:/docker-entrypoint-initdb.d/migrations/add_popularity.sql:ro
     expose:
-      - "5432" # Internal-only database port for other Compose services
-    # Healthcheck ensures Postgres is fully ready before other services start
+      - "5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nextplay"] # Built-in readiness test
-      interval: 5s   # Check every 5 seconds
-      timeout: 5s    # Fail if Postgres doesn't answer in 5s
-      retries: 5     # Retry 5 times before marking unhealthy
-      start_period: 10s # Allow Postgres extra time to boot up
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nextplay}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
-  # -------------------------------------------------------
-  #  USER SERVICE (Go / Fiber)
-  # -------------------------------------------------------
   user:
     build:
       context: ..
-      dockerfile: services/user/Dockerfile # Build Dockerfile located in services/user
+      dockerfile: services/user/Dockerfile
     expose:
-      - "8083" # Internal-only service port
+      - "8083"
     env_file:
       - env/user.env
     environment:
       CONFIG_FILE: /config/config.yaml
       PORT: "8083"
-    volumes:
-      - ./config/config.yaml:/config/config.yaml:ro
-    depends_on:
-      postgres:
-        condition: service_healthy # Only start when Postgres is ready
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://user:8083/health"] # Use container port
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  # -------------------------------------------------------
-  #  GAME SERVICE (Go / Fiber)
-  # -------------------------------------------------------
-  game:
-    build:
-      context: ..
-      dockerfile: services/game/Dockerfile # Build Dockerfile located in services/game
-    expose:
-      - "8081" # Internal-only service port
-    env_file:
-      - env/game.env
-    environment:
-      CONFIG_FILE: /config/config.yaml
-      PORT: "8081"
-      GATEWAY_SERVICE_TOKEN: "${GATEWAY_SERVICE_TOKEN:-nextplay-dev-service-token}"
+      DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL in .env}"
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET in .env}"
+      PASSWORD_PEPPER: "${PASSWORD_PEPPER:?set PASSWORD_PEPPER in .env}"
     volumes:
       - ./config/config.yaml:/config/config.yaml:ro
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://game:8081/health"] # Checks if service responds
+      test: ["CMD", "curl", "-f", "http://user:8083/health"]
       interval: 5s
       timeout: 3s
       retries: 5
-  
-  #-------------------------------------------------------
-  # GAME ETL SERVICE (Go)
-  #-------------------------------------------------------
+
+  game:
+    build:
+      context: ..
+      dockerfile: services/game/Dockerfile
+    expose:
+      - "8081"
+    env_file:
+      - env/game.env
+    environment:
+      CONFIG_FILE: /config/config.yaml
+      PORT: "8081"
+      DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL in .env}"
+      LOCAL_DATABASE_URL: "${LOCAL_DATABASE_URL:?set LOCAL_DATABASE_URL in .env}"
+      GATEWAY_SERVICE_TOKEN: "${GATEWAY_SERVICE_TOKEN:?set GATEWAY_SERVICE_TOKEN in .env}"
+      IGDB_CLIENT_ID: "${IGDB_CLIENT_ID:?set IGDB_CLIENT_ID in .env}"
+      IGDB_ACCESS_TOKEN: "${IGDB_ACCESS_TOKEN:?set IGDB_ACCESS_TOKEN in .env}"
+    volumes:
+      - ./config/config.yaml:/config/config.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://game:8081/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   game-etl:
     build:
       context: ..
@@ -88,6 +80,11 @@ services:
       - env/game.env
     environment:
       CONFIG_FILE: /config/config.yaml
+      DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL in .env}"
+      LOCAL_DATABASE_URL: "${LOCAL_DATABASE_URL:?set LOCAL_DATABASE_URL in .env}"
+      GATEWAY_SERVICE_TOKEN: "${GATEWAY_SERVICE_TOKEN:?set GATEWAY_SERVICE_TOKEN in .env}"
+      IGDB_CLIENT_ID: "${IGDB_CLIENT_ID:?set IGDB_CLIENT_ID in .env}"
+      IGDB_ACCESS_TOKEN: "${IGDB_ACCESS_TOKEN:?set IGDB_ACCESS_TOKEN in .env}"
     volumes:
       - ./config/config.yaml:/config/config.yaml:ro
     depends_on:
@@ -97,23 +94,19 @@ services:
     profiles: ["etl"]
     restart: "no"
 
-  # -------------------------------------------------------
-  #  RECOMMENDER SERVICE (Python FastAPI)
-  # -------------------------------------------------------
   recommender:
     build:
-      context: .. # Build from the root directory
-      dockerfile: services/recommender/Dockerfile # Specify recommender Dockerfile 
+      context: ..
+      dockerfile: services/recommender/Dockerfile
     expose:
-      - "8082" # Internal-only service port
+      - "8082"
     env_file:
       - env/recommender.env
     environment:
       CONFIG_FILE: /config/config.yaml
       PORT: "8082"
-      GATEWAY_SERVICE_TOKEN: "${GATEWAY_SERVICE_TOKEN:-nextplay-dev-service-token}"
-      # Hybrid ranking weights: defaults below = balanced profile.
-      # Override these via environment or Make targets for A/B tuning.
+      DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL in .env}"
+      GATEWAY_SERVICE_TOKEN: "${GATEWAY_SERVICE_TOKEN:?set GATEWAY_SERVICE_TOKEN in .env}"
       RANK_WEIGHT_LIKED_KEYWORD: "${RANK_WEIGHT_LIKED_KEYWORD:-4.0}"
       RANK_WEIGHT_LIKED_PLATFORM: "${RANK_WEIGHT_LIKED_PLATFORM:-2.5}"
       RANK_WEIGHT_ANSWER_TOKEN: "${RANK_WEIGHT_ANSWER_TOKEN:-1.2}"
@@ -134,27 +127,24 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      # Uses FastAPI /docs endpoint as a health indicator
       test: ["CMD", "curl", "-f", "http://recommender:8082/health"]
       interval: 5s
       timeout: 3s
       retries: 5
 
-  # -------------------------------------------------------
-  #  API GATEWAY (Go / Fiber)
-  # -------------------------------------------------------
   gateway:
     build:
       context: ..
-      dockerfile: services/gateway/Dockerfile # Build gateway from its Dockerfile
+      dockerfile: services/gateway/Dockerfile
     ports:
-      - "${GATEWAY_HOST_PORT:-18084}:8084" # Main entry point for host <-> backend API
+      - "${GATEWAY_HOST_PORT:-18084}:8084"
     env_file:
       - env/gateway.env
-    environment:      
+    environment:
       CONFIG_FILE: /config/config.yaml
       PORT: "8084"
-      GATEWAY_SERVICE_TOKEN: "${GATEWAY_SERVICE_TOKEN:-nextplay-dev-service-token}"
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET in .env}"
+      GATEWAY_SERVICE_TOKEN: "${GATEWAY_SERVICE_TOKEN:?set GATEWAY_SERVICE_TOKEN in .env}"
       APP_ENV: "${APP_ENV:-development}"
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-http://localhost:${FRONTEND_HOST_PORT:-5173},http://127.0.0.1:${FRONTEND_HOST_PORT:-5173},http://localhost:5174,http://127.0.0.1:5174}"
       AUTH_RATE_LIMIT_MAX: "${AUTH_RATE_LIMIT_MAX:-10}"
@@ -168,29 +158,26 @@ services:
       - ./config/config.yaml:/config/config.yaml:ro
     depends_on:
       user:
-        condition: service_healthy      # Wait until user service responds
+        condition: service_healthy
       game:
-        condition: service_healthy      # Wait until game service responds
+        condition: service_healthy
       recommender:
-        condition: service_healthy      # Wait until recommender is healthy
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://gateway:8084/health"] # Gateway health check
+      test: ["CMD", "curl", "-f", "http://gateway:8084/health"]
       interval: 5s
       timeout: 3s
       retries: 5
 
-  # -------------------------------------------------------
-  #  FRONTEND SERVICE (React / Vite)
-  # -------------------------------------------------------
   frontend:
     build:
       context: ..
-      dockerfile: frontend/Dockerfile # Build frontend Dockerfile
+      dockerfile: frontend/Dockerfile
     ports:
-      - "${FRONTEND_HOST_PORT:-5173}:80" # Expose frontend locally
+      - "${FRONTEND_HOST_PORT:-5173}:80"
     depends_on:
       gateway:
-        condition: service_healthy # Only start UI when backend gateway works
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost/api/health >/dev/null 2>&1 || exit 1"]
       interval: 10s
@@ -199,3 +186,4 @@ services:
 
 volumes:
   postgres_data:
+

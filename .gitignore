@@ -92,3 +92,6 @@ deploy/env
 
 # Batch Scripts
 *.bat
+# Local Kubernetes secret material
+deploy/bridge/base/nextplay-secrets.yaml
+

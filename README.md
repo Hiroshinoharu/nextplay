@@ -65,18 +65,18 @@ The remaining work is mostly around product depth and operational hardening rath
 
 ### Run the Full Stack with Docker Compose
 
-1. Review the env files in `deploy/env/`.
-   - Compose reads `game.env`, `gateway.env`, `recommender.env`, and `user.env`.
+1. Copy `.env.example` to `.env` and replace every placeholder secret before starting the stack.
+   - Compose still reads the non-secret defaults in `deploy/env/` for service URLs and tuning values.
 2. Start the stack from the repo root:
 
 ```bash
-docker compose -f deploy/docker-compose.yml up -d --build
+docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
 ```
 
 If `5173` or `18084` is already published by the desktop bridge or another local stack, override the host ports:
 
 ```bash
-FRONTEND_HOST_PORT=5175 GATEWAY_HOST_PORT=18085 docker compose -f deploy/docker-compose.yml up -d --build
+FRONTEND_HOST_PORT=5175 GATEWAY_HOST_PORT=18085 docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
 ```
 
 3. Check the main endpoints:
@@ -92,15 +92,15 @@ If you override the host ports, use those values in the URLs above.
 To expose PostgreSQL to desktop clients such as DBeaver or pgAdmin:
 
 ```bash
-docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.postgres-host.yml up -d --build
+docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.postgres-host.yml up -d --build
 ```
 
-Then connect to `127.0.0.1:5432` with database `nextplay`, username `nextplay`, and password `nextplay`. Do not use `0.0.0.0` as the client host value.
+Then connect to `127.0.0.1:5432` with the database, username, and password from your repo-root `.env` file. Do not use `0.0.0.0` as the client host value.
 
 If the stack is already running, recreate only PostgreSQL with the host binding:
 
 ```bash
-docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.postgres-host.yml up -d --force-recreate --no-deps postgres
+docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.postgres-host.yml up -d --force-recreate --no-deps postgres
 ```
 
 More detail: [docs/postgres-dbeaver-access.md](docs/postgres-dbeaver-access.md)
@@ -117,7 +117,7 @@ curl http://localhost:18084/api/health/recommender
 5. Stop the stack when finished:
 
 ```bash
-docker compose -f deploy/docker-compose.yml down
+docker compose --env-file .env -f deploy/docker-compose.yml down
 ```
 
 ### Run the Game ETL Manually
@@ -125,7 +125,7 @@ docker compose -f deploy/docker-compose.yml down
 The ETL service is configured as an optional Compose profile.
 
 ```bash
-docker compose -f deploy/docker-compose.yml run --rm game-etl
+docker compose --env-file .env -f deploy/docker-compose.yml run --rm game-etl
 ```
 
 ### Run the Frontend Against the Local Gateway
@@ -239,10 +239,13 @@ GitHub Actions runs the following in `.github/workflows/ci.yml`:
 
 Kubernetes manifests live under `kube/base`, with desktop-oriented overlays under `kube/overlays/desktop`.
 
+The checked-in bridge manifests expect a `nextplay-secrets` Kubernetes Secret; start from `deploy/bridge/base/nextplay-secrets.example.yaml` when provisioning one.
 ## Known Gaps
 
 - catalog ingestion and freshness workflows still need more operational polish;
 - recommendation quality work is ongoing around calibration, richer data, and rollout controls;
 - observability, security hardening, and deployment operations still need expansion;
 - the frontend needs more product depth beyond the current discovery and recommendation flow.
+
+
 

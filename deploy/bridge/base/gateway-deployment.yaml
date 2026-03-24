@@ -37,11 +37,17 @@ spec:
                     - name: GAME_SERVICE_URL
                       value: "http://game.deploy.svc.cluster.local:8081"
                     - name: GATEWAY_SERVICE_TOKEN
-                      value: "nextplay-dev-service-token"
+                      valueFrom:
+                        secretKeyRef:
+                          name: nextplay-secrets
+                          key: gateway_service_token
                     - name: GATEWAY_UPSTREAM_TIMEOUT_SECONDS
                       value: "60"
                     - name: JWT_SECRET
-                      value: "FOHnngwPWbmYHSDAguUNItjx7WDmhFcqWLv0kI7cRX8="
+                      valueFrom:
+                        secretKeyRef:
+                          name: nextplay-secrets
+                          key: jwt_secret
                     - name: PORT
                       value: "8084"
                     - name: RECOMMENDER_SERVICE_URL

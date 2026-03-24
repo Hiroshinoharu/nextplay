@@ -31,7 +31,10 @@ spec:
                     - name: POSTGRES_DB
                       value: "nextplay"
                     - name: POSTGRES_PASSWORD
-                      value: "nextplay"
+                      valueFrom:
+                        secretKeyRef:
+                          name: nextplay-secrets
+                          key: postgres_password
                     - name: POSTGRES_USER
                       value: "nextplay"
                   livenessProbe:
@@ -60,6 +63,3 @@ spec:
                 - name: postgres-initdb-scripts
                   configMap:
                     name: postgres-initdb-scripts
-
-
-

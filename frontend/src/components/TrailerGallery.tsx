@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type TouchEvent } from 'react'
 import styled from 'styled-components'
+import { isAsciiYouTubeVideoId, takeUntilAnyDelimiter } from '../utils/text'
 import {
   FramePanel,
   FrameWrap,
@@ -25,17 +26,17 @@ type TrailerItem = {
   key: string
 }
 
-const youtubeIdPattern = /^[a-zA-Z0-9_-]{11}$/
-
 const toYouTubeVideoId = (value: string) => {
   const trimmed = value.trim()
   if (!trimmed) return null
-  if (youtubeIdPattern.test(trimmed)) return trimmed
+  if (isAsciiYouTubeVideoId(trimmed)) return trimmed
   if (trimmed.includes('youtu.be/')) {
-    return trimmed.split('youtu.be/')[1]?.split(/[?&/]/)[0] ?? null
+    const candidate = trimmed.split('youtu.be/')[1] ?? ''
+    return takeUntilAnyDelimiter(candidate, ['?', '&', '/']) || null
   }
   if (trimmed.includes('/embed/')) {
-    return trimmed.split('/embed/')[1]?.split(/[?&/]/)[0] ?? null
+    const candidate = trimmed.split('/embed/')[1] ?? ''
+    return takeUntilAnyDelimiter(candidate, ['?', '&', '/']) || null
   }
   if (trimmed.includes('youtube.com/watch')) {
     try {
@@ -238,3 +239,5 @@ const ThumbFallback = styled.span`
 
 
 export default TrailerGallery
+
+

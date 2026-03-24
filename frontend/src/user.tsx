@@ -20,6 +20,7 @@ import {
   type AuthUser,
 } from "./utils/authUser";
 import { type ThemeMode } from "./utils/theme";
+import { trimTrailingSlashes } from "./utils/text";
 import "./user.css";
 
 type UserPageProps = {
@@ -55,7 +56,7 @@ const hasMeaningfulInteraction = (item: UserInteraction) =>
   item.favorited === true ||
   Boolean(item.review?.trim());
 
-const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(/\/+$/, "");
+const RAW_BASE_URL = trimTrailingSlashes(import.meta.env.VITE_API_URL ?? "/api");
 const API_ROOT = RAW_BASE_URL.endsWith("/api")
   ? RAW_BASE_URL.slice(0, -4)
   : RAW_BASE_URL;
@@ -858,6 +859,7 @@ const UserPage = ({ authUser, onSignOut, theme, onThemeChange }: UserPageProps) 
 };
 
 export default UserPage;
+
 
 
 

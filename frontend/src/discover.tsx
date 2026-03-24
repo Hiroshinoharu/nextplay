@@ -12,6 +12,14 @@ import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
 import { type ThemeMode } from "./utils/theme";
 import {
+  collapseWhitespace,
+  normalizeAlphaNumericText,
+  replaceAllCharacters,
+  splitOnAnyDelimiter,
+  toSentenceCaseFromSlug,
+  trimTrailingSlashes,
+} from "./utils/text";
+import {
   QUESTIONNAIRE_V1,
   buildRecommendRequestFromQuestionnaire,
   createEmptyQuestionnaireAnswers,
@@ -176,11 +184,8 @@ const parseBoundedInt = (
   return normalized;
 };
 
-const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(
-  /\/+$/,
-  "",
-);
-const API_ROOT = RAW_BASE_URL.endsWith("/api")
+const RAW_BASE_URL = trimTrailingSlashes(import.meta.env.VITE_API_URL ?? "/api");
+const API_ROOT =RAW_BASE_URL.endsWith("/api")
   ? RAW_BASE_URL.slice(0, -4)
   : RAW_BASE_URL;
 
@@ -191,21 +196,35 @@ const DEFAULT_RECENT_RELEASE_WINDOW_MONTHS =
     MAX_RECENT_RELEASE_WINDOW_MONTHS,
   ) ?? 2;
 
-const collapseWhitespace = (value?: string) => {
-  if (!value) return "";
-  return value.replace(/\s+/g, " ").trim();
-};
-
 const normalizeTitleForSearch = (value?: string) =>
-  collapseWhitespace(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  normalizeAlphaNumericText(collapseWhitespace(value));
+
+const VARIANT_TITLE_TOKENS = new Set([
+  "anthology",
+  "chapter",
+  "collection",
+  "dancing",
+  "definitive",
+  "deluxe",
+  "dlc",
+  "episode",
+  "pack",
+  "reload",
+  "remake",
+  "remaster",
+  "remastered",
+  "royal",
+  "season",
+  "strikers",
+  "tactica",
+  "ultimate",
+  "update",
+]);
 
 const isLikelyVariantTitle = (value?: string) =>
-  /\b(remaster(?:ed)?|remake|reload|royal|strikers|tactica|dancing|episode|season|chapter|update|pack|dlc|definitive|deluxe|ultimate|collection|anthology)\b/i.test(
-    value ?? "",
-  );
+  normalizeTitleForSearch(value)
+    .split(" ")
+    .some((token) => VARIANT_TITLE_TOKENS.has(token));
 
 const formatReleaseDate = (value?: string) => {
   if (!value) return null;
@@ -275,18 +294,40 @@ const clampNumber = (value: number, min: number, max: number) =>
 
 const tokenizePreferenceText = (value?: string) => {
   if (!value) return [] as string[];
-  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, " ");
+  const normalized = normalizeAlphaNumericText(value);
   return normalized
     .split(" ")
     .map((part) => part.trim())
     .filter((part) => part.length >= 3);
 };
-
 const normalizeFacetText = (value?: string) =>
-  collapseWhitespace(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+  normalizeAlphaNumericText(collapseWhitespace(value));
+const MARATHON_KEYWORD_PHRASES = [
+  "4x",
+  "adventure",
+  "city builder",
+  "crafting",
+  "grand strategy",
+  "management",
+  "open world",
+  "role playing",
+  "rpg",
+  "sandbox",
+  "sim",
+  "simulation",
+  "strategy",
+  "survival",
+  "turn based",
+] as const;
+
+const containsWholePhrase = (value: string, phrase: string) =>
+  ` ${value} `.includes(` ${phrase} `);
+
+const hasMarathonGenreSignal = (value?: string) => {
+  const normalized = normalizeFacetText(value);
+  if (!normalized) return false;
+  return MARATHON_KEYWORD_PHRASES.some((phrase) => containsWholePhrase(normalized, phrase));
+};
 
 const tokenizeFacetText = (value?: string) =>
   normalizeFacetText(value)
@@ -456,14 +497,12 @@ const recommendationRawSignalFromGame = (
 const parseGenres = (value?: string) => {
   if (!value) return [] as string[];
   const unique = new Set<string>();
-  value
-    .split(/[,/|]/)
+  splitOnAnyDelimiter(value, [",", "/", "|"])
     .map((part) => collapseWhitespace(part))
     .filter(Boolean)
     .forEach((part) => unique.add(part));
   return Array.from(unique);
 };
-
 const normalizeGenreFilterValue = (value?: string) =>
   collapseWhitespace(value).toLowerCase();
 
@@ -606,12 +645,7 @@ const formatPlatformSummary = (platformNames?: string[]) => {
 };
 
 const sentenceCase = (value: string) =>
-  value
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/^\w/, (char) => char.toUpperCase());
-
+  toSentenceCaseFromSlug(value);
 const NSFW_TERMS = [
   "nsfw",
   "adult",
@@ -681,7 +715,7 @@ const NSFW_TERMS = [
 ];
 
 const normalizeFilterText = (value: string) =>
-  value.toLowerCase().replace(/[^a-z0-9+]+/g, " ").trim();
+  normalizeAlphaNumericText(value, { allowPlus: true });
 const NORMALIZED_NSFW_TERMS = NSFW_TERMS.map((term) => normalizeFilterText(term))
   .filter(Boolean);
 
@@ -1975,7 +2009,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
     const tokenSet = new Set<string>();
     for (const selected of Object.values(questionnaireAnswers)) {
       for (const value of selected) {
-        tokenizePreferenceText(value.replace(/_/g, " ")).forEach((token) => tokenSet.add(token));
+        tokenizePreferenceText(replaceAllCharacters(value, "_", " ")).forEach((token) => tokenSet.add(token));
       }
     }
     return tokenSet;
@@ -2269,8 +2303,6 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
         if (scoreB !== scoreA) return scoreB - scoreA;
         return hashString(`wildcard:${a.id}`) - hashString(`wildcard:${b.id}`);
       });
-    const MARATHON_GENRE_MATCHER =
-      /\b(rpg|role[- ]?playing|strategy|simulation|sim|management|city builder|4x|grand strategy|turn[- ]based|sandbox|survival|crafting|open world|adventure)\b/i;
     const scoreMarathon = (game: GameItem) =>
       getRating(game) * 0.8 + Math.log10((getVoteCount(game) || 1) + 1) * 10;
     const strictMarathon = [...safePool]
@@ -2282,7 +2314,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
           .join(" ");
         return (
           isReleasedGame(game) &&
-          MARATHON_GENRE_MATCHER.test(metadata) &&
+          hasMarathonGenreSignal(metadata) &&
           rating >= 60 &&
           votes >= 25 &&
           (game.popularity ?? 0) <= 2200
@@ -3706,6 +3738,10 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
 }
 
 export default DiscoverPage;
+
+
+
+
 
 
 

@@ -3,6 +3,8 @@
 RETRAIN_SCRIPT := services/recommender/training/retrain.sh
 TRAINING_DIR := services/recommender/training
 COMPOSE_FILE := deploy/docker-compose.yml
+COMPOSE_ENV_FILE := .env
+DOCKER_COMPOSE := docker compose --env-file $(COMPOSE_ENV_FILE) -f $(COMPOSE_FILE)
 
 ifeq ($(OS),Windows_NT)
 SHELL := C:/Progra~1/Git/usr/bin/sh.exe
@@ -34,7 +36,7 @@ retrain-export:
 	out="$(TRAINING_DIR)/user_interactions_$${ts}.csv"; \
 	tmp="$${out}.tmp"; \
 	rm -f "$${tmp}"; \
-	docker compose -f $(COMPOSE_FILE) exec -T postgres psql -U nextplay -d nextplay -c "\copy (SELECT user_id::text AS user_id, game_id::text AS game_id, COALESCE(rating::text, '') AS rating, COALESCE(review, '') AS review, CASE WHEN liked IS NULL THEN '' WHEN liked THEN 'true' ELSE 'false' END AS liked, CASE WHEN favorited IS NULL THEN '' WHEN favorited THEN 'true' ELSE 'false' END AS favorited, to_char(COALESCE(\"timestamp\", now()) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS.MS +0000') AS timestamp FROM user_interactions ORDER BY COALESCE(\"timestamp\", now())) TO STDOUT WITH (FORMAT CSV, HEADER true)" > "$${tmp}"; \
+	$(DOCKER_COMPOSE) exec -T postgres psql -U nextplay -d nextplay -c "\copy (SELECT user_id::text AS user_id, game_id::text AS game_id, COALESCE(rating::text, '') AS rating, COALESCE(review, '') AS review, CASE WHEN liked IS NULL THEN '' WHEN liked THEN 'true' ELSE 'false' END AS liked, CASE WHEN favorited IS NULL THEN '' WHEN favorited THEN 'true' ELSE 'false' END AS favorited, to_char(COALESCE(\"timestamp\", now()) AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS.MS +0000') AS timestamp FROM user_interactions ORDER BY COALESCE(\"timestamp\", now())) TO STDOUT WITH (FORMAT CSV, HEADER true)" > "$${tmp}"; \
 	test -s "$${tmp}"; \
 	mv "$${tmp}" "$${out}"; \
 	echo "Exported $${out}"
@@ -48,7 +50,7 @@ retrain-from-db-local: retrain-export
 	}
 
 recommender-balanced:
-	@docker compose -f $(COMPOSE_FILE) up -d --build recommender gateway
+	@$(DOCKER_COMPOSE) up -d --build recommender gateway
 	@echo "Recommender profile: balanced"
 
 recommender-favorites-strong:
@@ -57,7 +59,7 @@ recommender-favorites-strong:
 	RANK_WEIGHT_FAVORITE_GENRE="3.0" \
 	RANK_WEIGHT_FAVORITE_TEXT_SIM="8.5" \
 	RANK_WEIGHT_FAVORITE_SEED_BOOST="12.0" \
-	docker compose -f $(COMPOSE_FILE) up -d --build recommender gateway
+	$(DOCKER_COMPOSE) up -d --build recommender gateway
 	@echo "Recommender profile: favorites-strong"
 
 retrain-seeded-xl:

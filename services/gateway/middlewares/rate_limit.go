@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -46,15 +47,15 @@ func NewAvailabilityRateLimiter() fiber.Handler {
 
 // newRateLimiter returns a rate limiter that enforces per-route rate limits on incoming requests.
 // The rate limiter is configured with the following settings:
-// - Max: the maximum number of requests allowed within the expiration window.
-//   This value is read from the environment variable specified in settings.maxEnvVar.
-//   If the value is not set or is not a positive integer, the default value specified in settings.defaultMax is used.
-// - Expiration: the time duration of the rate limit window.
-//   This value is read from the environment variable specified in settings.windowEnvVar.
-//   If the value is not set or is not a positive integer, the default value specified in settings.defaultWindowInSeconds is used.
-// - KeyGenerator: a function that generates a unique key for each request based on the client's IP address and the route path.
-// - LimitReached: a function that is called when the rate limit is reached.
-//   This function should return an error that will be returned to the client when the rate limit is reached.
+//   - Max: the maximum number of requests allowed within the expiration window.
+//     This value is read from the environment variable specified in settings.maxEnvVar.
+//     If the value is not set or is not a positive integer, the default value specified in settings.defaultMax is used.
+//   - Expiration: the time duration of the rate limit window.
+//     This value is read from the environment variable specified in settings.windowEnvVar.
+//     If the value is not set or is not a positive integer, the default value specified in settings.defaultWindowInSeconds is used.
+//   - KeyGenerator: a function that generates a unique key for each request based on the client's IP address and the route path.
+//   - LimitReached: a function that is called when the rate limit is reached.
+//     This function should return an error that will be returned to the client when the rate limit is reached.
 func newRateLimiter(settings rateLimitSettings) fiber.Handler {
 	return limiter.New(limiter.Config{
 		Max:        positiveIntFromEnv(settings.maxEnvVar, settings.defaultMax),
@@ -64,11 +65,7 @@ func newRateLimiter(settings rateLimitSettings) fiber.Handler {
 			if route := c.Route(); route != nil && strings.TrimSpace(route.Path) != "" {
 				routePath = route.Path
 			}
-			forwardedFor := strings.TrimSpace(c.Get("X-Forwarded-For"))
-			if forwardedFor != "" {
-				return forwardedFor + ":" + routePath
-			}
-			return c.IP() + ":" + routePath
+			return rateLimitKeyIP(c) + ":" + routePath
 		},
 		LimitReached: func(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
@@ -86,4 +83,35 @@ func positiveIntFromEnv(name string, fallback int) int {
 		}
 	}
 	return fallback
+}
+
+func rateLimitKeyIP(c *fiber.Ctx) string {
+	if trustProxyHeaders() {
+		if forwardedIP := firstForwardedIP(c.Get("X-Forwarded-For")); forwardedIP != "" {
+			return forwardedIP
+		}
+	}
+	return c.IP()
+}
+
+func trustProxyHeaders() bool {
+	raw := strings.TrimSpace(os.Getenv("TRUST_PROXY_HEADERS"))
+	if raw == "" {
+		return false
+	}
+	parsed, err := strconv.ParseBool(raw)
+	return err == nil && parsed
+}
+
+func firstForwardedIP(header string) string {
+	for _, candidate := range strings.Split(header, ",") {
+		trimmed := strings.TrimSpace(candidate)
+		if trimmed == "" {
+			continue
+		}
+		if parsed := net.ParseIP(trimmed); parsed != nil {
+			return parsed.String()
+		}
+	}
+	return ""
 }

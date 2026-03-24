@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -37,7 +38,7 @@ func main() {
 	app.Use(observability.AccessLog("game"))
 
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
+		AllowOrigins: resolveAllowedOrigins(cfg.FrontendURL),
 		AllowHeaders: "Content-Type, Authorization",
 	}))
 
@@ -68,4 +69,39 @@ func main() {
 	routes.SetUpRoutes(app)
 
 	app.Listen(":" + cfg.Port)
+}
+
+func resolveAllowedOrigins(configuredFrontendURL string) string {
+	if raw := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS")); raw != "" {
+		origins := uniqueOrigins(strings.Split(raw, ",")...)
+		if len(origins) > 0 {
+			return strings.Join(origins, ",")
+		}
+	}
+
+	origins := uniqueOrigins(
+		configuredFrontendURL,
+		"http://localhost:5173",
+		"http://127.0.0.1:5173",
+		"http://localhost:5174",
+		"http://127.0.0.1:5174",
+	)
+	return strings.Join(origins, ",")
+}
+
+func uniqueOrigins(values ...string) []string {
+	seen := make(map[string]struct{}, len(values))
+	origins := make([]string, 0, len(values))
+	for _, value := range values {
+		origin := strings.TrimSpace(value)
+		if origin == "" || origin == "*" {
+			continue
+		}
+		if _, ok := seen[origin]; ok {
+			continue
+		}
+		seen[origin] = struct{}{}
+		origins = append(origins, origin)
+	}
+	return origins
 }

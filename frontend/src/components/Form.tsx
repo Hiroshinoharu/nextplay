@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import styled from 'styled-components';
 import { normalizeAuthUser } from '../utils/authUser';
+import { trimTrailingSlashes } from '../utils/text';
 
 type AuthFormProps = {
   apiBaseUrl?: string;
@@ -58,7 +59,7 @@ const PASSWORD_POLICY_TEXT =
   'Password must be at least 8 characters and include upper-case, lower-case, number, and special character.';
 
 const Form = ({ apiBaseUrl, onAuthSuccess, initialEmail, initialMode = 'login' }: AuthFormProps) => {
-  const rawBaseUrl = (apiBaseUrl ?? import.meta.env.VITE_API_URL ?? '/api').replace(/\/+$/, '');
+  const rawBaseUrl = trimTrailingSlashes(apiBaseUrl ?? import.meta.env.VITE_API_URL ?? '/api');
   const apiRoot = rawBaseUrl.endsWith('/api') ? rawBaseUrl.slice(0, -4) : rawBaseUrl;
   const apiUrl = useCallback((path: string) => {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
@@ -950,3 +951,4 @@ const StyledWrapper = styled.div`
   }`;
 
 export default Form;
+

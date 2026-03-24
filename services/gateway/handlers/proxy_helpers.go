@@ -13,12 +13,15 @@ import (
 // Helper to write error response for proxy handlers
 func writeProxyError(c *fiber.Ctx, err error) error {
 	if httpErr, ok := err.(*clients.HTTPError); ok {
+		if httpErr.Status >= fiber.StatusInternalServerError {
+			return c.Status(httpErr.Status).JSON(fiber.Map{"error": "upstream service error"})
+		}
 		if len(httpErr.Body) == 0 {
 			return c.Status(httpErr.Status).JSON(fiber.Map{"error": "upstream error"})
 		}
 		return c.Status(httpErr.Status).Send(httpErr.Body)
 	}
-	return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": err.Error()})
+	return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{"error": "upstream request failed"})
 }
 
 // Helper to send byte response for proxy handlers

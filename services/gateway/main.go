@@ -132,7 +132,12 @@ func globalErrorHandler(c *fiber.Ctx, err error) error {
 		code = e.Code
 	}
 
+	message := "internal server error"
+	if code < fiber.StatusInternalServerError {
+		message = err.Error()
+	}
+
 	return c.Status(code).JSON(fiber.Map{
-		"error": err.Error(),
+		"error": message,
 	})
 }

@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
 	gatewayauth "github.com/maxceban/nextplay/services/gateway/auth"
+	"github.com/maxceban/nextplay/services/gateway/clients"
 )
 
 // TestForwardingHeadersIncludeAuthorizationAndServiceToken tests that the forwardingHeaders function
@@ -64,5 +66,33 @@ func TestForwardingHeadersBuildAuthorizationFromSessionCookie(t *testing.T) {
 
 	if resp.StatusCode != fiber.StatusNoContent {
 		t.Fatalf("expected status %d, got %d", fiber.StatusNoContent, resp.StatusCode)
+	}
+}
+
+func TestWriteProxyErrorSanitizesUpstreamServerErrors(t *testing.T) {
+	app := fiber.New()
+	app.Get("/proxy", func(c *fiber.Ctx) error {
+		return writeProxyError(c, &clients.HTTPError{
+			Status: fiber.StatusBadGateway,
+			Body:   []byte(`{"error":"db timeout"}`),
+		})
+	})
+
+	resp, err := app.Test(httptest.NewRequest("GET", "/proxy", nil))
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadGateway {
+		t.Fatalf("expected status %d, got %d", fiber.StatusBadGateway, resp.StatusCode)
+	}
+
+	var payload map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode response body: %v", err)
+	}
+	if payload["error"] != "upstream service error" {
+		t.Fatalf("expected sanitized upstream error message, got %q", payload["error"])
 	}
 }

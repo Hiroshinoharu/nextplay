@@ -3,8 +3,10 @@ package clients
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"time"
 )
 
 // HTTPError preserves upstream status codes and bodies for proxy responses.
@@ -17,8 +19,10 @@ func (e *HTTPError) Error() string {
 	return string(e.Body)
 }
 
+const maxUpstreamBodyBytes = 2 * 1024 * 1024
+
 // Global HTTP client for all requests
-var HttpClient = &http.Client{}
+var HttpClient = &http.Client{Timeout: 20 * time.Second}
 
 var (
 	UserServiceURL        string
@@ -39,22 +43,20 @@ func doGet(url string, headers map[string]string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Close the response body when the function returns
 	defer resp.Body.Close()
 
-	// Read the response body
-	body, _ := io.ReadAll(resp.Body)
+	body, err := readResponseBody(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 
-	// Unmarshal the response into a generic container
 	var data interface{}
 	_ = json.Unmarshal(body, &data)
 
-	// Check for HTTP error status codes
 	if resp.StatusCode >= 400 {
 		return nil, &HTTPError{Status: resp.StatusCode, Body: body}
 	}
 
-	// Return the unmarshaled data and no error
 	return data, nil
 }
 
@@ -69,27 +71,23 @@ func doPost(url string, body []byte, headers map[string]string) (interface{}, er
 		req.Header.Set(key, value)
 	}
 	resp, err := HttpClient.Do(req)
-	// Handle errors and read response
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	raw, err := readResponseBody(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	// Close the response body when the function returns
-	defer resp.Body.Close()
-
-	// Read the response body
-	raw, _ := io.ReadAll(resp.Body)
-
-	// Unmarshal the response into a generic container
 	var data interface{}
 	_ = json.Unmarshal(raw, &data)
 
-	// Check for HTTP error status codes
 	if resp.StatusCode >= 400 {
 		return nil, &HTTPError{Status: resp.StatusCode, Body: raw}
 	}
 
-	// Return the unmarshaled data and no error
 	return data, nil
 }
 
@@ -109,7 +107,10 @@ func doPut(url string, body []byte, headers map[string]string) (interface{}, err
 	}
 	defer resp.Body.Close()
 
-	raw, _ := io.ReadAll(resp.Body)
+	raw, err := readResponseBody(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	var data interface{}
 	_ = json.Unmarshal(raw, &data)
 	if resp.StatusCode >= 400 {
@@ -134,7 +135,10 @@ func doPatch(url string, body []byte, headers map[string]string) (interface{}, e
 	}
 	defer resp.Body.Close()
 
-	raw, _ := io.ReadAll(resp.Body)
+	raw, err := readResponseBody(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	var data interface{}
 	_ = json.Unmarshal(raw, &data)
 	if resp.StatusCode >= 400 {
@@ -158,7 +162,10 @@ func doDelete(url string, headers map[string]string) (interface{}, error) {
 	}
 	defer resp.Body.Close()
 
-	raw, _ := io.ReadAll(resp.Body)
+	raw, err := readResponseBody(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	var data interface{}
 	_ = json.Unmarshal(raw, &data)
 	if resp.StatusCode >= 400 {
@@ -169,21 +176,18 @@ func doDelete(url string, headers map[string]string) (interface{}, error) {
 
 // Helper function to perform GET requests returning raw response data
 func doGetRaw(url string) (int, []byte, error) {
-	// Create the GET request
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	// Perform the request
 	resp, err := HttpClient.Do(req)
 	if err != nil {
 		return 0, nil, err
 	}
 	defer resp.Body.Close()
 
-	// Read the response body
-	data, err := io.ReadAll(resp.Body)
+	data, err := readResponseBody(resp.Body)
 	if err != nil {
 		return resp.StatusCode, nil, err
 	}
@@ -193,4 +197,15 @@ func doGetRaw(url string) (int, []byte, error) {
 // GetRaw exposes raw GET for handlers that need status passthrough
 func GetRaw(url string) (int, []byte, error) {
 	return doGetRaw(url)
+}
+
+func readResponseBody(reader io.Reader) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(reader, maxUpstreamBodyBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maxUpstreamBodyBytes {
+		return nil, fmt.Errorf("upstream response exceeded %d bytes", maxUpstreamBodyBytes)
+	}
+	return body, nil
 }

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"os"
 	"strings"
 
@@ -18,7 +19,7 @@ func RequireServiceAuth(c *fiber.Ctx) error {
 	}
 
 	providedToken := strings.TrimSpace(c.Get("X-Service-Token"))
-	if providedToken == "" || providedToken != expectedToken {
+	if providedToken == "" || subtle.ConstantTimeCompare([]byte(providedToken), []byte(expectedToken)) != 1 {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized service token"})
 	}
 

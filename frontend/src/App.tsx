@@ -12,6 +12,7 @@ import {
   shouldAttachCSRFToken,
 } from "./utils/csrf";
 import { getInitialTheme, THEME_STORAGE_KEY, type ThemeMode } from "./utils/theme";
+import { trimTrailingSlashes } from "./utils/text";
 import Loader from "./components/Loader";
 import LoadingScreen from "./components/LoadingScreen";
 
@@ -63,10 +64,7 @@ type PopularGameResponse = {
 };
 
 // Base URL for API requests, trimmed of trailing slashes
-const RAW_API_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(
-  /\/+$/,
-  "",
-);
+const RAW_API_BASE_URL = trimTrailingSlashes(import.meta.env.VITE_API_URL ?? "/api");
 const API_ROOT = RAW_API_BASE_URL.endsWith("/api")
   ? RAW_API_BASE_URL.slice(0, -4)
   : RAW_API_BASE_URL;
@@ -992,6 +990,9 @@ function App() {
 }
 
 export default App;
+
+
+
 
 
 

@@ -29,19 +29,31 @@ spec:
                   imagePullPolicy: IfNotPresent
                   env:
                     - name: DATABASE_URL
-                      value: "postgres://nextplay:nextplay@postgres.deploy.svc.cluster.local:5432/nextplay?sslmode=disable"
+                      valueFrom:
+                        secretKeyRef:
+                          name: nextplay-secrets
+                          key: database_url
                     - name: ETL_GATEWAY_WRITE_ENABLED
                       value: "0"
                     - name: ETL_GATEWAY_WRITE_LIMIT
                       value: "0"
                     - name: GATEWAY_SERVICE_TOKEN
-                      value: "nextplay-dev-service-token"
+                      valueFrom:
+                        secretKeyRef:
+                          name: nextplay-secrets
+                          key: gateway_service_token
                     - name: GATEWAY_SERVICE_URL
                       value: "http://gateway.deploy.svc.cluster.local:8084"
                     - name: IGDB_ACCESS_TOKEN
-                      value: "u9qt9fupddzrykcr6zo99op85sku9y"
+                      valueFrom:
+                        secretKeyRef:
+                          name: nextplay-secrets
+                          key: igdb_access_token
                     - name: IGDB_CLIENT_ID
-                      value: "1slvq78fhrvhf8ia04mwwy21o9kh2d"
+                      valueFrom:
+                        secretKeyRef:
+                          name: nextplay-secrets
+                          key: igdb_client_id
                     - name: IGDB_MAX_CONCURRENT
                       value: "2"
                     - name: IGDB_MAX_GAMES
@@ -63,7 +75,10 @@ spec:
                     - name: IGDB_RPS
                       value: "2"
                     - name: LOCAL_DATABASE_URL
-                      value: "postgres://nextplay:nextplay@localhost:5432/nextplay?sslmode=disable"
+                      valueFrom:
+                        secretKeyRef:
+                          name: nextplay-secrets
+                          key: local_database_url
                     - name: PORT
                       value: "8081"
                   livenessProbe:

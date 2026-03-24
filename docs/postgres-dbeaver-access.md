@@ -9,7 +9,7 @@ Use the PostgreSQL host override file together with the main Compose file when y
 From the repo root:
 
 ```bash
-docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.postgres-host.yml up -d --build
+docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.postgres-host.yml up -d --build
 ```
 
 This keeps the app services running as usual and also publishes PostgreSQL to the host on `127.0.0.1:5432` by default.
@@ -19,7 +19,7 @@ This keeps the app services running as usual and also publishes PostgreSQL to th
 If the stack is already up and you only need to add host access for PostgreSQL:
 
 ```bash
-docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.postgres-host.yml up -d --force-recreate --no-deps postgres
+docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.postgres-host.yml up -d --force-recreate --no-deps postgres
 ```
 
 That recreates only the `postgres` container with the host port binding.
@@ -30,9 +30,9 @@ Use these values:
 
 - Host: `127.0.0.1`
 - Port: `5432`
-- Database: `nextplay`
-- Username: `nextplay`
-- Password: `nextplay`
+- Database: use `POSTGRES_DB` from your repo-root `.env` file (default `nextplay`)
+- Username: use `POSTGRES_USER` from your repo-root `.env` file (default `nextplay`)
+- Password: use `POSTGRES_PASSWORD` from your repo-root `.env` file
 
 Do not use `0.0.0.0` as the client host value. Use `127.0.0.1` or `localhost`.
 
@@ -41,7 +41,7 @@ Do not use `0.0.0.0` as the client host value. Use `127.0.0.1` or `localhost`.
 If `5432` is already in use on your machine, override it:
 
 ```bash
-POSTGRES_HOST_PORT=55432 docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.postgres-host.yml up -d --force-recreate --no-deps postgres
+POSTGRES_HOST_PORT=55432 docker compose --env-file .env -f deploy/docker-compose.yml -f deploy/docker-compose.postgres-host.yml up -d --force-recreate --no-deps postgres
 ```
 
 Then connect DBeaver to `127.0.0.1:55432`.
@@ -65,3 +65,5 @@ Expected output includes:
 - `Connection refused`: the container is running without the override, or PostgreSQL was recreated without the host port binding. Re-run the `--force-recreate --no-deps postgres` command above.
 - `Connection lost`: close the old DBeaver connection tab and open a fresh connection after the container restart.
 - `Port already allocated`: set `POSTGRES_HOST_PORT` to another value and connect to that port instead.
+
+

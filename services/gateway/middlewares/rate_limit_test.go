@@ -68,3 +68,73 @@ func TestNewAvailabilityRateLimiterUsesSeparateBudget(t *testing.T) {
 		t.Fatalf("expected third availability request to fail with %d, got %d", fiber.StatusTooManyRequests, resp.StatusCode)
 	}
 }
+
+func TestNewAuthRateLimiterIgnoresSpoofedForwardedForByDefault(t *testing.T) {
+	t.Setenv("AUTH_RATE_LIMIT_MAX", "1")
+	t.Setenv("AUTH_RATE_LIMIT_WINDOW_SECONDS", "60")
+	t.Setenv("TRUST_PROXY_HEADERS", "false")
+
+	app := fiber.New()
+	app.Post("/users/login", NewAuthRateLimiter(), func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	firstReq := httptest.NewRequest("POST", "/users/login", nil)
+	firstReq.RemoteAddr = "203.0.113.10:1234"
+	firstReq.Header.Set("X-Forwarded-For", "198.51.100.10")
+	firstResp, err := app.Test(firstReq)
+	if err != nil {
+		t.Fatalf("first app.Test returned error: %v", err)
+	}
+	defer firstResp.Body.Close()
+	if firstResp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("expected first request to succeed with %d, got %d", fiber.StatusNoContent, firstResp.StatusCode)
+	}
+
+	secondReq := httptest.NewRequest("POST", "/users/login", nil)
+	secondReq.RemoteAddr = "203.0.113.10:1234"
+	secondReq.Header.Set("X-Forwarded-For", "198.51.100.11")
+	secondResp, err := app.Test(secondReq)
+	if err != nil {
+		t.Fatalf("second app.Test returned error: %v", err)
+	}
+	defer secondResp.Body.Close()
+	if secondResp.StatusCode != fiber.StatusTooManyRequests {
+		t.Fatalf("expected spoofed forwarded header to be ignored and request to fail with %d, got %d", fiber.StatusTooManyRequests, secondResp.StatusCode)
+	}
+}
+
+func TestNewAuthRateLimiterUsesForwardedForWhenExplicitlyTrusted(t *testing.T) {
+	t.Setenv("AUTH_RATE_LIMIT_MAX", "1")
+	t.Setenv("AUTH_RATE_LIMIT_WINDOW_SECONDS", "60")
+	t.Setenv("TRUST_PROXY_HEADERS", "true")
+
+	app := fiber.New()
+	app.Post("/users/login", NewAuthRateLimiter(), func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	firstReq := httptest.NewRequest("POST", "/users/login", nil)
+	firstReq.RemoteAddr = "203.0.113.10:1234"
+	firstReq.Header.Set("X-Forwarded-For", "198.51.100.10")
+	firstResp, err := app.Test(firstReq)
+	if err != nil {
+		t.Fatalf("first app.Test returned error: %v", err)
+	}
+	defer firstResp.Body.Close()
+	if firstResp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("expected first request to succeed with %d, got %d", fiber.StatusNoContent, firstResp.StatusCode)
+	}
+
+	secondReq := httptest.NewRequest("POST", "/users/login", nil)
+	secondReq.RemoteAddr = "203.0.113.10:1234"
+	secondReq.Header.Set("X-Forwarded-For", "198.51.100.11")
+	secondResp, err := app.Test(secondReq)
+	if err != nil {
+		t.Fatalf("second app.Test returned error: %v", err)
+	}
+	defer secondResp.Body.Close()
+	if secondResp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("expected trusted forwarded header to use a different budget and succeed with %d, got %d", fiber.StatusNoContent, secondResp.StatusCode)
+	}
+}

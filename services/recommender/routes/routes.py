@@ -1,3 +1,4 @@
+import hmac
 import os
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -24,7 +25,7 @@ async def require_service_token(request: Request) -> None:
         )
 
     provided_token = request.headers.get("X-Service-Token", "").strip()
-    if provided_token != expected_token:
+    if not hmac.compare_digest(provided_token, expected_token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="unauthorized service token",

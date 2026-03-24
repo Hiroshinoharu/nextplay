@@ -40,7 +40,7 @@ Where to inspect:
    - `make -f Makefile retrain-seeded-xl`
 2. If it fails, inspect gate failures in `run_log.json`.
 3. If gate passes and `--promote_current` is enabled, restart services:
-   - `docker compose -f deploy/docker-compose.yml up -d --build recommender gateway`
+   - `docker compose --env-file .env -f deploy/docker-compose.yml up -d --build recommender gateway`
 4. Verify recommender startup logs show model loaded.
 
 ## Notes for large catalog runs
@@ -48,4 +48,5 @@ Where to inspect:
 Large candidate spaces (e.g. tens of thousands of games) often reduce `coverage_at_k`.
 Use a threshold profile appropriate for large catalogs:
 - `services/recommender/training/offline_eval_thresholds_large_catalog.json`
+
 

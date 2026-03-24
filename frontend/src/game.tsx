@@ -14,6 +14,11 @@ import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
 import { isNonBaseContentGame, normalizeCatalogImageUrl } from "./utils/catalog";
 import { type ThemeMode } from "./utils/theme";
+import {
+  collapseWhitespace,
+  normalizeAlphaNumericText,
+  trimTrailingSlashes,
+} from "./utils/text";
 import "./game.css";
 import "./games.css";
 import SiteFooter from "./components/SiteFooter";
@@ -76,10 +81,7 @@ const hasMeaningfulInteractionInput = (value: InteractionInput) =>
   Boolean(value.review?.trim());
 
 // Determine the default base URL for the API from environment variables
-const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(
-  /\/+$/,
-  "",
-);
+const RAW_BASE_URL = trimTrailingSlashes(import.meta.env.VITE_API_URL ?? "/api");
 const API_ROOT = RAW_BASE_URL.endsWith("/api")
   ? RAW_BASE_URL.slice(0, -4)
   : RAW_BASE_URL;
@@ -101,12 +103,6 @@ const formatReleaseDate = (value?: string) => {
     month: "short",
     day: "2-digit",
   });
-};
-
-// Utility function to collapse multiple whitespace characters into a single space and trim the result
-const collapseWhitespace = (value?: string) => {
-  if (!value) return "";
-  return value.replace(/\s+/g, " ").trim();
 };
 
 // Utility function to truncate text to a specified maximum length, adding an ellipsis if truncation occurs
@@ -142,10 +138,8 @@ const buildAssociationTokens = (gameName: string): string[] => {
     "royal",
     "game",
   ]);
-  const normalized = gameName
-    .toLowerCase()
-    .replace(/[^a-z0-9\s:]+/g, " ")
-    .split(/[\s:]+/)
+  const normalized = normalizeAlphaNumericText(gameName)
+    .split(" ")
     .map((token) => token.trim())
     .filter((token) => token.length >= 3 && !stopWords.has(token));
   return Array.from(new Set(normalized)).slice(0, 6);
@@ -187,7 +181,7 @@ function Game({ authUser, theme }: GameProps) {
   // Construct the game detail API URL using the base URL and memoization
   const gameUrl = useMemo(() => {
     if (!isValidId || numericId === null) return null;
-    const trimmedBase = baseUrl.replace(/\/+$/, "");
+    const trimmedBase = trimTrailingSlashes(baseUrl);
     const root = trimmedBase.endsWith("/api")
       ? trimmedBase.slice(0, -4)
       : trimmedBase;
@@ -325,7 +319,7 @@ function Game({ authUser, theme }: GameProps) {
   // Construct the user interactions API URL using the base URL and memoization, returning null if the user is not authenticated
   const userInteractionsUrl = useMemo(() => {
     if (!authUser?.id) return null;
-    const trimmedBase = baseUrl.replace(/\/+$/, "");
+    const trimmedBase = trimTrailingSlashes(baseUrl);
     const root = trimmedBase.endsWith("/api")
       ? trimmedBase.slice(0, -4)
       : trimmedBase;
@@ -1112,6 +1106,9 @@ function Game({ authUser, theme }: GameProps) {
 }
 
 export default Game;
+
+
+
 
 
 

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -21,17 +20,18 @@ func (e *UpstreamError) Error() string {
 }
 
 func readResponse(resp *http.Response) ([]byte, error) {
-	body, err := io.ReadAll(resp.Body)
+	body, err := readResponseBody(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		message := strings.TrimSpace(string(body))
-		if message == "" {
-			message = http.StatusText(resp.StatusCode)
+		message := http.StatusText(resp.StatusCode)
+		if resp.StatusCode < 500 {
+			if trimmed := strings.TrimSpace(string(body)); trimmed != "" {
+				message = trimmed
+			}
 		}
-		fmt.Printf("Recommender service error: %d - %s\n", resp.StatusCode, message)
 		return nil, &UpstreamError{
 			StatusCode: resp.StatusCode,
 			Message:    message,

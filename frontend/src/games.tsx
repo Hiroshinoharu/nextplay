@@ -19,6 +19,12 @@ import {
 } from "./utils/catalog";
 import { type ThemeMode } from "./utils/theme";
 import {
+  collapseWhitespace,
+  normalizeAlphaNumericText,
+  replaceIgdbImageSizeSegment,
+  trimTrailingSlashes,
+} from "./utils/text";
+import {
   QUESTIONNAIRE_V1,
   buildRecommendRequestFromQuestionnaire,
   createEmptyQuestionnaireAnswers,
@@ -105,10 +111,7 @@ const mergeUniqueGames = (existing: GameItem[], incoming: GameItem[]) => {
 };
 
 // Determine the default base URL for the API from environment variables
-const RAW_BASE_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(
-  /\/+$/,
-  "",
-);
+const RAW_BASE_URL = trimTrailingSlashes(import.meta.env.VITE_API_URL ?? "/api");
 const API_ROOT = RAW_BASE_URL.endsWith("/api")
   ? RAW_BASE_URL.slice(0, -4)
   : RAW_BASE_URL;
@@ -116,7 +119,7 @@ const API_ROOT = RAW_BASE_URL.endsWith("/api")
 // Upgrade IGDB image URLs to a specified size by replacing the size segment in the URL
 const upgradeIgdbSize = (url: string | null, size: string) => {
   if (!url) return null;
-  return url.replace(/\/t_[^/]+\//, `/${size}/`);
+  return replaceIgdbImageSizeSegment(url, size);
 };
 
 // Parse release date strings into Date objects, returning null for invalid or missing dates
@@ -136,12 +139,6 @@ const formatReleaseDate = (value?: string) => {
     month: "short",
     day: "2-digit",
   });
-};
-
-// Collapse consecutive whitespace characters in a string into a single space and trim leading/trailing whitespace, returning an empty string if the input is undefined or null
-const collapseWhitespace = (value?: string) => {
-  if (!value) return "";
-  return value.replace(/\s+/g, " ").trim();
 };
 
 // Define the CSS styles for the loading spinner component using styled-components
@@ -196,7 +193,7 @@ const NSFW_TERMS = [
 ];
 
 const normalizeFilterText = (value: string) =>
-  value.toLowerCase().replace(/[^a-z0-9+]+/g, " ").trim();
+  normalizeAlphaNumericText(value, { allowPlus: true });
 const NORMALIZED_NSFW_TERMS = NSFW_TERMS.map((term) => normalizeFilterText(term))
   .filter(Boolean);
 
@@ -341,7 +338,7 @@ function Games({ authUser, theme }: GamesProps) {
       signal?: AbortSignal;
     }): Promise<GamesPage> => {
       // Ensure the base URL is properly formatted and does not have trailing slashes
-      const trimmedBaseUrl = baseUrl.replace(/\/+$/, "");
+      const trimmedBaseUrl = trimTrailingSlashes(baseUrl);
       const root = trimmedBaseUrl.endsWith("/api")
         ? trimmedBaseUrl.slice(0, -4)
         : trimmedBaseUrl;
@@ -413,7 +410,7 @@ function Games({ authUser, theme }: GamesProps) {
   } = useQuery<GameItem[], Error>({
     queryKey: ["games-trending-recent", baseUrl] as const,
     queryFn: async ({ signal }) => {
-      const trimmedBaseUrl = baseUrl.replace(/\/+$/, "");
+      const trimmedBaseUrl = trimTrailingSlashes(baseUrl);
       const root = trimmedBaseUrl.endsWith("/api")
         ? trimmedBaseUrl.slice(0, -4)
         : trimmedBaseUrl;
@@ -490,7 +487,7 @@ function Games({ authUser, theme }: GamesProps) {
       topPopularityWeight,
     ] as const,
     queryFn: async ({ signal }) => {
-      const trimmedBaseUrl = baseUrl.replace(/\/+$/, "");
+      const trimmedBaseUrl = trimTrailingSlashes(baseUrl);
       const root = trimmedBaseUrl.endsWith("/api")
         ? trimmedBaseUrl.slice(0, -4)
         : trimmedBaseUrl;
@@ -536,7 +533,7 @@ function Games({ authUser, theme }: GamesProps) {
     ] as const,
     enabled: normalizedSearchQuery.length > 0,
     queryFn: async ({ signal }) => {
-      const trimmedBaseUrl = baseUrl.replace(/\/+$/, "");
+      const trimmedBaseUrl = trimTrailingSlashes(baseUrl);
       const root = trimmedBaseUrl.endsWith("/api")
         ? trimmedBaseUrl.slice(0, -4)
         : trimmedBaseUrl;
@@ -721,7 +718,7 @@ function Games({ authUser, theme }: GamesProps) {
       return;
     }
     const controller = new AbortController();
-    const trimmedBaseUrl = baseUrl.replace(/\/+$/, "");
+    const trimmedBaseUrl = trimTrailingSlashes(baseUrl);
     const root = trimmedBaseUrl.endsWith("/api")
       ? trimmedBaseUrl.slice(0, -4)
       : trimmedBaseUrl;
@@ -1792,3 +1789,6 @@ function Games({ authUser, theme }: GamesProps) {
 }
 
 export default Games;
+
+
+
