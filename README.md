@@ -146,6 +146,35 @@ To override the backend target, create `frontend/.env.local`:
 VITE_API_URL=http://127.0.0.1:18084/api
 ```
 
+### Deploy the Full Stack on Railway
+
+The current recommended hosted layout is a single Railway project with five private backend services and one public frontend service.
+
+- `frontend` is public and deploys from [frontend/Dockerfile](frontend/Dockerfile).
+- `gateway`, `user`, `game`, `recommender`, and `postgres` stay private inside Railway.
+- Set `GATEWAY_UPSTREAM_URL` on the Railway `frontend` service to `http://${{gateway.RAILWAY_PRIVATE_DOMAIN}}:8084`.
+- Keep the production frontend setting `VITE_API_URL=/api`.
+- The templated proxy in [frontend/nginx.conf](frontend/nginx.conf) forwards browser `/api/*` traffic to the private gateway, so the gateway does not need its own public domain.
+
+Recommended service order:
+
+1. `postgres`
+2. `user`
+3. `game`
+4. `recommender`
+5. `gateway`
+6. `frontend`
+
+### Deploy the Frontend to Vercel
+
+Vercel remains an optional alternative for the frontend only.
+
+- Set the Vercel project Root Directory to `frontend/`.
+- Use the default production frontend setting `VITE_API_URL=/api`.
+- Set `NEXTPLAY_GATEWAY_URL` to the externally reachable gateway origin, such as `https://gateway.example.com`.
+- The checked-in [frontend/vercel.json](frontend/vercel.json) preserves SPA deep links.
+- The checked-in [frontend/api/[...path].js](frontend/api/[...path].js) proxies same-origin `/api/*` requests to the gateway so the existing session cookie and CSRF flow continue to work behind Vercel.
+
 ## API Notes
 
 ### User-facing gateway routes

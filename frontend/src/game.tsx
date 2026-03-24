@@ -420,7 +420,6 @@ function Game({ authUser, theme }: GameProps) {
   useEffect(() => {
     if (
       !userInteractionsUrl ||
-      !authToken ||
       numericId === null ||
       !isValidId
     ) {
@@ -1106,6 +1105,7 @@ function Game({ authUser, theme }: GameProps) {
 }
 
 export default Game;
+
 
 
 

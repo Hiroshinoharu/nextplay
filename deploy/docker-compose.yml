@@ -173,6 +173,8 @@ services:
     build:
       context: ..
       dockerfile: frontend/Dockerfile
+    environment:
+      GATEWAY_UPSTREAM_URL: "${GATEWAY_UPSTREAM_URL:-http://gateway:8084}"
     ports:
       - "${FRONTEND_HOST_PORT:-5173}:80"
     depends_on:
