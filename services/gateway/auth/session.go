@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	defaultSessionCookieName         = "nextplay_session"
+	defaultSessionCookieName  = "nextplay_session"
 	defaultSessionCookieMaxAgeSecond = 24 * 60 * 60
 )
 
