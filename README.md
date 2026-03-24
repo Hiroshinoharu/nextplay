@@ -155,6 +155,7 @@ The current recommended hosted layout is a single Railway project with five priv
 - Set `GATEWAY_UPSTREAM_URL` on the Railway `frontend` service to `http://${{gateway.RAILWAY_PRIVATE_DOMAIN}}:8084`.
 - Keep the production frontend setting `VITE_API_URL=/api`.
 - The templated proxy in [frontend/nginx.conf](frontend/nginx.conf) forwards browser `/api/*` traffic to the private gateway, so the gateway does not need its own public domain.
+- The recommender image now bakes in the current trained artifacts from [services/recommender/training/artifacts/current](services/recommender/training/artifacts/current), so Railway model mode does not need a separate mounted volume for the default deploy.
 
 Recommended service order:
 
@@ -164,6 +165,23 @@ Recommended service order:
 4. `recommender`
 5. `gateway`
 6. `frontend`
+
+Recommended Railway variables for model-serving recommender deploys:
+
+```text
+PORT=8082
+DATABASE_URL=${{postgres.DATABASE_URL}}
+GATEWAY_SERVICE_TOKEN=replace-with-shared-service-token
+USER_SERVICE_URL=http://user.railway.internal:8083
+GAME_SERVICE_URL=http://game.railway.internal:8081
+GATEWAY_SERVICE_URL=http://gateway.railway.internal:8084
+MODEL_PATH=/models/recommender/current/model.keras
+MODEL_MANIFEST_PATH=/models/recommender/current/artifact_manifest.json
+MODEL_VERSION=20260313T164930Z
+MODEL_REQUIRED=true
+```
+
+If you want fallback-only mode instead, override `MODEL_REQUIRED=false` on the Railway `recommender` service.
 
 ### Deploy the Frontend to Vercel
 
