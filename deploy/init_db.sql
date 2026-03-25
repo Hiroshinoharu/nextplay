@@ -123,7 +123,20 @@ CREATE TABLE app_user (
     username   TEXT NOT NULL,
     password   TEXT NOT NULL,        -- hashed password
     email      TEXT NOT NULL,
-    steam_linked BOOLEAN DEFAULT FALSE
+    steam_linked BOOLEAN DEFAULT FALSE,
+    deleted_at TIMESTAMPTZ
+);
+
+-- ============================================================
+-- TABLE: user_deletion_audit
+-- Purpose: Records account deletions for support/debug visibility
+-- ============================================================
+CREATE TABLE user_deletion_audit (
+    audit_id    SERIAL PRIMARY KEY,
+    user_id     INT NOT NULL,
+    username    TEXT NOT NULL,
+    email       TEXT NOT NULL,
+    deleted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ============================================================

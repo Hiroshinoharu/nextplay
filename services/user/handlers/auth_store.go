@@ -40,7 +40,7 @@ var (
 		var user models.User
 		var storedPassword string
 		err := db.DB.QueryRow(
-			"SELECT user_id, username, email, password, steam_linked FROM app_user WHERE username = $1",
+			"SELECT user_id, username, email, password, steam_linked FROM app_user WHERE username = $1 AND deleted_at IS NULL",
 			username,
 		).Scan(&user.ID, &user.Username, &user.Email, &storedPassword, &user.SteamLinked)
 		return user, storedPassword, err
@@ -53,7 +53,7 @@ var (
 		var user models.User
 		var storedPassword string
 		err := db.DB.QueryRow(
-			"SELECT user_id, username, email, password, steam_linked FROM app_user WHERE email = $1",
+			"SELECT user_id, username, email, password, steam_linked FROM app_user WHERE email = $1 AND deleted_at IS NULL",
 			email,
 		).Scan(&user.ID, &user.Username, &user.Email, &storedPassword, &user.SteamLinked)
 		return user, storedPassword, err
@@ -62,7 +62,7 @@ var (
 		if db.DB == nil {
 			return sql.ErrConnDone
 		}
-		_, err := db.DB.Exec("UPDATE app_user SET password = $1 WHERE user_id = $2", hashedPassword, userID)
+		_, err := db.DB.Exec("UPDATE app_user SET password = $1 WHERE user_id = $2 AND deleted_at IS NULL", hashedPassword, userID)
 		return err
 	}
 	getAuthPasswordHashByUserID = func(id string) (string, error) {
@@ -72,7 +72,7 @@ var (
 
 		var storedPassword string
 		err := db.DB.QueryRow(
-			"SELECT password FROM app_user WHERE user_id = $1",
+			"SELECT password FROM app_user WHERE user_id = $1 AND deleted_at IS NULL",
 			id,
 		).Scan(&storedPassword)
 		return storedPassword, err
@@ -83,7 +83,7 @@ var (
 		}
 
 		result, err := db.DB.Exec(
-			"UPDATE app_user SET password = $1 WHERE user_id = $2",
+			"UPDATE app_user SET password = $1 WHERE user_id = $2 AND deleted_at IS NULL",
 			hashedPassword,
 			id,
 		)

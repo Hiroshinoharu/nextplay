@@ -20,7 +20,7 @@ func GetUserByID(c *fiber.Ctx) error {
 	// Declare a user variable to hold the fetched data
 	var user models.User
 	err := db.DB.QueryRow(
-		"SELECT user_id, username, email, steam_linked FROM app_user WHERE user_id = $1",
+		"SELECT user_id, username, email, steam_linked FROM app_user WHERE user_id = $1 AND deleted_at IS NULL",
 		id,
 	).Scan(&user.ID, &user.Username, &user.Email, &user.SteamLinked)
 	if err == sql.ErrNoRows {
@@ -60,6 +60,7 @@ func UpdateUser(c *fiber.Ctx) error {
 		     email = COALESCE($2, email),
 		     steam_linked = COALESCE($3, steam_linked)
 		 WHERE user_id = $4
+		   AND deleted_at IS NULL
 		 RETURNING user_id, username, email, steam_linked`,
 		req.Username,
 		req.Email,
@@ -104,18 +105,42 @@ func DeleteUser(c *fiber.Ctx) error {
 		}
 	}
 
-	var deletedID int64
+	var (
+		deletedID    int64
+		deletedUser  string
+		deletedEmail string
+		deletedAt    sql.NullTime
+	)
 	err = tx.QueryRow(
-		`DELETE FROM app_user
+		`UPDATE app_user
+		 SET deleted_at = NOW()
 		 WHERE user_id = $1
-		 RETURNING user_id`,
+		   AND deleted_at IS NULL
+		 RETURNING user_id, username, email, deleted_at`,
 		id,
-	).Scan(&deletedID)
+	).Scan(&deletedID, &deletedUser, &deletedEmail, &deletedAt)
 	if err == sql.ErrNoRows {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
 	}
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete user"})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to soft-delete user"})
+	}
+
+	var deletionAuditTable sql.NullString
+	if err := tx.QueryRow("SELECT to_regclass('public.user_deletion_audit')::text").Scan(&deletionAuditTable); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to inspect deletion audit storage"})
+	}
+	if deletionAuditTable.Valid && deletionAuditTable.String != "" {
+		if _, err := tx.Exec(
+			`INSERT INTO user_deletion_audit (user_id, username, email, deleted_at)
+			 VALUES ($1, $2, $3, COALESCE($4, NOW()))`,
+			deletedID,
+			deletedUser,
+			deletedEmail,
+			deletedAt,
+		); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write deletion audit"})
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to finalize user deletion"})

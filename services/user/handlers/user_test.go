@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	userdb "github.com/maxceban/nextplay/services/user/db"
@@ -22,14 +23,19 @@ func TestDeleteUserRemovesUserAndAssociatedRecords(t *testing.T) {
 	scenario := &deleteDBScenario{
 		expectedUserID:            "42",
 		recommendationEventsTable: "recommendation_events",
+		deletionAuditTable:        "user_deletion_audit",
 		deletedUserID:             42,
+		deletedUsername:           "max",
+		deletedEmail:              "max@example.com",
 		hasDeletedUser:            true,
 		expectedOperationsInOrder: []string{
 			"begin",
 			"delete_interactions",
 			"inspect_recommendation_events",
 			"delete_recommendation_events",
-			"delete_user",
+			"soft_delete_user",
+			"inspect_deletion_audit",
+			"insert_deletion_audit",
 			"commit",
 		},
 	}
@@ -74,13 +80,18 @@ func TestDeleteUserSkipsRecommendationEventDeletionWhenTableMissing(t *testing.T
 	scenario := &deleteDBScenario{
 		expectedUserID:            "42",
 		recommendationEventsTable: "",
+		deletionAuditTable:        "user_deletion_audit",
 		deletedUserID:             42,
+		deletedUsername:           "max",
+		deletedEmail:              "max@example.com",
 		hasDeletedUser:            true,
 		expectedOperationsInOrder: []string{
 			"begin",
 			"delete_interactions",
 			"inspect_recommendation_events",
-			"delete_user",
+			"soft_delete_user",
+			"inspect_deletion_audit",
+			"insert_deletion_audit",
 			"commit",
 		},
 	}
@@ -114,12 +125,13 @@ func TestDeleteUserReturnsNotFoundAndRollsBackWhenUserDoesNotExist(t *testing.T)
 	scenario := &deleteDBScenario{
 		expectedUserID:            "42",
 		recommendationEventsTable: "recommendation_events",
+		deletionAuditTable:        "user_deletion_audit",
 		expectedOperationsInOrder: []string{
 			"begin",
 			"delete_interactions",
 			"inspect_recommendation_events",
 			"delete_recommendation_events",
-			"delete_user",
+			"soft_delete_user",
 			"rollback",
 		},
 	}
@@ -162,7 +174,10 @@ func TestDeleteUserReturnsNotFoundAndRollsBackWhenUserDoesNotExist(t *testing.T)
 type deleteDBScenario struct {
 	expectedUserID            string
 	recommendationEventsTable string
+	deletionAuditTable        string
 	deletedUserID             int64
+	deletedUsername           string
+	deletedEmail              string
 	hasDeletedUser            bool
 	expectedOperationsInOrder []string
 
@@ -270,6 +285,12 @@ func (c *deleteTestConn) ExecContext(_ context.Context, query string, args []dri
 		}
 		c.scenario.record("delete_recommendation_events")
 		return driver.RowsAffected(1), nil
+	case "INSERT INTO user_deletion_audit (user_id, username, email, deleted_at) VALUES ($1, $2, $3, COALESCE($4, NOW()))":
+		if err := expectDeletionAuditArgs(c.scenario, args); err != nil {
+			return nil, err
+		}
+		c.scenario.record("insert_deletion_audit")
+		return driver.RowsAffected(1), nil
 	default:
 		return nil, fmt.Errorf("unexpected exec query: %s", normalizedQuery)
 	}
@@ -288,14 +309,29 @@ func (c *deleteTestConn) QueryContext(_ context.Context, query string, args []dr
 			columns: []string{"to_regclass"},
 			values:  [][]driver.Value{{value}},
 		}, nil
-	case "DELETE FROM app_user WHERE user_id = $1 RETURNING user_id":
+	case "SELECT to_regclass('public.user_deletion_audit')::text":
+		c.scenario.record("inspect_deletion_audit")
+		var value driver.Value
+		if strings.TrimSpace(c.scenario.deletionAuditTable) != "" {
+			value = c.scenario.deletionAuditTable
+		}
+		return &deleteTestRows{
+			columns: []string{"to_regclass"},
+			values:  [][]driver.Value{{value}},
+		}, nil
+	case "UPDATE app_user SET deleted_at = NOW() WHERE user_id = $1 AND deleted_at IS NULL RETURNING user_id, username, email, deleted_at":
 		if err := expectDeleteUserID(c.scenario.expectedUserID, args); err != nil {
 			return nil, err
 		}
-		c.scenario.record("delete_user")
-		rows := &deleteTestRows{columns: []string{"user_id"}}
+		c.scenario.record("soft_delete_user")
+		rows := &deleteTestRows{columns: []string{"user_id", "username", "email", "deleted_at"}}
 		if c.scenario.hasDeletedUser {
-			rows.values = [][]driver.Value{{c.scenario.deletedUserID}}
+			rows.values = [][]driver.Value{{
+				c.scenario.deletedUserID,
+				c.scenario.deletedUsername,
+				c.scenario.deletedEmail,
+				time.Date(2026, time.March, 25, 12, 0, 0, 0, time.UTC),
+			}}
 		}
 		return rows, nil
 	default:
@@ -358,6 +394,25 @@ func expectDeleteUserID(expected string, args []driver.NamedValue) error {
 	got := strings.TrimSpace(fmt.Sprint(args[0].Value))
 	if got != strings.TrimSpace(expected) {
 		return fmt.Errorf("expected user id %q, got %q", expected, got)
+	}
+	return nil
+}
+
+func expectDeletionAuditArgs(scenario *deleteDBScenario, args []driver.NamedValue) error {
+	if len(args) != 4 {
+		return fmt.Errorf("expected four SQL args, got %d", len(args))
+	}
+	if got := strings.TrimSpace(fmt.Sprint(args[0].Value)); got != strings.TrimSpace(fmt.Sprint(scenario.deletedUserID)) {
+		return fmt.Errorf("expected deleted user id %q, got %q", fmt.Sprint(scenario.deletedUserID), got)
+	}
+	if got := strings.TrimSpace(fmt.Sprint(args[1].Value)); got != strings.TrimSpace(scenario.deletedUsername) {
+		return fmt.Errorf("expected deleted username %q, got %q", scenario.deletedUsername, got)
+	}
+	if got := strings.TrimSpace(fmt.Sprint(args[2].Value)); got != strings.TrimSpace(scenario.deletedEmail) {
+		return fmt.Errorf("expected deleted email %q, got %q", scenario.deletedEmail, got)
+	}
+	if _, ok := args[3].Value.(time.Time); !ok {
+		return fmt.Errorf("expected deleted_at to be time.Time, got %T", args[3].Value)
 	}
 	return nil
 }

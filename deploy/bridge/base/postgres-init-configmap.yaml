@@ -96,7 +96,16 @@ data:
             username TEXT NOT NULL,
             password TEXT NOT NULL,
             email TEXT NOT NULL,
-            steam_linked BOOLEAN DEFAULT FALSE
+            steam_linked BOOLEAN DEFAULT FALSE,
+            deleted_at TIMESTAMPTZ
+        );
+
+        CREATE TABLE user_deletion_audit (
+            audit_id SERIAL PRIMARY KEY,
+            user_id INT NOT NULL,
+            username TEXT NOT NULL,
+            email TEXT NOT NULL,
+            deleted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
 
         CREATE TABLE user_interactions (
@@ -256,6 +265,17 @@ data:
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             FOREIGN KEY (user_id) REFERENCES app_user(user_id),
             FOREIGN KEY (game_id) REFERENCES games(game_id)
+        );
+    050-add_user_soft_delete.sql: |
+        ALTER TABLE app_user
+            ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+        CREATE TABLE IF NOT EXISTS user_deletion_audit (
+            audit_id SERIAL PRIMARY KEY,
+            user_id INT NOT NULL,
+            username TEXT NOT NULL,
+            email TEXT NOT NULL,
+            deleted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
 
         CREATE INDEX IF NOT EXISTS recommendation_events_user_created_idx

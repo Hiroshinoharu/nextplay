@@ -25,7 +25,7 @@ func lookupExistingAuthIdentity(username string, email string) (bool, bool, erro
 
 	if normalizedUsername != "" {
 		err := db.DB.QueryRow(
-			"SELECT EXISTS(SELECT 1 FROM app_user WHERE LOWER(username) = LOWER($1))",
+			"SELECT EXISTS(SELECT 1 FROM app_user WHERE deleted_at IS NULL AND LOWER(username) = LOWER($1))",
 			normalizedUsername,
 		).Scan(&usernameExists)
 		if err != nil {
@@ -35,7 +35,7 @@ func lookupExistingAuthIdentity(username string, email string) (bool, bool, erro
 
 	if normalizedEmail != "" {
 		err := db.DB.QueryRow(
-			"SELECT EXISTS(SELECT 1 FROM app_user WHERE LOWER(email) = LOWER($1))",
+			"SELECT EXISTS(SELECT 1 FROM app_user WHERE deleted_at IS NULL AND LOWER(email) = LOWER($1))",
 			normalizedEmail,
 		).Scan(&emailExists)
 		if err != nil {

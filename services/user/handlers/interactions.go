@@ -124,6 +124,11 @@ func GetInteractions(c *fiber.Ctx) error {
 	if db.DB == nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database not initialized"})
 	}
+	if err := requireActiveUser(userID); err == sql.ErrNoRows {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to verify user"})
+	}
 
 	rows, err := db.DB.Query(
 		"SELECT user_id, game_id, rating, review, liked, favorited, timestamp FROM user_interactions WHERE user_id = $1 ORDER BY timestamp DESC NULLS LAST, game_id DESC",
@@ -186,6 +191,11 @@ func AddOrUpdateInteraction(c *fiber.Ctx) error {
 	if db.DB == nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database not initialized"})
 	}
+	if err := requireActiveUser(userID); err == sql.ErrNoRows {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to verify user"})
+	}
 
 	var req interactionRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -230,6 +240,11 @@ func DeleteInteraction(c *fiber.Ctx) error {
 	if db.DB == nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database not initialized"})
 	}
+	if err := requireActiveUser(userID); err == sql.ErrNoRows {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to verify user"})
+	}
 
 	_, err := db.DB.Exec(
 		"DELETE FROM user_interactions WHERE user_id=$1 AND game_id=$2",
@@ -253,6 +268,11 @@ func GetInteractionEvents(c *fiber.Ctx) error {
 
 	if db.DB == nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database not initialized"})
+	}
+	if err := requireActiveUser(userID); err == sql.ErrNoRows {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to verify user"})
 	}
 
 	limit := parseLimit(c.Query("limit"), 50)
@@ -346,6 +366,11 @@ func AddInteractionEvent(c *fiber.Ctx) error {
 
 	if db.DB == nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database not initialized"})
+	}
+	if err := requireActiveUser(userID); err == sql.ErrNoRows {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "user not found"})
+	} else if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to verify user"})
 	}
 
 	var req recommendationEventRequest
