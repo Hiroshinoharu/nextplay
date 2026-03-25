@@ -2,9 +2,13 @@ package igdb
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -132,13 +136,13 @@ func (client *Client) FetchGamesByIDs(ids []int) ([]Game, error) {
 }
 
 // FetchExternalGames retrieves external game entries by their IDs.
-func (client *Client) FetchExternalGames(ids []int) (map[int]ExternalGame, error){
+func (client *Client) FetchExternalGames(ids []int) (map[int]ExternalGame, error) {
 	if len(ids) == 0 {
 		return map[int]ExternalGame{}, nil
 	}
 
 	result := make(map[int]ExternalGame, len(ids))
-	for _,chunks := range chunkIDs(ids, 200){
+	for _, chunks := range chunkIDs(ids, 200) {
 		query := fmt.Sprintf("fields game,category; where id = (%s); limit %d;", joinIDs(chunks), len(chunks))
 		payload, err := client.post("/external_games", query)
 		if err != nil {
@@ -449,7 +453,20 @@ func (client *Client) post(endpoint, body string) ([]byte, error) {
 		resp, err := httpClient.Do(req)
 		release()
 		if err != nil {
-			return nil, err
+			if attempt == maxRetries || !isRetryableError(err) {
+				return nil, err
+			}
+			log.Printf(
+				"IGDB request timeout on %s (attempt %d/%d): %v; retrying in %s",
+				endpoint,
+				attempt+1,
+				maxRetries+1,
+				err,
+				backoff,
+			)
+			time.Sleep(backoff)
+			backoff = nextBackoff(backoff)
+			continue
 		}
 		// Read and close the response body
 		respBody, readErr := io.ReadAll(resp.Body)
@@ -488,10 +505,7 @@ func (client *Client) post(endpoint, body string) ([]byte, error) {
 				}
 			}
 			time.Sleep(delay)
-			backoff *= 2
-			if backoff > 5*time.Second {
-				backoff = 5 * time.Second
-			}
+			backoff = nextBackoff(backoff)
 			continue
 		}
 
@@ -502,6 +516,25 @@ func (client *Client) post(endpoint, body string) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("igdb error: exhausted retries")
+}
+
+func isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
+}
+
+func nextBackoff(backoff time.Duration) time.Duration {
+	backoff *= 2
+	if backoff > 5*time.Second {
+		return 5 * time.Second
+	}
+	return backoff
 }
 
 // chunkIDs splits a slice of integers into chunks of specified size

@@ -176,8 +176,10 @@ func run() error {
 
 	// Initialize IGDB client with rate limiting settings
 	minInterval := time.Second / time.Duration(rps)
+	httpTimeout := loadIGDBHTTPTimeout()
 	log.Printf("IGDB rate limit: %d rps, max concurrent=%d", rps, maxConcurrent)
 	log.Printf("IGDB popularity type: %d", popularityType)
+	log.Printf("IGDB HTTP timeout: %s", httpTimeout)
 	if usePopularitySeed {
 		log.Printf("IGDB popularity seed enabled (year=%d)", popularityYear)
 	}
@@ -189,7 +191,7 @@ func run() error {
 	client := igdb.Client{
 		ClientID:      clientID,
 		AccessToken:   accessToken,
-		HTTPClient:    &http.Client{Timeout: 30 * time.Second},
+		HTTPClient:    &http.Client{Timeout: httpTimeout},
 		MaxConcurrent: maxConcurrent,
 		MinInterval:   minInterval,
 	}
@@ -887,6 +889,8 @@ func collectIDs(games []igdb.Game, getter func(igdb.Game) []int) []int {
 	return ids
 }
 
+// collectCompanyIDs extracts unique company IDs from a map of involved companies
+// using the CompanyID field. It returns a slice of unique company IDs.
 func collectCompanyIDs(involved map[int]igdb.InvolvedCompany) []int {
 	seen := make(map[int]struct{})
 	for _, item := range involved {
@@ -902,6 +906,13 @@ func collectCompanyIDs(involved map[int]igdb.InvolvedCompany) []int {
 	return ids
 }
 
+
+// filterGamesByReleaseYear filters a slice of games by a given release year.
+// If the year is <= 0, it returns the original slice.
+// It iterates over the slice, checks if the FirstReleaseDate is > 0,
+// extracts the release year from the FirstReleaseDate, and if it matches the given year,
+// appends the game to the output slice.
+// It returns the filtered slice of games.
 func filterGamesByReleaseYear(games []igdb.Game, year int) []igdb.Game {
 	if year <= 0 {
 		return games
@@ -919,6 +930,10 @@ func filterGamesByReleaseYear(games []igdb.Game, year int) []igdb.Game {
 	return out
 }
 
+// orderGamesByIDList reorders a list of games according to the order specified in the idOrder argument.
+// If the idOrder argument is empty, the original list of games is returned unchanged.
+// If the games argument is empty, an empty list of games is returned.
+// The function returns a new list of games in the specified order, with any games that are not present in the idOrder argument excluded from the result.
 func orderGamesByIDList(games []igdb.Game, idOrder []int) []igdb.Game {
 	if len(games) == 0 || len(idOrder) == 0 {
 		return games
@@ -1120,4 +1135,17 @@ func loadEnvFileNoOverwrite(path string) error {
 		_ = os.Setenv(key, value)
 	}
 	return nil
+}
+
+func loadIGDBHTTPTimeout() time.Duration {
+	timeout := 2 * time.Minute
+	if raw := strings.TrimSpace(os.Getenv("IGDB_HTTP_TIMEOUT")); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil || parsed <= 0 {
+			log.Printf("Invalid IGDB_HTTP_TIMEOUT=%q, using default %s", raw, timeout)
+		} else {
+			timeout = parsed
+		}
+	}
+	return timeout
 }
