@@ -1703,10 +1703,92 @@
 }
 
 .games-section__badge {
-  font-size: 11px;
-  letter-spacing: 0.3em;
+  --games-badge-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(140, 243, 122, 0.08));
+  --games-badge-border: rgba(140, 243, 122, 0.22);
+  --games-badge-text: var(--games-text);
+  --games-badge-dot: rgba(199, 240, 0, 0.9);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--games-badge-border);
+  background: var(--games-badge-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
-  color: var(--games-subtle);
+  color: var(--games-badge-text);
+  white-space: nowrap;
+}
+
+.games-section__badge::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--games-badge-dot);
+  box-shadow: 0 0 12px var(--games-badge-dot);
+  flex: 0 0 auto;
+}
+
+.games-section__badge--base {
+  --games-badge-bg: linear-gradient(135deg, rgba(140, 243, 122, 0.14), rgba(199, 240, 0, 0.06));
+  --games-badge-border: rgba(140, 243, 122, 0.4);
+  --games-badge-text: rgba(220, 255, 116, 0.96);
+  --games-badge-dot: rgba(140, 243, 122, 0.95);
+}
+
+.games-section__badge--addon {
+  --games-badge-bg: linear-gradient(135deg, rgba(255, 158, 103, 0.14), rgba(255, 94, 98, 0.08));
+  --games-badge-border: rgba(255, 158, 103, 0.38);
+  --games-badge-text: rgba(255, 199, 130, 0.96);
+  --games-badge-dot: rgba(255, 158, 103, 0.95);
+}
+
+.games-page[data-theme="light"] .games-section__badge {
+  --games-badge-bg: linear-gradient(135deg, rgba(24, 53, 74, 0.03), rgba(95, 169, 59, 0.08));
+  --games-badge-border: rgba(59, 143, 62, 0.2);
+  --games-badge-text: rgba(24, 53, 74, 0.86);
+  --games-badge-dot: rgba(95, 169, 59, 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.games-page[data-theme="light"] .games-section__badge--base {
+  --games-badge-bg: linear-gradient(135deg, rgba(95, 169, 59, 0.14), rgba(137, 214, 217, 0.1));
+  --games-badge-border: rgba(95, 169, 59, 0.28);
+  --games-badge-text: #28563a;
+  --games-badge-dot: #5fa93b;
+}
+
+.games-page[data-theme="light"] .games-section__badge--addon {
+  --games-badge-bg: linear-gradient(135deg, rgba(255, 168, 93, 0.18), rgba(255, 121, 77, 0.12));
+  --games-badge-border: rgba(215, 126, 44, 0.28);
+  --games-badge-text: #7d4318;
+  --games-badge-dot: #df7c31;
+}
+
+.game-page[data-theme="light"] .games-section__badge {
+  --games-badge-bg: linear-gradient(135deg, rgba(24, 53, 74, 0.03), rgba(95, 169, 59, 0.08));
+  --games-badge-border: rgba(59, 143, 62, 0.2);
+  --games-badge-text: rgba(24, 53, 74, 0.86);
+  --games-badge-dot: rgba(95, 169, 59, 0.85);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.game-page[data-theme="light"] .games-section__badge--base {
+  --games-badge-bg: linear-gradient(135deg, rgba(95, 169, 59, 0.14), rgba(137, 214, 217, 0.1));
+  --games-badge-border: rgba(95, 169, 59, 0.28);
+  --games-badge-text: #28563a;
+  --games-badge-dot: #5fa93b;
+}
+
+.game-page[data-theme="light"] .games-section__badge--addon {
+  --games-badge-bg: linear-gradient(135deg, rgba(255, 168, 93, 0.18), rgba(255, 121, 77, 0.12));
+  --games-badge-border: rgba(215, 126, 44, 0.28);
+  --games-badge-text: #7d4318;
+  --games-badge-dot: #df7c31;
 }
 
 .games-pagination {

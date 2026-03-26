@@ -21,6 +21,7 @@ type GameCarouselItem = {
 type GameCarouselProps = {
   title: string
   badge?: string
+  badgeVariant?: 'neutral' | 'base' | 'addon'
   games: GameCarouselItem[]
   onSelect: (gameId: number) => void
   getDescription?: (game: GameCarouselItem) => ReactNode
@@ -90,6 +91,7 @@ const shuffleItems = <T,>(items: T[], seedKey: string): T[] => {
 const GameCarousel = ({
   title,
   badge,
+  badgeVariant = 'neutral',
   games,
   onSelect,
   getDescription = defaultDescription,
@@ -371,7 +373,11 @@ const GameCarousel = ({
       {showHeader ? (
         <header className="games-section__header">
           <h2 className="games-section__title">{title}</h2>
-          {badge && <span className="games-section__badge">{badge}</span>}
+          {badge && (
+            <span className={`games-section__badge games-section__badge--${badgeVariant}`}>
+              {badge}
+            </span>
+          )}
         </header>
       ) : null}
       <div className="games-row-wrap">
@@ -445,4 +451,3 @@ const GameCarousel = ({
 }
 
 export default memo(GameCarousel)
-

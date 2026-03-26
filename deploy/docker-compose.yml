@@ -90,7 +90,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["go", "run", "./etl"]
+    entrypoint: ["/game-etl"]
     profiles: ["etl"]
     restart: "no"
 

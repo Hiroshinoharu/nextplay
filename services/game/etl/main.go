@@ -18,6 +18,19 @@ import (
 	"github.com/maxceban/nextplay/services/shared/config"
 )
 
+const (
+	igdbGameTypeDLCAAddon           = 1
+	igdbGameTypeExpansion           = 2
+	igdbGameTypeBundle              = 3
+	igdbGameTypeStandaloneExpansion = 4
+	igdbGameTypeMod                 = 5
+	igdbGameTypeEpisode             = 6
+	igdbGameTypeSeason              = 7
+	igdbGameTypeExpandedGame        = 10
+	igdbGameTypePack                = 13
+	igdbGameTypeUpdate              = 14
+)
+
 // main is the entry point for the ETL process
 func main() {
 	if err := run(); err != nil {
@@ -265,6 +278,29 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("failed to fetch games: %w", err)
 		}
+	}
+
+	additionalContentIDs := collectAdditionalContentIDs(games)
+	if len(additionalContentIDs) > 0 {
+		additionalGames, err := client.FetchGamesByIDs(additionalContentIDs)
+		if err != nil {
+			return fmt.Errorf("failed to fetch related additional-content games: %w", err)
+		}
+		games = appendUniqueGames(games, filterAdditionalContentGames(additionalGames)...)
+	}
+
+	parentIDs := collectIDs(games, func(game igdb.Game) []int {
+		if game.ID > 0 {
+			return []int{game.ID}
+		}
+		return nil
+	})
+	if len(parentIDs) > 0 {
+		childGames, err := client.FetchAdditionalContentChildren(parentIDs)
+		if err != nil {
+			return fmt.Errorf("failed to fetch child additional-content games: %w", err)
+		}
+		games = appendUniqueGames(games, filterAdditionalContentGames(childGames)...)
 	}
 
 	// Gather auxiliary IDs
@@ -648,11 +684,15 @@ func run() error {
 	franchiseRight := make([]int, 0, len(games)*2)
 	seriesLeft := make([]int, 0, len(games)*2)
 	seriesRight := make([]int, 0, len(games)*2)
+	additionalContentParentIDs := make([]int, 0, len(games)*2)
+	additionalContentChildIDs := make([]int, 0, len(games)*2)
+	additionalContentRelationTypes := make([]string, 0, len(games)*2)
 	platformIndex := make(map[[2]int]struct{}, len(games)*4)
 	keywordIndex := make(map[[2]int]struct{}, len(games)*6)
 	genreIndex := make(map[[2]int]struct{}, len(games)*4)
 	franchiseIndex := make(map[[2]int]struct{}, len(games)*2)
 	seriesIndex := make(map[[2]int]struct{}, len(games)*2)
+	additionalContentIndex := make(map[string]struct{}, len(games)*3)
 	companyGameIDs := make([]int, 0, len(games)*4)
 	companyIDs := make([]int, 0, len(games)*4)
 	companyIsDeveloper := make([]bool, 0, len(games)*4)
@@ -681,12 +721,68 @@ func run() error {
 		mediaSortOrders = append(mediaSortOrders, sortOrder)
 	}
 
+	addAdditionalContent := func(parentGameID, childGameID int, relationType string) {
+		if parentGameID == 0 || childGameID == 0 || parentGameID == childGameID {
+			return
+		}
+		relationType = strings.TrimSpace(relationType)
+		if relationType == "" {
+			relationType = "additional_content"
+		}
+		key := fmt.Sprintf("%d|%d|%s", parentGameID, childGameID, relationType)
+		if _, exists := additionalContentIndex[key]; exists {
+			return
+		}
+		additionalContentIndex[key] = struct{}{}
+		additionalContentParentIDs = append(additionalContentParentIDs, parentGameID)
+		additionalContentChildIDs = append(additionalContentChildIDs, childGameID)
+		additionalContentRelationTypes = append(additionalContentRelationTypes, relationType)
+	}
+
 	for _, game := range games {
 		// Find the DB game_id for this IGDB game
 		gameID, ok := gameIDByIGDB[game.ID]
 		if !ok {
 			log.Printf("Skipping joins for game %q: missing game_id for igdb_id=%d", game.Name, game.ID)
 			continue
+		}
+
+		for _, extraID := range game.DLCs {
+			if childGameID, ok := gameIDByIGDB[extraID]; ok {
+				addAdditionalContent(gameID, childGameID, "dlc")
+			}
+		}
+		for _, extraID := range game.Expansions {
+			if childGameID, ok := gameIDByIGDB[extraID]; ok {
+				addAdditionalContent(gameID, childGameID, "expansion")
+			}
+		}
+		for _, extraID := range game.StandaloneExpansions {
+			if childGameID, ok := gameIDByIGDB[extraID]; ok {
+				addAdditionalContent(gameID, childGameID, "standalone_expansion")
+			}
+		}
+		for _, extraID := range game.ExpandedGames {
+			if childGameID, ok := gameIDByIGDB[extraID]; ok {
+				addAdditionalContent(gameID, childGameID, "expanded_game")
+			}
+		}
+		for _, extraID := range game.Bundles {
+			if childGameID, ok := gameIDByIGDB[extraID]; ok {
+				addAdditionalContent(gameID, childGameID, "bundle")
+			}
+		}
+		if isAdditionalContentGameType(game.GameType) {
+			if game.ParentGame > 0 {
+				if parentGameID, ok := gameIDByIGDB[game.ParentGame]; ok {
+					addAdditionalContent(parentGameID, gameID, relationTypeForGameType(game.GameType))
+				}
+			}
+			if game.VersionParent > 0 {
+				if parentGameID, ok := gameIDByIGDB[game.VersionParent]; ok {
+					addAdditionalContent(parentGameID, gameID, relationTypeForGameType(game.GameType))
+				}
+			}
 		}
 
 		// Link platforms
@@ -822,6 +918,9 @@ func run() error {
 	if err := bulkInsertJoinPairs(tx, "game_series", "game_id", "series_id", seriesLeft, seriesRight, batchCfg.Joins); err != nil {
 		return fmt.Errorf("failed to bulk link series: %w", err)
 	}
+	if err := bulkInsertGameAdditionalContentPairs(tx, additionalContentParentIDs, additionalContentChildIDs, additionalContentRelationTypes, batchCfg.Joins); err != nil {
+		return fmt.Errorf("failed to bulk link additional content: %w", err)
+	}
 	if err := bulkInsertGameCompaniesPairs(tx, companyGameIDs, companyIDs, companyIsDeveloper, companyIsPublisher, batchCfg.Companies); err != nil {
 		return fmt.Errorf("failed to bulk link companies: %w", err)
 	}
@@ -889,6 +988,122 @@ func collectIDs(games []igdb.Game, getter func(igdb.Game) []int) []int {
 	return ids
 }
 
+func isAdditionalContentGameType(gameType int) bool {
+	switch gameType {
+	case igdbGameTypeDLCAAddon,
+		igdbGameTypeExpansion,
+		igdbGameTypeBundle,
+		igdbGameTypeStandaloneExpansion,
+		igdbGameTypeMod,
+		igdbGameTypeEpisode,
+		igdbGameTypeSeason,
+		igdbGameTypeExpandedGame,
+		igdbGameTypePack,
+		igdbGameTypeUpdate:
+		return true
+	default:
+		return false
+	}
+}
+
+func relationTypeForGameType(gameType int) string {
+	switch gameType {
+	case igdbGameTypeDLCAAddon:
+		return "dlc"
+	case igdbGameTypeExpansion:
+		return "expansion"
+	case igdbGameTypeBundle:
+		return "bundle"
+	case igdbGameTypeStandaloneExpansion:
+		return "standalone_expansion"
+	case igdbGameTypeMod:
+		return "mod"
+	case igdbGameTypeEpisode:
+		return "episode"
+	case igdbGameTypeSeason:
+		return "season"
+	case igdbGameTypeExpandedGame:
+		return "expanded_game"
+	case igdbGameTypePack:
+		return "pack"
+	case igdbGameTypeUpdate:
+		return "update"
+	default:
+		return "additional_content"
+	}
+}
+
+func collectAdditionalContentIDs(games []igdb.Game) []int {
+	seen := make(map[int]struct{})
+	for _, game := range games {
+		for _, id := range game.DLCs {
+			if id > 0 {
+				seen[id] = struct{}{}
+			}
+		}
+		for _, id := range game.Expansions {
+			if id > 0 {
+				seen[id] = struct{}{}
+			}
+		}
+		for _, id := range game.StandaloneExpansions {
+			if id > 0 {
+				seen[id] = struct{}{}
+			}
+		}
+		for _, id := range game.ExpandedGames {
+			if id > 0 {
+				seen[id] = struct{}{}
+			}
+		}
+		for _, id := range game.Bundles {
+			if id > 0 {
+				seen[id] = struct{}{}
+			}
+		}
+	}
+
+	ids := make([]int, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+func filterAdditionalContentGames(games []igdb.Game) []igdb.Game {
+	filtered := make([]igdb.Game, 0, len(games))
+	for _, game := range games {
+		if !isAdditionalContentGameType(game.GameType) {
+			continue
+		}
+		filtered = append(filtered, game)
+	}
+	return filtered
+}
+
+func appendUniqueGames(existing []igdb.Game, incoming ...igdb.Game) []igdb.Game {
+	if len(incoming) == 0 {
+		return existing
+	}
+	seen := make(map[int]struct{}, len(existing)+len(incoming))
+	for _, game := range existing {
+		if game.ID > 0 {
+			seen[game.ID] = struct{}{}
+		}
+	}
+	for _, game := range incoming {
+		if game.ID <= 0 {
+			continue
+		}
+		if _, exists := seen[game.ID]; exists {
+			continue
+		}
+		seen[game.ID] = struct{}{}
+		existing = append(existing, game)
+	}
+	return existing
+}
+
 // collectCompanyIDs extracts unique company IDs from a map of involved companies
 // using the CompanyID field. It returns a slice of unique company IDs.
 func collectCompanyIDs(involved map[int]igdb.InvolvedCompany) []int {
@@ -905,7 +1120,6 @@ func collectCompanyIDs(involved map[int]igdb.InvolvedCompany) []int {
 	}
 	return ids
 }
-
 
 // filterGamesByReleaseYear filters a slice of games by a given release year.
 // If the year is <= 0, it returns the original slice.

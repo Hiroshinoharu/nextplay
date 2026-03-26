@@ -10,7 +10,7 @@ import (
 	"github.com/maxceban/nextplay/services/game/models"
 )
 
-const nonBaseContentRegex = `(\m(dlc|downloadable content|expansion|expansion pack|add[- ]?on|bonus( content)?|soundtrack|artbook|season pass|character pass|battle pass|event pass|starter pack|founder.?s pack|cosmetic pack|skin( pack| set)?|costume( pack)?|outfit( pack)?|upgrade pack|item pack|consumable( pack)?|bundle|edition upgrade|currency pack|booster pack|mission pack|title update|content update|seasonal update|mid[- ]?season|live service|ranked split|rotation update|patch( v?[0-9]+)?|hotfix|content drop|episode[[:space:]]*[0-9ivxlcdm]+|season[[:space:]]*[0-9ivxlcdm]+|chapter[[:space:]]*[0-9ivxlcdm]+)\M)`
+const nonBaseContentRegex = `(\m(dlc|downloadable content|expansion|expansion pack|add[- ]?on|bonus( content)?|soundtrack|artbook|season pass|character pass|battle pass|event pass|starter pack|founder.?s pack|cosmetic pack|skin( pack| set)?|costume( pack)?|outfit( pack)?|upgrade pack|item pack|consumable( pack)?|bundle|collection|compilation|anthology|archive|all[- ]?in[- ]?one|((double|triple|combo|dual|twin)[[:space:]]+(pack|bundle|set))|twin[[:space:]]+plus|deluxe edition|ultimate edition|gold edition|complete edition|definitive edition|special edition|premium edition|launch edition|day[[:space:]]+one[[:space:]]+edition|collector.?s edition|digital[[:space:]]+deluxe|edition upgrade|currency pack|booster pack|mission pack|title update|content update|seasonal update|mid[- ]?season|live service|ranked split|rotation update|patch( v?[0-9]+)?|hotfix|content drop|episode[[:space:]]*[0-9ivxlcdm]+|season[[:space:]]*[0-9ivxlcdm]+|chapter[[:space:]]*[0-9ivxlcdm]+)\M)`
 
 // QuestionnaireFacetGenre describes an available genre option for the questionnaire flow.
 type QuestionnaireFacetGenre struct {
@@ -32,8 +32,35 @@ type QuestionnaireFacets struct {
 	Platforms []QuestionnaireFacetPlatform `json:"platforms"`
 }
 
+func additionalContentExclusionCondition(gameAlias string) (string, error) {
+	exists, err := relationTablesExist("game_additional_content")
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return "", nil
+	}
+	alias := strings.TrimSpace(gameAlias)
+	if alias == "" {
+		alias = "g"
+	}
+	return fmt.Sprintf(
+		"NOT EXISTS (SELECT 1 FROM game_additional_content gac WHERE gac.content_game_id = %s.game_id)",
+		alias,
+	), nil
+}
+
 // GetQuestionnaireFacets returns aggregated genre and platform facets for discovery questions.
 func GetQuestionnaireFacets() (*QuestionnaireFacets, error) {
+	additionalContentFilter, err := additionalContentExclusionCondition("games")
+	if err != nil {
+		return nil, err
+	}
+
+	genresFilter := ""
+	if additionalContentFilter != "" {
+		genresFilter = "\n  AND " + additionalContentFilter
+	}
 	genresRows, err := DB.Query(
 		`
 		SELECT
@@ -43,7 +70,7 @@ func GetQuestionnaireFacets() (*QuestionnaireFacets, error) {
 		FROM games
 		WHERE genre IS NOT NULL
 		  AND TRIM(SPLIT_PART(genre, ',', 1)) <> ''
-		  AND NOT (CONCAT_WS(' ', COALESCE(game_name, ''), COALESCE(genre, ''), COALESCE(game_description, '')) ~* '` + nonBaseContentRegex + `')
+		  AND NOT (CONCAT_WS(' ', COALESCE(game_name, ''), COALESCE(genre, ''), COALESCE(game_description, '')) ~* '` + nonBaseContentRegex + `')` + genresFilter + `
 		GROUP BY slug, label
 		ORDER BY game_count DESC, label ASC
 		LIMIT 24
@@ -75,6 +102,10 @@ func GetQuestionnaireFacets() (*QuestionnaireFacets, error) {
 		return nil, err
 	}
 
+	platformFilter := ""
+	if additionalContentFilter != "" {
+		platformFilter = "\n  AND " + strings.ReplaceAll(additionalContentFilter, "games.", "g.")
+	}
 	platformRows, err := DB.Query(
 		`
 		SELECT
@@ -86,7 +117,7 @@ func GetQuestionnaireFacets() (*QuestionnaireFacets, error) {
 		INNER JOIN games g ON g.game_id = gp.game_id
 		WHERE p.platform_name IS NOT NULL
 		  AND TRIM(p.platform_name) <> ''
-		  AND NOT (CONCAT_WS(' ', COALESCE(g.game_name, ''), COALESCE(g.genre, ''), COALESCE(g.game_description, '')) ~* '` + nonBaseContentRegex + `')
+		  AND NOT (CONCAT_WS(' ', COALESCE(g.game_name, ''), COALESCE(g.genre, ''), COALESCE(g.game_description, '')) ~* '` + nonBaseContentRegex + `')` + platformFilter + `
 		GROUP BY p.platform_id, p.platform_name
 		ORDER BY game_count DESC, p.platform_name ASC
 		LIMIT 24
@@ -130,6 +161,13 @@ func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool, searchQue
 	}
 	if excludeNonBaseContent {
 		whereParts = append(whereParts, `NOT (CONCAT_WS(' ', COALESCE(game_name, ''), COALESCE(genre, ''), COALESCE(game_description, '')) ~* '`+nonBaseContentRegex+`')`)
+		additionalContentFilter, err := additionalContentExclusionCondition("games")
+		if err != nil {
+			return nil, err
+		}
+		if additionalContentFilter != "" {
+			whereParts = append(whereParts, additionalContentFilter)
+		}
 	}
 	if strings.TrimSpace(searchQuery) != "" {
 		args = append(args, "%"+strings.TrimSpace(searchQuery)+"%")
@@ -319,6 +357,13 @@ func SearchGamesByName(query string, mode string, limit int, offset int, include
 	args := []interface{}{argValue}
 	if excludeNonBaseContent {
 		querySQL += "\n  AND NOT (CONCAT_WS(' ', COALESCE(g.game_name, ''), COALESCE(g.genre, ''), COALESCE(g.game_description, '')) ~* '" + nonBaseContentRegex + "')"
+		additionalContentFilter, err := additionalContentExclusionCondition("g")
+		if err != nil {
+			return nil, err
+		}
+		if additionalContentFilter != "" {
+			querySQL += "\n  AND " + additionalContentFilter
+		}
 	}
 	querySQL += "\nORDER BY g.game_id"
 	if limit > 0 {
@@ -447,6 +492,14 @@ func GetPopularGames(year, limit, offset, minRatingCount int, includeMedia bool)
 	if minRatingCount < 0 {
 		minRatingCount = 0
 	}
+	additionalContentFilter, err := additionalContentExclusionCondition("g")
+	if err != nil {
+		return nil, err
+	}
+	additionalWhere := ""
+	if additionalContentFilter != "" {
+		additionalWhere = "\n  AND " + additionalContentFilter
+	}
 	query := `
 		SELECT
 			g.game_id,
@@ -464,7 +517,7 @@ func GetPopularGames(year, limit, offset, minRatingCount int, includeMedia bool)
 			g.popularity
 		FROM games g
 		WHERE ($1 = 0 OR EXTRACT(YEAR FROM g.release_date) = $1)
-		  AND COALESCE(g.aggregated_rating_count, g.total_rating_count, 0) >= $3
+		  AND COALESCE(g.aggregated_rating_count, g.total_rating_count, 0) >= $3` + additionalWhere + `
 		GROUP BY g.game_id
 		ORDER BY
 			COALESCE(g.popularity, 0) DESC,
@@ -588,6 +641,14 @@ func GetTopGames(limit, offset, minRatingCount, priorVotes int, popularityWeight
 	if priorVotes <= 0 {
 		priorVotes = 200
 	}
+	additionalContentFilter, err := additionalContentExclusionCondition("g")
+	if err != nil {
+		return nil, err
+	}
+	additionalWhere := ""
+	if additionalContentFilter != "" {
+		additionalWhere = "\n  AND " + additionalContentFilter
+	}
 
 	query := `
 		WITH rated AS (
@@ -617,7 +678,7 @@ func GetTopGames(limit, offset, minRatingCount, priorVotes int, popularityWeight
 				END::float8 AS votes
 			FROM games g
 			WHERE g.release_date IS NOT NULL
-			  AND g.release_date <= CURRENT_DATE
+			  AND g.release_date <= CURRENT_DATE` + additionalWhere + `
 		),
 		stats AS (
 			SELECT COALESCE(AVG(r.rating), 0)::float8 AS c
@@ -842,13 +903,20 @@ func GetGameByID(id int) (*models.Game, error) {
 	return &g, nil
 }
 
-// GetRelatedAddOnContent returns related games from the same franchise (with series overlap as a tiebreaker).
+// GetRelatedAddOnContent returns related base-game titles from the same franchise or series.
 func GetRelatedAddOnContent(gameID int, limit int, includeMedia bool) ([]models.Game, error) {
 	if limit <= 0 {
 		limit = 60
 	}
 	if limit > 200 {
 		limit = 200
+	}
+	additionalContentFilter, err := additionalContentExclusionCondition("g")
+	if err != nil {
+		return nil, err
+	}
+	if additionalContentFilter != "" {
+		additionalContentFilter = "\n\t\tAND " + additionalContentFilter
 	}
 
 	query := `
@@ -878,11 +946,11 @@ func GetRelatedAddOnContent(gameID int, limit int, includeMedia bool) ([]models.
 		),
 		scored AS (
 			SELECT
-				fg.game_id,
-				fg.shared_franchise_count,
+				COALESCE(fg.game_id, ss.game_id) AS game_id,
+				COALESCE(fg.shared_franchise_count, 0) AS shared_franchise_count,
 				COALESCE(ss.shared_series_count, 0) AS shared_series_count
 			FROM franchise_games fg
-			LEFT JOIN series_scores ss ON ss.game_id = fg.game_id
+			FULL OUTER JOIN series_scores ss ON ss.game_id = fg.game_id
 		)
 		SELECT
 			g.game_id,
@@ -900,6 +968,7 @@ func GetRelatedAddOnContent(gameID int, limit int, includeMedia bool) ([]models.
 			g.popularity
 		FROM scored s
 		INNER JOIN games g ON g.game_id = s.game_id
+		WHERE NOT (CONCAT_WS(' ', COALESCE(g.game_name, ''), COALESCE(g.genre, ''), COALESCE(g.game_description, '')) ~* '` + nonBaseContentRegex + `')` + additionalContentFilter + `
 		ORDER BY
 			s.shared_franchise_count DESC,
 			s.shared_series_count DESC,
@@ -945,6 +1014,157 @@ func GetRelatedAddOnContent(gameID int, limit int, includeMedia bool) ([]models.
 			&popularity,
 		)
 		if err != nil {
+			return nil, err
+		}
+
+		if description.Valid {
+			g.Description = description.String
+		}
+		if releaseDate.Valid {
+			g.ReleaseDate = releaseDate.String
+		}
+		if genre.Valid {
+			g.Genre = genre.String
+		}
+		if publishers.Valid {
+			g.Publishers = publishers.String
+		}
+		if story.Valid {
+			g.Story = story.String
+		}
+		if coverImage.Valid {
+			g.CoverImageURL = coverImage.String
+		}
+		if aggregatedRating.Valid {
+			g.AggregatedRating = aggregatedRating.Float64
+		}
+		if aggregatedRatingCount.Valid {
+			g.AggregatedRatingCount = int(aggregatedRatingCount.Int64)
+		}
+		if totalRating.Valid {
+			g.TotalRating = totalRating.Float64
+		}
+		if totalRatingCount.Valid {
+			g.TotalRatingCount = int(totalRatingCount.Int64)
+		}
+		if popularity.Valid {
+			g.Popularity = popularity.Float64
+		}
+		if includeMedia {
+			media, err := GetGameMedia(int(g.ID))
+			if err != nil {
+				return nil, err
+			}
+			g.Media = media
+		} else {
+			g.Media = []models.GameMedia{}
+		}
+		g.Platforms = []int64{}
+		g.PlatformNames = []string{}
+		g.Keywords = []int64{}
+		g.Franchises = []int64{}
+		g.Companies = []int64{}
+		g.Series = []int64{}
+		games = append(games, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := populatePlatformNames(games); err != nil {
+		return nil, err
+	}
+	return games, nil
+}
+
+// GetAdditionalContent returns explicit extra-content records linked to the given game.
+func GetAdditionalContent(gameID int, limit int, includeMedia bool) ([]models.Game, error) {
+	if limit <= 0 {
+		limit = 60
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	exists, err := relationTablesExist("game_additional_content")
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return []models.Game{}, nil
+	}
+
+	query := `
+		SELECT
+			g.game_id,
+			g.game_name,
+			g.game_description,
+			g.release_date,
+			g.genre,
+			g.publishers,
+			g.story,
+			g.cover_image_url,
+			g.aggregated_rating,
+			g.aggregated_rating_count,
+			g.total_rating,
+			g.total_rating_count,
+			g.popularity
+		FROM game_additional_content gac
+		INNER JOIN games g ON g.game_id = gac.content_game_id
+		WHERE gac.game_id = $1
+		ORDER BY
+			CASE gac.relation_type
+				WHEN 'update' THEN 1
+				WHEN 'expanded_game' THEN 2
+				WHEN 'expansion' THEN 3
+				WHEN 'standalone_expansion' THEN 4
+				WHEN 'dlc' THEN 5
+				WHEN 'season' THEN 6
+				WHEN 'episode' THEN 7
+				WHEN 'pack' THEN 8
+				WHEN 'bundle' THEN 9
+				ELSE 10
+			END,
+			COALESCE(g.popularity, 0) DESC,
+			COALESCE(g.aggregated_rating_count, g.total_rating_count, 0) DESC,
+			g.game_id ASC
+		LIMIT $2;
+	`
+
+	rows, err := DB.Query(query, gameID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	games := make([]models.Game, 0, limit)
+	for rows.Next() {
+		var g models.Game
+		var description sql.NullString
+		var releaseDate sql.NullString
+		var genre sql.NullString
+		var publishers sql.NullString
+		var story sql.NullString
+		var coverImage sql.NullString
+		var aggregatedRating sql.NullFloat64
+		var aggregatedRatingCount sql.NullInt64
+		var totalRating sql.NullFloat64
+		var totalRatingCount sql.NullInt64
+		var popularity sql.NullFloat64
+		if err := rows.Scan(
+			&g.ID,
+			&g.Name,
+			&description,
+			&releaseDate,
+			&genre,
+			&publishers,
+			&story,
+			&coverImage,
+			&aggregatedRating,
+			&aggregatedRatingCount,
+			&totalRating,
+			&totalRatingCount,
+			&popularity,
+		); err != nil {
 			return nil, err
 		}
 
@@ -1136,7 +1356,7 @@ func GetGameMedia(gameID int) ([]models.GameMedia, error) {
 // GetGameRelations retrieves all related entity IDs for a given game
 func GetGameRelations(gameID int) ([]int64, []string, []int64, []int64, []int64, []int64, error) {
 	// Fetch related entity IDs for platforms, keywords, franchises, companies, and series using a helper function to avoid code duplication
-	platforms, err := fetchRelationIDs(`SELECT platform_id FROM game_platform WHERE game_id=$1`, gameID)
+	platforms, err := fetchRelationIDsIfTableExists("game_platform", `SELECT platform_id FROM game_platform WHERE game_id=$1`, gameID)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
@@ -1147,23 +1367,23 @@ func GetGameRelations(gameID int) ([]int64, []string, []int64, []int64, []int64,
 	}
 
 	// Fetch keywords, franchises, companies, and series in a similar way
-	keywords, err := fetchRelationIDs(`SELECT keyword_id FROM game_keywords WHERE game_id=$1`, gameID)
+	keywords, err := fetchRelationIDsIfTableExists("game_keywords", `SELECT keyword_id FROM game_keywords WHERE game_id=$1`, gameID)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
 
 	// Fetch franchises, companies, and series in a similar way
-	franchises, err := fetchRelationIDs(`SELECT franchise_id FROM game_franchise WHERE game_id=$1`, gameID)
+	franchises, err := fetchRelationIDsIfTableExists("game_franchise", `SELECT franchise_id FROM game_franchise WHERE game_id=$1`, gameID)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
 
 	// Fetch
-	companies, err := fetchRelationIDs(`SELECT company_id FROM game_companies WHERE game_id=$1`, gameID)
+	companies, err := fetchRelationIDsIfTableExists("game_companies", `SELECT company_id FROM game_companies WHERE game_id=$1`, gameID)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
-	series, err := fetchRelationIDs(`SELECT series_id FROM game_series WHERE game_id=$1`, gameID)
+	series, err := fetchRelationIDsIfTableExists("game_series", `SELECT series_id FROM game_series WHERE game_id=$1`, gameID)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
@@ -1171,6 +1391,14 @@ func GetGameRelations(gameID int) ([]int64, []string, []int64, []int64, []int64,
 }
 
 func fetchPlatformNames(gameID int) ([]string, error) {
+	platformTablesAvailable, err := relationTablesExist("game_platform", "platform")
+	if err != nil {
+		return nil, err
+	}
+	if !platformTablesAvailable {
+		return []string{}, nil
+	}
+
 	rows, err := DB.Query(`
 			SELECT p.platform_name FROM platform p
 			INNER JOIN game_platform gp ON gp.platform_id = p.platform_id
@@ -1240,6 +1468,14 @@ func fetchPlatformNamesByGameIDs(gameIDs []int64) (map[int64][]string, error) {
 		result[gameID] = []string{}
 	}
 
+	platformTablesAvailable, err := relationTablesExist("game_platform", "platform")
+	if err != nil {
+		return nil, err
+	}
+	if !platformTablesAvailable {
+		return result, nil
+	}
+
 	rows, err := DB.Query(`
 			SELECT gp.game_id, p.platform_name
 			FROM game_platform gp
@@ -1305,4 +1541,32 @@ func fetchRelationIDs(query string, args ...interface{}) ([]int64, error) {
 		return nil, err
 	}
 	return ids, nil
+}
+
+func fetchRelationIDsIfTableExists(tableName string, query string, args ...interface{}) ([]int64, error) {
+	exists, err := relationTablesExist(tableName)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return []int64{}, nil
+	}
+	return fetchRelationIDs(query, args...)
+}
+
+func relationTablesExist(tableNames ...string) (bool, error) {
+	for _, tableName := range tableNames {
+		var qualifiedName sql.NullString
+		err := DB.QueryRow(
+			"SELECT to_regclass($1)::text",
+			"public."+strings.TrimSpace(tableName),
+		).Scan(&qualifiedName)
+		if err != nil {
+			return false, err
+		}
+		if !qualifiedName.Valid || strings.TrimSpace(qualifiedName.String) == "" {
+			return false, nil
+		}
+	}
+	return true, nil
 }

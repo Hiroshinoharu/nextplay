@@ -5,6 +5,7 @@
 -- ============================================================
 
 DROP TABLE IF EXISTS game_series CASCADE;
+DROP TABLE IF EXISTS game_additional_content CASCADE;
 DROP TABLE IF EXISTS game_media CASCADE;
 DROP TABLE IF EXISTS game_genre CASCADE;
 DROP TABLE IF EXISTS game_keywords CASCADE;

@@ -60,6 +60,21 @@ func TestGetRelatedAddOnContentRejectsInvalidID(t *testing.T) {
 	}
 }
 
+func TestGetAdditionalContentRejectsInvalidID(t *testing.T) {
+	app := fiber.New()
+	app.Get("/games/:id/additional-content", GetAdditionalContent)
+
+	resp, err := app.Test(httptest.NewRequest("GET", "/games/not-a-number/additional-content", nil))
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", fiber.StatusBadRequest, resp.StatusCode)
+	}
+}
+
 // TestCreateGameRejectsMalformedJSON tests that CreateGame rejects requests with malformed JSON bodies.
 func TestCreateGameRejectsMalformedJSON(t *testing.T) {
 	app := fiber.New()
@@ -294,6 +309,29 @@ func TestGetRelatedAddOnContentReturnsResults(t *testing.T) {
 	}
 }
 
+func TestGetAdditionalContentReturnsResults(t *testing.T) {
+	withGameStoreStubs(t)
+	getAdditionalContentFromStore = func(id int, limit int, includeMedia bool) ([]gamemodels.Game, error) {
+		if id != 42 || limit != 100 || !includeMedia {
+			t.Fatalf("unexpected additional-content args: id=%d limit=%d includeMedia=%v", id, limit, includeMedia)
+		}
+		return []gamemodels.Game{{ID: 101, Name: "Halo Title Update 2.0"}}, nil
+	}
+
+	app := fiber.New()
+	app.Get("/games/:id/additional-content", GetAdditionalContent)
+
+	resp, err := app.Test(httptest.NewRequest("GET", "/games/42/additional-content?limit=999&include_media=1", nil))
+	if err != nil {
+		t.Fatalf("app.Test returned error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected status %d, got %d", fiber.StatusOK, resp.StatusCode)
+	}
+}
+
 // TestCreateGameReturnsCreatedGameID tests that CreateGame returns the created game ID.
 // The test checks that the function returns the correct created game ID and that the query parameters are normalized correctly.
 func TestCreateGameReturnsCreatedGameID(t *testing.T) {
@@ -432,6 +470,7 @@ func withGameStoreStubs(t *testing.T) {
 	oldGetGameRelations := getGameRelationsFromStore
 	oldGetGameMedia := getGameMediaFromStore
 	oldGetRelatedAddOnContent := getRelatedAddOnContentFromStore
+	oldGetAdditionalContent := getAdditionalContentFromStore
 	oldCreateGame := createGameInStore
 	oldUpdateGame := updateGameInStore
 	oldDeleteGame := deleteGameFromStore
@@ -446,6 +485,7 @@ func withGameStoreStubs(t *testing.T) {
 		getGameRelationsFromStore = oldGetGameRelations
 		getGameMediaFromStore = oldGetGameMedia
 		getRelatedAddOnContentFromStore = oldGetRelatedAddOnContent
+		getAdditionalContentFromStore = oldGetAdditionalContent
 		createGameInStore = oldCreateGame
 		updateGameInStore = oldUpdateGame
 		deleteGameFromStore = oldDeleteGame

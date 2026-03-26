@@ -83,7 +83,7 @@ func (client *Client) FetchGames(maxGames int) ([]Game, error) {
 			break
 		}
 		query := fmt.Sprintf(
-			"fields name,summary,first_release_date,aggregated_rating,aggregated_rating_count,total_rating,total_rating_count,genres,platforms,keywords,storyline,cover,involved_companies,external_games,artworks,screenshots,videos; limit %d; offset %d; where name != null;",
+			"fields name,summary,game_type,parent_game,version_parent,first_release_date,aggregated_rating,aggregated_rating_count,total_rating,total_rating_count,genres,platforms,keywords,franchises,collections,dlcs,expansions,expanded_games,standalone_expansions,bundles,storyline,cover,involved_companies,external_games,artworks,screenshots,videos; limit %d; offset %d; where name != null;",
 			pageLimit,
 			offset,
 		)
@@ -115,7 +115,7 @@ func (client *Client) FetchGamesByIDs(ids []int) ([]Game, error) {
 	var games []Game
 	for _, chunk := range chunkIDs(ids, 200) {
 		query := fmt.Sprintf(
-			"fields name,summary,first_release_date,aggregated_rating,aggregated_rating_count,total_rating,total_rating_count,genres,platforms,keywords,franchises, collections,storyline,cover,involved_companies,external_games,artworks,screenshots,videos; where id = (%s); limit %d;",
+			"fields name,summary,game_type,parent_game,version_parent,first_release_date,aggregated_rating,aggregated_rating_count,total_rating,total_rating_count,genres,platforms,keywords,franchises,collections,dlcs,expansions,expanded_games,standalone_expansions,bundles,storyline,cover,involved_companies,external_games,artworks,screenshots,videos; where id = (%s); limit %d;",
 			joinIDs(chunk),
 			len(chunk),
 		)
@@ -123,6 +123,36 @@ func (client *Client) FetchGamesByIDs(ids []int) ([]Game, error) {
 		if err != nil {
 			return nil, err
 		}
+		var batch []Game
+		if err := json.Unmarshal(payload, &batch); err != nil {
+			return nil, err
+		}
+		if len(batch) == 0 {
+			continue
+		}
+		games = append(games, batch...)
+	}
+	return games, nil
+}
+
+// FetchAdditionalContentChildren retrieves extra-content child records linked by parent or version parent.
+func (client *Client) FetchAdditionalContentChildren(parentIDs []int) ([]Game, error) {
+	if len(parentIDs) == 0 {
+		return []Game{}, nil
+	}
+
+	var games []Game
+	for _, chunk := range chunkIDs(parentIDs, 100) {
+		query := fmt.Sprintf(
+			"fields name,summary,game_type,parent_game,version_parent,first_release_date,aggregated_rating,aggregated_rating_count,total_rating,total_rating_count,genres,platforms,keywords,franchises,collections,dlcs,expansions,expanded_games,standalone_expansions,bundles,storyline,cover,involved_companies,external_games,artworks,screenshots,videos; where (parent_game = (%s) | version_parent = (%s)) & game_type = (1,2,3,4,5,6,7,10,13,14); limit 500;",
+			joinIDs(chunk),
+			joinIDs(chunk),
+		)
+		payload, err := client.post("/games", query)
+		if err != nil {
+			return nil, err
+		}
+
 		var batch []Game
 		if err := json.Unmarshal(payload, &batch); err != nil {
 			return nil, err

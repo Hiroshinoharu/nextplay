@@ -21,6 +21,7 @@ func SetUpRoutes(app *fiber.App) {
 	games.Get("/questionnaire-facets", handlers.GetQuestionnaireFacets)
 	games.Get("/:id", handlers.GetGameByID) // Get one game by ID
 	games.Get("/:id/related-content", handlers.GetRelatedAddOnContent)
+	games.Get("/:id/additional-content", handlers.GetAdditionalContent)
 	games.Post("/", middleware.RequireServiceAuth, handlers.CreateGame)
 	games.Put("/:id", middleware.RequireServiceAuth, handlers.UpdateGame)
 	games.Delete("/:id", middleware.RequireServiceAuth, handlers.DeleteGame)

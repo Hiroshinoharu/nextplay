@@ -12,7 +12,12 @@ import TrailerGallery from "./components/TrailerGallery";
 import Loader from "./components/Loader";
 import logoUrl from "./assets/logo.png";
 import { getUserInitials, type AuthUser } from "./utils/authUser";
-import { isNonBaseContentGame, normalizeCatalogImageUrl } from "./utils/catalog";
+import {
+  buildAssociationTokens,
+  buildRelatedCatalogSearchQueries,
+  filterRelatedBaseCatalogGames,
+  normalizeCatalogImageUrl,
+} from "./utils/catalog";
 import { type ThemeMode } from "./utils/theme";
 import {
   collapseWhitespace,
@@ -125,24 +130,33 @@ const formatCommaSeparatedText = (value?: string) => {
   return normalized;
 };
 
-const buildAssociationTokens = (gameName: string): string[] => {
-  const stopWords = new Set([
-    "the",
-    "and",
-    "for",
-    "with",
-    "edition",
-    "ultimate",
-    "complete",
-    "deluxe",
-    "royal",
-    "game",
-  ]);
-  const normalized = normalizeAlphaNumericText(gameName)
+const buildAssociationMatchScore = (candidate: GameItem, tokens: string[], query: string) => {
+  const normalizedTitle = normalizeAlphaNumericText(candidate.name);
+  const normalizedMetadata = normalizeAlphaNumericText(
+    `${candidate.name ?? ""} ${candidate.description ?? ""} ${candidate.story ?? ""}`,
+  );
+  const queryTokens = normalizeAlphaNumericText(query)
     .split(" ")
     .map((token) => token.trim())
-    .filter((token) => token.length >= 3 && !stopWords.has(token));
-  return Array.from(new Set(normalized)).slice(0, 6);
+    .filter(Boolean);
+  const titleTokenHits = tokens.reduce(
+    (sum, token) => sum + (normalizedTitle.includes(token) ? 1 : 0),
+    0,
+  );
+  const metadataTokenHits = tokens.reduce(
+    (sum, token) => sum + (normalizedMetadata.includes(token) ? 1 : 0),
+    0,
+  );
+  const queryTokenHits = queryTokens.reduce(
+    (sum, token) => sum + (normalizedTitle.includes(token) ? 1 : 0),
+    0,
+  );
+
+  return {
+    titleTokenHits,
+    metadataTokenHits,
+    queryTokenHits,
+  };
 };
 
 // Main Game component handling individual game detail view
@@ -561,7 +575,7 @@ function Game({ authUser, theme }: GameProps) {
   const platformsText = platformsTextFull || "n/a";
 
   useEffect(() => {
-    if (!game?.id) {
+    if (!game?.id || !game.name?.trim()) {
       setRelatedContent([]);
       setRelatedError(null);
       setRelatedLoading(false);
@@ -573,6 +587,8 @@ function Game({ authUser, theme }: GameProps) {
       setRelatedLoading(true);
       setRelatedError(null);
       try {
+        const fallbackQueries = buildRelatedCatalogSearchQueries(game.name);
+        const tokens = buildAssociationTokens(game.name);
         const query = new URLSearchParams({
           limit: "60",
           include_media: "1",
@@ -583,21 +599,95 @@ function Game({ authUser, theme }: GameProps) {
             ? { headers: { Authorization: `Bearer ${authToken}` } }
             : {}),
         });
-        if (!response.ok) {
-          setRelatedError(`Could not load franchise games (${response.status}).`);
-          setRelatedContent([]);
+        let relatedFromStore: GameItem[] = [];
+        if (response.ok) {
+          const payload = await response.json();
+          if (Array.isArray(payload)) {
+            relatedFromStore = filterRelatedBaseCatalogGames(game.name, payload as GameItem[]);
+          }
+        }
+        if (relatedFromStore.length) {
+          setRelatedContent(relatedFromStore);
           return;
         }
-        const payload = await response.json();
-        if (!Array.isArray(payload)) {
-          setRelatedError("Unexpected franchise response shape.");
-          setRelatedContent([]);
-          return;
+
+        const fallbackMatches = new Map<number, {
+          candidate: GameItem;
+          queryTokenHits: number;
+          titleTokenHits: number;
+          metadataTokenHits: number;
+        }>();
+
+        for (const fallbackQuery of fallbackQueries) {
+          const searchQuery = new URLSearchParams({
+            q: fallbackQuery,
+            mode: "contains",
+            limit: "80",
+            offset: "0",
+            include_media: "1",
+            exclude_non_base: "1",
+          });
+          const fallbackResponse = await fetch(`${API_ROOT}/api/games/search?${searchQuery.toString()}`, {
+            signal: controller.signal,
+            ...(authToken
+              ? { headers: { Authorization: `Bearer ${authToken}` } }
+              : {}),
+          });
+          if (!fallbackResponse.ok) {
+            continue;
+          }
+          const fallbackPayload = await fallbackResponse.json();
+          if (!Array.isArray(fallbackPayload)) {
+            continue;
+          }
+
+          const rankedMatches = filterRelatedBaseCatalogGames(game.name, fallbackPayload as GameItem[])
+            .filter((candidate) => candidate.id !== game.id)
+            .map((candidate) => ({
+              candidate,
+              ...buildAssociationMatchScore(candidate, tokens, fallbackQuery),
+            }))
+            .filter((row) => row.queryTokenHits > 0 && row.titleTokenHits > 0);
+
+          for (const row of rankedMatches) {
+            const existing = fallbackMatches.get(row.candidate.id);
+            if (
+              !existing ||
+              row.queryTokenHits > existing.queryTokenHits ||
+              (row.queryTokenHits === existing.queryTokenHits &&
+                row.titleTokenHits > existing.titleTokenHits) ||
+              (row.queryTokenHits === existing.queryTokenHits &&
+                row.titleTokenHits === existing.titleTokenHits &&
+                row.metadataTokenHits > existing.metadataTokenHits)
+            ) {
+              fallbackMatches.set(row.candidate.id, row);
+            }
+          }
         }
-        setRelatedContent(payload as GameItem[]);
+
+        const fallbackRelated = Array.from(fallbackMatches.values())
+          .sort((a, b) => {
+            if (b.queryTokenHits !== a.queryTokenHits) {
+              return b.queryTokenHits - a.queryTokenHits;
+            }
+            if (b.titleTokenHits !== a.titleTokenHits) {
+              return b.titleTokenHits - a.titleTokenHits;
+            }
+            if (b.metadataTokenHits !== a.metadataTokenHits) {
+              return b.metadataTokenHits - a.metadataTokenHits;
+            }
+            return (b.candidate.popularity ?? 0) - (a.candidate.popularity ?? 0);
+          })
+          .map((row) => row.candidate)
+          .slice(0, 36);
+
+        if (!fallbackRelated.length && !response.ok) {
+          setRelatedError(`Could not load related titles (${response.status}).`);
+        }
+        setRelatedContent(fallbackRelated);
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
-        setRelatedError("Could not load related franchise games.");
+        setRelatedError("Could not load related titles.");
         setRelatedContent([]);
       } finally {
         if (!controller.signal.aborted) {
@@ -608,7 +698,7 @@ function Game({ authUser, theme }: GameProps) {
 
     void loadRelated();
     return () => controller.abort();
-  }, [authToken, game?.id]);
+  }, [authToken, game?.id, game?.name]);
 
   useEffect(() => {
     if (!game?.id || !game.name?.trim()) {
@@ -624,13 +714,10 @@ function Game({ authUser, theme }: GameProps) {
       setAdditionalError(null);
       try {
         const query = new URLSearchParams({
-          q: game.name,
-          mode: "contains",
-          limit: "120",
-          offset: "0",
+          limit: "60",
           include_media: "1",
         });
-        const response = await fetch(`${API_ROOT}/api/games/search?${query.toString()}`, {
+        const response = await fetch(`${API_ROOT}/api/games/${game.id}/additional-content?${query.toString()}`, {
           signal: controller.signal,
           ...(authToken
             ? { headers: { Authorization: `Bearer ${authToken}` } }
@@ -648,28 +735,7 @@ function Game({ authUser, theme }: GameProps) {
           return;
         }
 
-        const tokens = buildAssociationTokens(game.name);
-        const ranked = (payload as GameItem[])
-          .filter((candidate) => candidate.id !== game.id)
-          .filter((candidate) => isNonBaseContentGame(candidate))
-          .map((candidate) => {
-            const searchable =
-              `${candidate.name ?? ""} ${candidate.description ?? ""} ${candidate.story ?? ""}`.toLowerCase();
-            const tokenHits = tokens.reduce(
-              (sum, token) => sum + (searchable.includes(token) ? 1 : 0),
-              0,
-            );
-            return { candidate, tokenHits };
-          })
-          .filter((row) => row.tokenHits > 0)
-          .sort((a, b) => {
-            if (b.tokenHits !== a.tokenHits) return b.tokenHits - a.tokenHits;
-            return (b.candidate.popularity ?? 0) - (a.candidate.popularity ?? 0);
-          })
-          .map((row) => row.candidate)
-          .slice(0, 36);
-
-        setAdditionalContent(ranked);
+        setAdditionalContent((payload as GameItem[]).filter((candidate) => candidate.id !== game.id));
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
         setAdditionalError("Could not load additional content.");
@@ -1015,8 +1081,8 @@ function Game({ authUser, theme }: GameProps) {
               {relatedLoading ? (
                 <div className="game-gallery__empty">
                   <Loader
-                    title="Loading franchise games"
-                    subtitle="Finding connected titles..."
+                    title="Loading related titles"
+                    subtitle="Finding franchise and series matches..."
                     theme={theme}
                   />
                 </div>
@@ -1024,8 +1090,9 @@ function Game({ authUser, theme }: GameProps) {
                 <div className="game-gallery__empty">{relatedError}</div>
               ) : relatedContent.length ? (
                 <GameCarousel
-                  title="More from this Franchise"
-                  badge="Franchise"
+                  title="Related Titles"
+                  badge="Base Games"
+                  badgeVariant="base"
                   games={relatedContent}
                   onSelect={(targetId) => navigate(`/games/${targetId}`)}
                   getDescription={(item) => {
@@ -1036,7 +1103,7 @@ function Game({ authUser, theme }: GameProps) {
                 />
               ) : (
                 <div className="game-gallery__empty">
-                  No franchise games found for this title yet.
+                  No related titles found for this game yet.
                 </div>
               )}
             </section>
@@ -1057,7 +1124,8 @@ function Game({ authUser, theme }: GameProps) {
               ) : additionalContent.length ? (
                 <GameCarousel
                   title="Additional Content"
-                  badge="DLC / Packs"
+                  badge="Add-Ons / Editions"
+                  badgeVariant="addon"
                   games={additionalContent}
                   onSelect={(targetId) => navigate(`/games/${targetId}`)}
                   getDescription={(item) => {
@@ -1105,11 +1173,3 @@ function Game({ authUser, theme }: GameProps) {
 }
 
 export default Game;
-
-
-
-
-
-
-
-

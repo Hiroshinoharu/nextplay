@@ -265,6 +265,35 @@ func bulkInsertJoinPairs(tx DBTX, table, leftCol, rightCol string, leftIDs, righ
 	return nil
 }
 
+func bulkInsertGameAdditionalContentPairs(tx DBTX, parentGameIDs, contentGameIDs []int, relationTypes []string, batchSize int) error {
+	if len(parentGameIDs) == 0 || len(contentGameIDs) == 0 || len(relationTypes) == 0 {
+		return nil
+	}
+	if len(parentGameIDs) != len(contentGameIDs) || len(parentGameIDs) != len(relationTypes) {
+		return fmt.Errorf("mismatched additional content relation batch sizes")
+	}
+
+	query := `
+		INSERT INTO game_additional_content (game_id, content_game_id, relation_type)
+		SELECT * FROM UNNEST($1::int[], $2::int[], $3::text[])
+		ON CONFLICT (game_id, content_game_id, relation_type) DO NOTHING
+	`
+
+	batchSize = normalizeBatchSize(batchSize, len(parentGameIDs))
+	for start := 0; start < len(parentGameIDs); start += batchSize {
+		end := batchEnd(start, batchSize, len(parentGameIDs))
+		if _, err := tx.Exec(
+			query,
+			pq.Array(parentGameIDs[start:end]),
+			pq.Array(contentGameIDs[start:end]),
+			pq.Array(relationTypes[start:end]),
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // bulkInsertGameMedia inserts media rows in batches, skipping existing rows.
 func bulkInsertGameMedia(tx DBTX, gameIDs, igdbIDs []int, mediaTypes, urls []string, sortOrders []int, batchSize int) error {
 	if len(gameIDs) == 0 {

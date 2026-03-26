@@ -86,6 +86,15 @@ func GetRelatedAddOnContent(c *fiber.Ctx) error {
 	return sendProxyBytes(c, status, data, err)
 }
 
+// GetAdditionalContent retrieves explicit additional-content rows for the given game id.
+func GetAdditionalContent(c *fiber.Ctx) error {
+	id := c.Params("id")
+	query := c.Context().QueryArgs().String()
+	gameClient := clients.NewGameClientWithHeaders(forwardingHeaders(c))
+	status, data, err := gameClient.GetAdditionalContent(id, query)
+	return sendProxyBytes(c, status, data, err)
+}
+
 // CreateGame creates a new game in the database.
 // The request body should contain a JSON object representing the game to be created.
 // The response will contain a JSON object representing the created game, along with a status code and any error messages if there are any issues with the request.

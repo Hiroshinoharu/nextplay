@@ -99,6 +99,7 @@ func (gc *GameClient) SearchGamesByName(query string) (int, []byte, error) {
 //   - offset: the number of games to skip before returning the result
 //   - min_rating_count: the minimum number of ratings required for a game to be included in the result
 //   - include_media: whether to include media (e.g. images, videos) in the response
+//
 // The result is a list of games in JSON format.
 // The returned status code is the HTTP status code from the Game service.
 // The returned error is nil if the request is successful, or an error if there is an issue with the request.
@@ -120,6 +121,7 @@ func (gc *GameClient) GetPopularGames(query string) (int, []byte, error) {
 //   - offset: the number of games to skip before returning the result
 //   - min_rating_count: the minimum number of ratings required for a game to be included in the result
 //   - include_media: whether to include media (e.g. images, videos) in the response
+//
 // The result is a list of games in JSON format.
 // The returned status code is the HTTP status code from the Game service.
 // The returned error is nil if the request is successful, or an error if there is an issue with the request.
@@ -163,10 +165,24 @@ func (gc *GameClient) GetGameByID(id string) (int, []byte, error) {
 //   - offset: the number of games to skip before returning the result
 //   - min_rating_count: the minimum number of ratings required for a game to be included in the result
 //   - include_media: whether to include media (e.g. images, videos) in the response
+//
 // The returned status code is the HTTP status code from the Game service.
 // The returned error is nil if the request is successful, or an error if there is an issue with the request.
 func (gc *GameClient) GetRelatedAddOnContent(id, query string) (int, []byte, error) {
 	url := fmt.Sprintf("%s/games/%s/related-content", gc.baseURL, id)
+	if query != "" {
+		url += "?" + query
+	}
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return 0, nil, err
+	}
+	return gc.doRequest(req)
+}
+
+// GetAdditionalContent returns explicit extra-content rows for the given game ID in JSON format.
+func (gc *GameClient) GetAdditionalContent(id, query string) (int, []byte, error) {
+	url := fmt.Sprintf("%s/games/%s/additional-content", gc.baseURL, id)
 	if query != "" {
 		url += "?" + query
 	}

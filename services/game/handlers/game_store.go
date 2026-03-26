@@ -13,6 +13,7 @@ var (
 	getGameRelationsFromStore       = gamedb.GetGameRelations
 	getGameMediaFromStore           = gamedb.GetGameMedia
 	getRelatedAddOnContentFromStore = gamedb.GetRelatedAddOnContent
+	getAdditionalContentFromStore   = gamedb.GetAdditionalContent
 	createGameInStore               = gamedb.CreateGame
 	updateGameInStore               = gamedb.UpdateGame
 	deleteGameFromStore             = gamedb.DeleteGame

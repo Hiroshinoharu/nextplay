@@ -11,11 +11,13 @@ COPY services/shared/ ../shared/
 
 ENV CGO_ENABLED=0
 RUN go build -o game .
+RUN go build -o game-etl ./etl
 
 FROM alpine:3.20
 WORKDIR /
 RUN apk add --no-cache ca-certificates curl
 COPY --from=builder /app/services/game/game /game
+COPY --from=builder /app/services/game/game-etl /game-etl
 
 EXPOSE 8081
 ENTRYPOINT ["/game"]

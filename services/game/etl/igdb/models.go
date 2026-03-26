@@ -6,6 +6,7 @@ type Game struct {
 	Name                  string  `json:"name"`
 	Summary               string  `json:"summary"`
 	Storyline             string  `json:"storyline"`
+	GameType              int     `json:"game_type"`
 	FirstReleaseDate      int64   `json:"first_release_date"`
 	AggregatedRating      float64 `json:"aggregated_rating"`
 	AggregatedRatingCount int     `json:"aggregated_rating_count"`
@@ -16,6 +17,13 @@ type Game struct {
 	Keywords              []int   `json:"keywords"`
 	Franchises            []int   `json:"franchises"`
 	Collections           []int   `json:"collections"`
+	DLCs                  []int   `json:"dlcs"`
+	Expansions            []int   `json:"expansions"`
+	ExpandedGames         []int   `json:"expanded_games"`
+	StandaloneExpansions  []int   `json:"standalone_expansions"`
+	Bundles               []int   `json:"bundles"`
+	ParentGame            int     `json:"parent_game"`
+	VersionParent         int     `json:"version_parent"`
 	CoverID               int     `json:"cover"`
 	InvolvedCompanies     []int   `json:"involved_companies"`
 	ExternalGames         []int   `json:"external_games"`
