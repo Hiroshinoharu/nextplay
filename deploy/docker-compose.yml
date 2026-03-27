@@ -127,7 +127,11 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://recommender:8082/health"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -g -fsS http://[::1]:8082/health >/dev/null 2>&1 || curl -fsS http://127.0.0.1:8082/health >/dev/null 2>&1",
+        ]
       interval: 5s
       timeout: 3s
       retries: 5
