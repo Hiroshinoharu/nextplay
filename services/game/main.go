@@ -33,6 +33,11 @@ func main() {
 	if err := db.Connect(cfg.DatabaseURL); err != nil {
 		log.Fatal("Failed to connect to DB: ", err)
 	}
+	go func() {
+		if _, err := db.GetQuestionnaireFacets(); err != nil {
+			log.Printf("Questionnaire facets warmup failed: %v", err)
+		}
+	}()
 
 	app := fiber.New()
 	app.Use(observability.AccessLog("game"))

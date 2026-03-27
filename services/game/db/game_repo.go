@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/lib/pq"
 	"github.com/maxceban/nextplay/services/game/models"
@@ -32,6 +34,16 @@ type QuestionnaireFacets struct {
 	Platforms []QuestionnaireFacetPlatform `json:"platforms"`
 }
 
+const questionnaireFacetsCacheTTL = 10 * time.Minute
+
+var (
+	questionnaireFacetsCacheMu     sync.RWMutex
+	questionnaireFacetsCacheValue  *QuestionnaireFacets
+	questionnaireFacetsCacheExpiry time.Time
+	questionnaireFacetsLoader      = loadQuestionnaireFacetsFromDB
+	questionnaireFacetsTimeNow     = time.Now
+)
+
 func additionalContentExclusionCondition(gameAlias string) (string, error) {
 	exists, err := relationTablesExist("game_additional_content")
 	if err != nil {
@@ -52,6 +64,33 @@ func additionalContentExclusionCondition(gameAlias string) (string, error) {
 
 // GetQuestionnaireFacets returns aggregated genre and platform facets for discovery questions.
 func GetQuestionnaireFacets() (*QuestionnaireFacets, error) {
+	now := questionnaireFacetsTimeNow()
+	if cached := cachedQuestionnaireFacets(now, false); cached != nil {
+		return cached, nil
+	}
+
+	questionnaireFacetsCacheMu.Lock()
+	defer questionnaireFacetsCacheMu.Unlock()
+
+	now = questionnaireFacetsTimeNow()
+	if cached := cachedQuestionnaireFacetsLocked(now, false); cached != nil {
+		return cached, nil
+	}
+
+	facets, err := questionnaireFacetsLoader()
+	if err != nil {
+		if stale := cachedQuestionnaireFacetsLocked(now, true); stale != nil {
+			return stale, nil
+		}
+		return nil, err
+	}
+
+	questionnaireFacetsCacheValue = cloneQuestionnaireFacets(facets)
+	questionnaireFacetsCacheExpiry = now.Add(questionnaireFacetsCacheTTL)
+	return cloneQuestionnaireFacets(facets), nil
+}
+
+func loadQuestionnaireFacetsFromDB() (*QuestionnaireFacets, error) {
 	additionalContentFilter, err := additionalContentExclusionCondition("games")
 	if err != nil {
 		return nil, err
@@ -144,6 +183,35 @@ func GetQuestionnaireFacets() (*QuestionnaireFacets, error) {
 	}
 
 	return facets, nil
+}
+
+func cachedQuestionnaireFacets(now time.Time, allowExpired bool) *QuestionnaireFacets {
+	questionnaireFacetsCacheMu.RLock()
+	defer questionnaireFacetsCacheMu.RUnlock()
+	return cachedQuestionnaireFacetsLocked(now, allowExpired)
+}
+
+func cachedQuestionnaireFacetsLocked(now time.Time, allowExpired bool) *QuestionnaireFacets {
+	if questionnaireFacetsCacheValue == nil {
+		return nil
+	}
+	if !allowExpired && !questionnaireFacetsCacheExpiry.IsZero() && now.After(questionnaireFacetsCacheExpiry) {
+		return nil
+	}
+	return cloneQuestionnaireFacets(questionnaireFacetsCacheValue)
+}
+
+func cloneQuestionnaireFacets(source *QuestionnaireFacets) *QuestionnaireFacets {
+	if source == nil {
+		return nil
+	}
+	cloned := &QuestionnaireFacets{
+		Genres:    make([]QuestionnaireFacetGenre, len(source.Genres)),
+		Platforms: make([]QuestionnaireFacetPlatform, len(source.Platforms)),
+	}
+	copy(cloned.Genres, source.Genres)
+	copy(cloned.Platforms, source.Platforms)
+	return cloned
 }
 
 // GetGames retrieves a page of games from the database.
