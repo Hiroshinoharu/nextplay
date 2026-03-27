@@ -15,12 +15,14 @@ jobs:
       packages: write
       contents: read
     env:
-      DOCKER_CONFIG: ${{ runner.temp }}/.docker
       DOCKER_AUTH_CONFIG: ""
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Set isolated Docker config path
+        run: echo "DOCKER_CONFIG=${RUNNER_TEMP}/.docker" >> "$GITHUB_ENV"
 
       - name: Prepare isolated Docker config
         run: |

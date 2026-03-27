@@ -160,6 +160,7 @@ const FAVORITE_SEARCH_MIN_RATING = 65;
 const FAVORITE_SEARCH_MIN_VOTES = 100;
 const RECOMMENDATION_INITIAL_DETAIL_COUNT = 12;
 const RECOMMENDATION_DETAIL_BATCH_SIZE = 12;
+const RECOMMENDATION_EXPOSURE_EVENT_LIMIT = 3;
 
 const INITIAL_ROW_ITEMS = 24;
 const ROW_STEP_ITEMS = 24;
@@ -446,6 +447,17 @@ const stableOrderBySeed = (items: GameItem[], seed: string) =>
     if (left !== right) return left - right;
     return a.id - b.id;
   });
+
+const dedupeGameItems = (items: GameItem[]) => {
+  const seen = new Set<number>();
+  const deduped: GameItem[] = [];
+  for (const item of items) {
+    if (!item || typeof item.id !== "number" || seen.has(item.id)) continue;
+    seen.add(item.id);
+    deduped.push(item);
+  }
+  return deduped;
+};
 
 /**
  * Computes a weighted signal from a game item, its rank, and a personalization signal.
@@ -875,6 +887,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
   const randomPoolFetchPromiseRef = useRef<Promise<unknown> | null>(null);
   const recommendationRunIdRef = useRef<number>(0);
   const loggedRecommendationEventKeysRef = useRef<Set<string>>(new Set());
+  const recommendationEventPostingDisabledRef = useRef<boolean>(false);
   const searchGridSectionRef = useRef<HTMLElement | null>(null);
   const randomLanesSectionRef = useRef<HTMLDivElement | null>(null);
   const recommendationSectionRef = useRef<HTMLDivElement | null>(null);
@@ -901,6 +914,9 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
     if (!authUser?.id) return null;
     return `${API_ROOT}/api/users/${authUser.id}/interactions/events`;
   }, [authUser?.id]);
+  useEffect(() => {
+    recommendationEventPostingDisabledRef.current = false;
+  }, [recommendationEventsUrl]);
   const questionnaireFacetsQuery = useQuery({
     queryKey: ["discover-questionnaire-facets", authUser?.id ?? "guest"],
     enabled:
@@ -1526,7 +1542,9 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
       trace: RecommendationTrace | null,
       metadata?: Record<string, unknown>,
     ) => {
-      if (!recommendationEventsUrl || !trace) return false;
+      if (!recommendationEventsUrl || !trace || recommendationEventPostingDisabledRef.current) {
+        return false;
+      }
       try {
         const response = await fetch(recommendationEventsUrl, {
           method: "POST",
@@ -1546,8 +1564,13 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
             metadata: metadata ?? {},
           }),
         });
-        return response.ok;
+        if (!response.ok) {
+          recommendationEventPostingDisabledRef.current = true;
+          return false;
+        }
+        return true;
       } catch {
+        recommendationEventPostingDisabledRef.current = true;
         return false;
       }
     },
@@ -1556,8 +1579,8 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
 
   const logRecommendationExposureBatch = useCallback(
     (games: GameItem[], trace: RecommendationTrace | null, ranks: Record<number, number>) => {
-      if (!trace) return;
-      for (const game of games) {
+      if (!trace || recommendationEventPostingDisabledRef.current) return;
+      for (const game of games.slice(0, RECOMMENDATION_EXPOSURE_EVENT_LIMIT)) {
         const dedupeKey = `${trace.requestId}:recommendation_exposure:${game.id}`;
         if (loggedRecommendationEventKeysRef.current.has(dedupeKey)) continue;
         loggedRecommendationEventKeysRef.current.add(dedupeKey);
@@ -2119,16 +2142,14 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
 
   const handleRecommendationFavorite = useCallback(
     async (gameId: number, rank: number) => {
-      const success = await postRecommendationEvent(
+      setSavedRecommendationIds((prev) => (prev.includes(gameId) ? prev : [...prev, gameId]));
+      await postRecommendationEvent(
         gameId,
         "recommendation_favorite",
         rank,
         recommendationTrace,
         { surface: "discover_results" },
       );
-      if (success) {
-        setSavedRecommendationIds((prev) => (prev.includes(gameId) ? prev : [...prev, gameId]));
-      }
     },
     [postRecommendationEvent, recommendationTrace],
   );
@@ -2158,6 +2179,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
     isFetchingNextPage: randomPoolLoadingMore,
     hasNextPage: hasMoreRandomPool,
     fetchNextPage: fetchNextRandomPoolPage,
+    error: randomPoolError,
   } = useInfiniteQuery<RandomPoolPage, Error>({
     queryKey: ["discover-random-pool", randomPoolPageSize] as const,
     queryFn: async ({ pageParam, signal }: { pageParam: unknown; signal?: AbortSignal }) => {
@@ -2218,9 +2240,72 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
     () => randomPool.filter((game) => !shouldHideFromDiscover(game)),
     [randomPool],
   );
+  const {
+    data: fallbackDiscoverPoolData = [],
+    isPending: fallbackDiscoverPoolLoading,
+  } = useQuery<GameItem[], Error>({
+    queryKey: ["discover-fallback-popular-feed"] as const,
+    enabled: !normalizedSearchQuery && !randomPoolLoading && discoverBasePool.length === 0,
+    queryFn: async ({ signal }) => {
+      const currentYear = new Date().getFullYear();
+      const years = [currentYear, currentYear - 1, 0];
+      const collected: GameItem[] = [];
+
+      for (const year of years) {
+        const query = new URLSearchParams({
+          year: String(year),
+          limit: "50",
+          offset: "0",
+          min_rating_count: "1",
+          include_media: "0",
+        });
+        const response = await fetch(`${API_ROOT}/api/games/popular?${query.toString()}`, {
+          signal,
+        });
+        if (!response.ok) {
+          if (collected.length > 0) {
+            continue;
+          }
+          throw new Error(`Popular fallback failed (${response.status})`);
+        }
+        const payload = await response.json();
+        if (!Array.isArray(payload)) {
+          if (collected.length > 0) {
+            continue;
+          }
+          throw new Error("Unexpected discover fallback response shape");
+        }
+        collected.push(...(payload as GameItem[]));
+        if (dedupeGameItems(collected).length >= INITIAL_ROW_ITEMS) {
+          break;
+        }
+      }
+
+      return dedupeGameItems(collected);
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+  const fallbackDiscoverPool = useMemo(
+    () => fallbackDiscoverPoolData.filter((game) => !shouldHideFromDiscover(game)),
+    [fallbackDiscoverPoolData],
+  );
+  const effectiveDiscoverBasePool = useMemo(
+    () => (discoverBasePool.length > 0 ? discoverBasePool : fallbackDiscoverPool),
+    [discoverBasePool, fallbackDiscoverPool],
+  );
+  const discoverFeedErrorMessage = useMemo(() => {
+    if (!(randomPoolError instanceof Error)) return null;
+    if (fallbackDiscoverPool.length > 0) {
+      return "Discover live feed is temporarily unavailable. Showing fallback popular picks.";
+    }
+    return "Discover feed is temporarily unavailable right now. Try again in a moment.";
+  }, [fallbackDiscoverPool.length, randomPoolError]);
   const filterSourceGames = useMemo(
-    () => (normalizedSearchQuery ? cards : discoverBasePool),
-    [cards, discoverBasePool, normalizedSearchQuery],
+    () => (normalizedSearchQuery ? cards : effectiveDiscoverBasePool),
+    [cards, effectiveDiscoverBasePool, normalizedSearchQuery],
   );
   const genreFilterOptions = useMemo(
     () =>
@@ -2269,7 +2354,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
     setSelectedPlatform(ALL_PLATFORM_FILTER_VALUE);
   }, []);
   const discoverCarousels = useMemo(() => {
-    const safePool = discoverBasePool.filter(
+    const safePool = effectiveDiscoverBasePool.filter(
       (game) =>
         matchesGenreFilter(game, selectedGenre) &&
         matchesPlatformFilter(game, selectedPlatform),
@@ -2552,7 +2637,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
       ...specialRows,
     ];
   }, [
-    discoverBasePool,
+    effectiveDiscoverBasePool,
     recentReleaseWindowMonths,
     selectedGenre,
     selectedPlatform,
@@ -2972,7 +3057,11 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
               ) : null}
               {!normalizedSearchQuery ? (
                 <div ref={randomLanesSectionRef} className="discover-random">
-                  {randomPoolLoading && visibleDisplayedDiscoverCarousels.length === 0 ? (
+                  {discoverFeedErrorMessage ? (
+                    <div className="search-error">{discoverFeedErrorMessage}</div>
+                  ) : null}
+                  {(randomPoolLoading || fallbackDiscoverPoolLoading) &&
+                  visibleDisplayedDiscoverCarousels.length === 0 ? (
                     <LoadingScreen
                       fullScreen
                       theme={theme}
@@ -3268,7 +3357,10 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
                         </footer>
                       </div>
                     </section>
-                  ) : null}                  {!randomPoolLoading && visibleDisplayedDiscoverCarousels.length === 0 ? (
+                  ) : null}
+                  {!randomPoolLoading &&
+                  !fallbackDiscoverPoolLoading &&
+                  visibleDisplayedDiscoverCarousels.length === 0 ? (
                     <section className="games-search-grid-section discover-empty-state" aria-live="polite">
                       <p className="games-search-grid__empty">
                         {hasActiveDiscoverFilters
@@ -3715,9 +3807,3 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
 }
 
 export default DiscoverPage;
-
-
-
-
-
-
