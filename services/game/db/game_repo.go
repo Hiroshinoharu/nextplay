@@ -293,13 +293,7 @@ func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool, searchQue
 		if popularity.Valid {
 			g.Popularity = popularity.Float64
 		}
-		if includeMedia {
-			media, err := GetGameMedia(int(g.ID))
-			if err != nil {
-				return nil, err
-			}
-			g.Media = media
-		} else {
+		if !includeMedia {
 			g.Media = []models.GameMedia{}
 		}
 		g.Platforms = []int64{}
@@ -312,6 +306,11 @@ func GetGames(limit, offset int, includeMedia bool, upcomingOnly bool, searchQue
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
+	}
+	if includeMedia {
+		if err := populateGameMedia(games); err != nil {
+			return nil, err
+		}
 	}
 	if err := populatePlatformNames(games); err != nil {
 		return nil, err
@@ -452,13 +451,7 @@ func SearchGamesByName(query string, mode string, limit int, offset int, include
 		if popularity.Valid {
 			g.Popularity = popularity.Float64
 		}
-		if includeMedia {
-			media, err := GetGameMedia(int(g.ID))
-			if err != nil {
-				return nil, err
-			}
-			g.Media = media
-		} else {
+		if !includeMedia {
 			g.Media = []models.GameMedia{}
 		}
 		g.Platforms = []int64{}
@@ -471,6 +464,11 @@ func SearchGamesByName(query string, mode string, limit int, offset int, include
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
+	}
+	if includeMedia {
+		if err := populateGameMedia(games); err != nil {
+			return nil, err
+		}
 	}
 	if err := populatePlatformNames(games); err != nil {
 		return nil, err
@@ -598,13 +596,7 @@ func GetPopularGames(year, limit, offset, minRatingCount int, includeMedia bool)
 		if popularity.Valid {
 			g.Popularity = popularity.Float64
 		}
-		if includeMedia {
-			media, err := GetGameMedia(int(g.ID))
-			if err != nil {
-				return nil, err
-			}
-			g.Media = media
-		} else {
+		if !includeMedia {
 			g.Media = []models.GameMedia{}
 		}
 		g.Platforms = []int64{}
@@ -617,6 +609,11 @@ func GetPopularGames(year, limit, offset, minRatingCount int, includeMedia bool)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
+	}
+	if includeMedia {
+		if err := populateGameMedia(games); err != nil {
+			return nil, err
+		}
 	}
 	if err := populatePlatformNames(games); err != nil {
 		return nil, err
@@ -785,13 +782,7 @@ func GetTopGames(limit, offset, minRatingCount, priorVotes int, popularityWeight
 		if popularity.Valid {
 			g.Popularity = popularity.Float64
 		}
-		if includeMedia {
-			media, err := GetGameMedia(int(g.ID))
-			if err != nil {
-				return nil, err
-			}
-			g.Media = media
-		} else {
+		if !includeMedia {
 			g.Media = []models.GameMedia{}
 		}
 		g.Platforms = []int64{}
@@ -804,6 +795,11 @@ func GetTopGames(limit, offset, minRatingCount, priorVotes int, popularityWeight
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
+	}
+	if includeMedia {
+		if err := populateGameMedia(games); err != nil {
+			return nil, err
+		}
 	}
 	if err := populatePlatformNames(games); err != nil {
 		return nil, err
@@ -1050,13 +1046,7 @@ func GetRelatedAddOnContent(gameID int, limit int, includeMedia bool) ([]models.
 		if popularity.Valid {
 			g.Popularity = popularity.Float64
 		}
-		if includeMedia {
-			media, err := GetGameMedia(int(g.ID))
-			if err != nil {
-				return nil, err
-			}
-			g.Media = media
-		} else {
+		if !includeMedia {
 			g.Media = []models.GameMedia{}
 		}
 		g.Platforms = []int64{}
@@ -1069,6 +1059,11 @@ func GetRelatedAddOnContent(gameID int, limit int, includeMedia bool) ([]models.
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
+	}
+	if includeMedia {
+		if err := populateGameMedia(games); err != nil {
+			return nil, err
+		}
 	}
 	if err := populatePlatformNames(games); err != nil {
 		return nil, err
@@ -1201,13 +1196,7 @@ func GetAdditionalContent(gameID int, limit int, includeMedia bool) ([]models.Ga
 		if popularity.Valid {
 			g.Popularity = popularity.Float64
 		}
-		if includeMedia {
-			media, err := GetGameMedia(int(g.ID))
-			if err != nil {
-				return nil, err
-			}
-			g.Media = media
-		} else {
+		if !includeMedia {
 			g.Media = []models.GameMedia{}
 		}
 		g.Platforms = []int64{}
@@ -1220,6 +1209,11 @@ func GetAdditionalContent(gameID int, limit int, includeMedia bool) ([]models.Ga
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
+	}
+	if includeMedia {
+		if err := populateGameMedia(games); err != nil {
+			return nil, err
+		}
 	}
 	if err := populatePlatformNames(games); err != nil {
 		return nil, err
@@ -1351,6 +1345,74 @@ func GetGameMedia(gameID int) ([]models.GameMedia, error) {
 		return nil, err
 	}
 	return media, nil
+}
+
+func populateGameMedia(games []models.Game) error {
+	if len(games) == 0 {
+		return nil
+	}
+
+	gameIDs := make([]int64, 0, len(games))
+	for index := range games {
+		gameIDs = append(gameIDs, games[index].ID)
+	}
+
+	mediaByGameID, err := fetchGameMediaByGameIDs(gameIDs)
+	if err != nil {
+		return err
+	}
+
+	for index := range games {
+		media, ok := mediaByGameID[games[index].ID]
+		if !ok {
+			games[index].Media = []models.GameMedia{}
+			continue
+		}
+		games[index].Media = media
+	}
+
+	return nil
+}
+
+func fetchGameMediaByGameIDs(gameIDs []int64) (map[int64][]models.GameMedia, error) {
+	result := make(map[int64][]models.GameMedia, len(gameIDs))
+	for _, gameID := range gameIDs {
+		result[gameID] = []models.GameMedia{}
+	}
+
+	rows, err := DB.Query(
+		`SELECT game_id, igdb_id, media_type, url, sort_order
+		 FROM game_media
+		 WHERE game_id = ANY($1)
+		 ORDER BY game_id, media_type, sort_order, igdb_id`,
+		pq.Array(gameIDs),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var gameID int64
+		var item models.GameMedia
+		var igdbID sql.NullInt64
+		var sortOrder sql.NullInt64
+		if err := rows.Scan(&gameID, &igdbID, &item.MediaType, &item.URL, &sortOrder); err != nil {
+			return nil, err
+		}
+		if igdbID.Valid {
+			item.IGDBID = igdbID.Int64
+		}
+		if sortOrder.Valid {
+			item.SortOrder = int(sortOrder.Int64)
+		}
+		result[gameID] = append(result[gameID], item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 // GetGameRelations retrieves all related entity IDs for a given game

@@ -355,9 +355,9 @@ function Games({ authUser, theme }: GamesProps) {
       }
       query.set("exclude_non_base", "1");
       console.debug(
-        `Fetching games from: ${root}/api/games?include_media=1&${query.toString()}`,
+        `Fetching games from: ${root}/api/games?include_media=0&${query.toString()}`,
       );
-      const url = `${root}/api/games?include_media=1&${query.toString()}`;
+      const url = `${root}/api/games?include_media=0&${query.toString()}`;
       const response = await fetch(url, {
         signal,
         ...(authToken
@@ -420,7 +420,7 @@ function Games({ authUser, theme }: GamesProps) {
           year: String(year),
           limit: String(300),
           min_rating_count: "1",
-          include_media: "1",
+          include_media: "0",
         });
         const response = await fetch(`${root}/api/games/popular?${query.toString()}`, {
           signal,
@@ -542,7 +542,7 @@ function Games({ authUser, theme }: GamesProps) {
         mode: "contains",
         limit: String(searchPageSize),
         offset: String(searchOffset),
-        include_media: "1",
+        include_media: "0",
         exclude_non_base: "1",
       });
       const response = await fetch(`${root}/api/games/search?${params.toString()}`, {
@@ -1789,6 +1789,5 @@ function Games({ authUser, theme }: GamesProps) {
 }
 
 export default Games;
-
 
 

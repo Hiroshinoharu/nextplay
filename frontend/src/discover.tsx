@@ -769,8 +769,8 @@ const fetchTopUpRecommendationGames = async (
   };
 
   const candidateUrls = [
-    `${API_ROOT}/api/games/top?limit=300&min_rating_count=1&include_media=1`,
-    `${API_ROOT}/api/games?limit=300&offset=0&include_media=1&exclude_non_base=1`,
+    `${API_ROOT}/api/games/top?limit=300&min_rating_count=1&include_media=0`,
+    `${API_ROOT}/api/games?limit=300&offset=0&include_media=0&exclude_non_base=1`,
   ];
 
   for (const url of candidateUrls) {
@@ -1109,7 +1109,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
         mode: "contains",
         limit: String(searchPageSize),
         offset: String(offset),
-        include_media: "1",
+        include_media: "0",
         exclude_non_base: "1",
       });
       const response = await fetch(
@@ -2162,7 +2162,6 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
         offset: String(offset),
         include_media: "0",
         exclude_non_base: "1",
-        random: "1",
       });
       const response = await fetch(
         `${API_ROOT}/api/games?${query.toString()}`,
@@ -3738,7 +3737,6 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
 }
 
 export default DiscoverPage;
-
 
 
 
