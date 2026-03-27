@@ -847,6 +847,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
     () => createEmptyQuestionnaireAnswers(),
   );
   const [questionnaireComplete, setQuestionnaireComplete] = useState<boolean>(false);
+  const [questionnaireStateHydrated, setQuestionnaireStateHydrated] = useState<boolean>(false);
   const [questionnaireOpen, setQuestionnaireOpen] = useState<boolean>(false);
   const [questionnaireStep, setQuestionnaireStep] = useState<number>(0);
   const [questionnaireValidationMessage, setQuestionnaireValidationMessage] =
@@ -904,6 +905,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
     queryKey: ["discover-questionnaire-facets", authUser?.id ?? "guest"],
     enabled:
       Boolean(authUser?.id) &&
+      questionnaireStateHydrated &&
       (questionnaireOpen || (!questionnaireComplete && !dismissedQuestionnaireBanner)),
     staleTime: 1000 * 60 * 10,
     refetchOnWindowFocus: false,
@@ -919,7 +921,9 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
     },
   });
   const showQuestionnaireBanner =
-    !questionnaireComplete && !dismissedQuestionnaireBanner;
+    questionnaireStateHydrated &&
+    !questionnaireComplete &&
+    !dismissedQuestionnaireBanner;
   const questionnaireQuestions = useMemo(
     () =>
       QUESTIONNAIRE_V1.questions.map((question) => {
@@ -999,9 +1003,11 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
   }, [questionnaireStorageKey]);
 
   useEffect(() => {
+    setQuestionnaireStateHydrated(false);
     if (!questionnaireStorageKey) {
       setQuestionnaireComplete(false);
       setQuestionnaireAnswers(createEmptyQuestionnaireAnswers());
+      setQuestionnaireStateHydrated(true);
       return;
     }
 
@@ -1023,6 +1029,8 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
     } catch {
       setQuestionnaireComplete(false);
       setQuestionnaireAnswers(createEmptyQuestionnaireAnswers());
+    } finally {
+      setQuestionnaireStateHydrated(true);
     }
   }, [questionnaireStorageKey]);
 
@@ -2189,6 +2197,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
       lastPage.hasMore ? lastPage.page + 1 : undefined,
     staleTime: 5 * 60_000,
     gcTime: 30 * 60_000,
+    retry: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
@@ -3706,7 +3715,6 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
 }
 
 export default DiscoverPage;
-
 
 
 
