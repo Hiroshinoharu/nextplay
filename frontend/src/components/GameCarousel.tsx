@@ -42,6 +42,7 @@ type GameCarouselProps = {
   showLaneStatus?: boolean
   laneLoadingText?: string
   laneEndText?: string
+  autoLoadOnNoOverflow?: boolean
 }
 
 // Base styles for the carousel row, with horizontal scrolling and no wrapping
@@ -112,6 +113,7 @@ const GameCarousel = ({
   showLaneStatus = false,
   laneLoadingText = 'Loading more...',
   laneEndText = 'No more games in this lane.',
+  autoLoadOnNoOverflow = false,
 }: GameCarouselProps) => {
   const rowStyle: CSSProperties = { ...baseRowStyle, gap }
   const itemStyle: CSSProperties = { flex: `0 0 ${itemWidth}px` }
@@ -214,6 +216,7 @@ const GameCarousel = ({
 
 
   useEffect(() => {
+    if (!autoLoadOnNoOverflow) return
     const row = rowRef.current
     if (!row || !onLoadMore || !canLoadMore || isLoadingMore) return
     if (hasTriggeredNoOverflowLoadRef.current) return
@@ -224,7 +227,7 @@ const GameCarousel = ({
     // Fire at most once for non-overflow rows to avoid continuous load loops.
     hasTriggeredNoOverflowLoadRef.current = true
     void onLoadMore()
-  }, [canLoadMore, carouselItems.length, isLoadingMore, onLoadMore])
+  }, [autoLoadOnNoOverflow, canLoadMore, carouselItems.length, isLoadingMore, onLoadMore])
 
   useEffect(() => {
     syncNavState()

@@ -165,7 +165,6 @@ const INITIAL_ROW_ITEMS = 24;
 const ROW_STEP_ITEMS = 24;
 const INITIAL_GENRE_ROWS = 6;
 const GENRE_ROWS_STEP = 6;
-const MAX_RECENT_RELEASE_BACKFILL_PAGES = 1;
 const MIN_RECENT_RELEASE_WINDOW_MONTHS = 1;
 const MAX_RECENT_RELEASE_WINDOW_MONTHS = 12;
 const ALL_GENRE_FILTER_VALUE = "";
@@ -875,7 +874,6 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
   const randomPoolFetchPromiseRef = useRef<Promise<unknown> | null>(null);
   const recommendationRunIdRef = useRef<number>(0);
   const loggedRecommendationEventKeysRef = useRef<Set<string>>(new Set());
-  const recentBackfillAttemptsRef = useRef<number>(0);
   const searchGridSectionRef = useRef<HTMLElement | null>(null);
   const randomLanesSectionRef = useRef<HTMLDivElement | null>(null);
   const recommendationSectionRef = useRef<HTMLDivElement | null>(null);
@@ -904,8 +902,12 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
   }, [authUser?.id]);
   const questionnaireFacetsQuery = useQuery({
     queryKey: ["discover-questionnaire-facets", authUser?.id ?? "guest"],
-    enabled: Boolean(authUser?.id),
+    enabled:
+      Boolean(authUser?.id) &&
+      (questionnaireOpen || (!questionnaireComplete && !dismissedQuestionnaireBanner)),
     staleTime: 1000 * 60 * 10,
+    refetchOnWindowFocus: false,
+    retry: false,
     queryFn: async (): Promise<QuestionnaireFacetsResponse> => {
       const response = await fetch(`${API_ROOT}/api/games/questionnaire-facets`, {
         ...(authToken ? { headers: { Authorization: `Bearer ${authToken}` } } : {}),
@@ -1077,10 +1079,6 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
     setSearchQuery(urlQuery);
     setSearchPage(1);
   }, [urlQuery]);
-
-  useEffect(() => {
-    recentBackfillAttemptsRef.current = 0;
-  }, [recentReleaseWindowMonths, normalizedSearchQuery]);
 
   const openQuestionnaireFlow = useCallback(() => {
     const firstIncompleteIndex = questionnaireQuestions.findIndex((question) => {
@@ -2145,7 +2143,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
     setResultPage(1);
   }, [rankedRecommendedGames]);
 
-  const randomPoolPageSize = 120;
+  const randomPoolPageSize = 60;
   const {
     data: randomPoolData,
     isPending: randomPoolLoading,
@@ -2558,36 +2556,6 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
     });
     return map;
   }, [discoverCarousels]);
-  const recentReleasedCount = useMemo(
-    () => discoverCarouselsByTitle.get("Recently Released")?.games.length ?? 0,
-    [discoverCarouselsByTitle],
-  );
-
-  useEffect(() => {
-    if (normalizedSearchQuery) return;
-    if (recentReleasedCount >= INITIAL_ROW_ITEMS) return;
-    if (!hasMoreRandomPool || randomPoolLoadingMore) return;
-    if (recentBackfillAttemptsRef.current >= MAX_RECENT_RELEASE_BACKFILL_PAGES) {
-      return;
-    }
-    if (randomPoolFetchPromiseRef.current) return;
-
-    recentBackfillAttemptsRef.current += 1;
-    const fetchPromise = fetchNextRandomPoolPage();
-    randomPoolFetchPromiseRef.current = fetchPromise;
-    void fetchPromise.finally(() => {
-      if (randomPoolFetchPromiseRef.current === fetchPromise) {
-        randomPoolFetchPromiseRef.current = null;
-      }
-    });
-  }, [
-    fetchNextRandomPoolPage,
-    hasMoreRandomPool,
-    normalizedSearchQuery,
-    randomPoolLoadingMore,
-    recentReleasedCount,
-  ]);
-
   const displayedDiscoverCarousels = useMemo(() => {
     return discoverCarousels
       .map((section) => {
@@ -3325,6 +3293,7 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
                       showLaneStatus
                       laneLoadingText="Loading more games..."
                       laneEndText="End of this lane."
+                      autoLoadOnNoOverflow={false}
                     />
                     );
                   })}
@@ -3737,9 +3706,6 @@ function DiscoverPage({ authUser, theme }: DiscoverPageProps) {
 }
 
 export default DiscoverPage;
-
-
-
 
 
 
