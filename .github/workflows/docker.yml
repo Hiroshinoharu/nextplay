@@ -14,10 +14,18 @@ jobs:
     permissions:
       packages: write
       contents: read
+    env:
+      DOCKER_CONFIG: ${{ runner.temp }}/.docker
+      DOCKER_AUTH_CONFIG: ""
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Prepare isolated Docker config
+        run: |
+          rm -rf "$DOCKER_CONFIG"
+          mkdir -p "$DOCKER_CONFIG"
 
       - name: Login to GHCR
         uses: docker/login-action@v3
