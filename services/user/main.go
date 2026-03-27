@@ -24,7 +24,9 @@ func main() {
 		log.Fatal("Failed to connect to DB: ", err)
 	}
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		Network: "tcp",
+	})
 	app.Use(observability.AccessLog("user"))
 
 	// Health Endpoint

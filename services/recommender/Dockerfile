@@ -22,4 +22,4 @@ COPY services/recommender/training/artifacts/current /models/recommender/current
 
 EXPOSE 8082
 
-CMD ["uvicorn", "services.recommender.main:app", "--host", "0.0.0.0", "--port", "8082"]
+CMD ["uvicorn", "services.recommender.main:app", "--host", "::", "--port", "8082"]

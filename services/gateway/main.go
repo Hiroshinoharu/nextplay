@@ -57,6 +57,7 @@ func main() {
 	app := fiber.New(fiber.Config{
 		AppName:      "NextPlay API Gateway",
 		ErrorHandler: globalErrorHandler,
+		Network:      "tcp",
 	})
 
 	app.Use(cors.New(cors.Config{
