@@ -18,11 +18,9 @@ RUN npm run build
 # ---- SERVE STAGE ----
 FROM nginx:stable-alpine
 
-# Default to the local Compose gateway host. Hosted environments can override this.
-ENV GATEWAY_UPSTREAM_URL=http://gateway:8084
-
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY frontend/nginx.conf /etc/nginx/templates/default.conf.template
+COPY frontend/docker/40-validate-gateway-upstream.sh /docker-entrypoint.d/40-validate-gateway-upstream.sh
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

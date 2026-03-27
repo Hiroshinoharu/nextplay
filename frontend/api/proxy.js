@@ -65,17 +65,6 @@ const removeTrailingAPISegment = (pathname) => {
   return withoutAPI || "/";
 };
 
-/*************  ✨ Windsurf Command ⭐  *************/
-/**
- * Normalizes a given NEXTPLAY_GATEWAY_URL value.
- * The function will return an error if the value is empty, not an absolute URL, or points to a
- * non-publicly reachable gateway when the frontend runs on Vercel.
- * Otherwise, the function will return a normalized URL object where the hash, search, and trailing
- * "/api" segments are removed.
- * @param {string} rawValue The value to normalize.
- * @returns {{ error: string } | { url: URL }}
- */
-/*******  790c7a44-c501-46b4-b221-1b594b6fe0c7  *******/
 export const normalizeGatewayBase = (rawValue) => {
   const trimmedValue = String(rawValue ?? "").trim();
   if (!trimmedValue) {
@@ -119,17 +108,19 @@ export const normalizeGatewayBase = (rawValue) => {
   return { url: parsed };
 };
 
-/*************  ✨ Windsurf Command ⭐  *************/
 /**
- * Builds a URL that points to a resource on the Gateway service.
- * The function takes two parameters: the base URL of the Gateway service and the URL of the request as seen by the frontend.
- * The function will return a new URL object that contains the relative path of the request URL appended to the Gateway base URL.
- * The function will preserve the query string of the original request URL.
- * @param {URL|string} gatewayBaseUrl The base URL of the Gateway service.
- * @param {string} requestUrl The URL of the request as seen by the frontend.
- * @returns {URL} The built URL object that points to a resource on the Gateway service.
+ * Builds an upstream URL for the given request URL and configured gateway base URL.
+ *
+ * Given a request URL (e.g. "/api/users/csrf?refresh=true") and a gateway base URL (e.g. "https://gateway.example.com/edge/"),
+ * returns a new URL that appends the relative path of the request URL to the gateway base URL.
+ *
+ * For example, given a request URL of "/api/users/csrf?refresh=true" and a gateway base URL of "https://gateway.example.com/edge/",
+ * the resulting upstream URL would be "https://gateway.example.com/edge/api/users/csrf?refresh=true".
+ *
+ * @param {string} gatewayBaseUrl The base URL of the NextPlay API Gateway service.
+ * @param {string} requestUrl The URL of the request from the frontend.
+ * @returns {URL} The upstream URL that should be used to proxy the request to the Gateway service.
  */
-/*******  cbbe911e-e766-479d-8990-6e04dc01f981  *******/
 export const buildUpstreamUrl = (gatewayBaseUrl, requestUrl) => {
   const rawRequestUrl = String(requestUrl ?? "/api/health").trim();
   const incomingUrl = new URL(rawRequestUrl, "http://nextplay.local");
@@ -157,13 +148,6 @@ export const copyRequestHeaders = (requestHeaders) => {
   return headers;
 };
 
-/*************  ✨ Windsurf Command ⭐  *************/
-/**
- * Reads the request body of a given request into a single Buffer.
- * If the request method is GET or HEAD, the function will return undefined.
- * @param {http.IncomingMessage} req The request to read the body from.
- * @returns {Promise<Buffer|undefined>} A promise that resolves to the request body as a single Buffer, or undefined if the request method is GET or HEAD.
-/*******  dc31bcf3-067f-4dce-b9bf-db03f81b6692  *******/
 export const readRequestBody = async (req) => {
   if (req.method === "GET" || req.method === "HEAD") {
     return undefined;
@@ -177,14 +161,6 @@ export const readRequestBody = async (req) => {
   return chunks.length > 0 ? Buffer.concat(chunks) : undefined;
 };
 
-/*************  ✨ Windsurf Command ⭐  *************/
-/**
- * Copies the response headers from an upstream response to a given response object.
- * This function will preserve the Set-Cookie header from the upstream response, and will ignore the Content-Length and HOP-by-HOP headers.
- * @param {http.IncomingMessage} upstreamResponse The upstream response to copy headers from.
- * @param {http.ServerResponse} res The response object to copy headers to.
- */
-/*******  10296c29-8c87-4d85-8523-eafdb61340d0  *******/
 export const writeResponseHeaders = (upstreamResponse, res) => {
   const setCookies =
     typeof upstreamResponse.headers.getSetCookie === "function"

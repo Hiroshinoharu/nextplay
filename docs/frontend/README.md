@@ -30,20 +30,11 @@ VITE_API_URL=http://127.0.0.1:18084/api
 - Deploy the frontend with [frontend/Dockerfile](../../frontend/Dockerfile).
 - Keep `VITE_API_URL=/api` so browser requests stay same-origin.
 - Set `GATEWAY_UPSTREAM_URL` on the Railway `frontend` service to `http://${{gateway.RAILWAY_PRIVATE_DOMAIN}}:8084`.
+- The frontend container now exits on startup if `GATEWAY_UPSTREAM_URL` is missing, which prevents silent `502` proxying to an invalid default host.
 - Give the `frontend` service the only public domain.
 - Keep `gateway`, `user`, `game`, `recommender`, and `postgres` private inside the Railway project.
 
 This uses the templated Nginx proxy in [frontend/nginx.conf](../../frontend/nginx.conf) so the frontend can forward `/api/*` traffic to the internal gateway without exposing the gateway publicly.
-
-## Vercel Deployment
-
-Vercel remains optional, but it is no longer required for the default hosted layout.
-
-- Set the Vercel project root directory to `frontend/`.
-- Keep `VITE_API_URL=/api` so browser requests stay same-origin on Vercel.
-- Set `NEXTPLAY_GATEWAY_URL` to the deployed gateway origin, for example `https://gateway.example.com`.
-- The checked-in [`vercel.json`](../../frontend/vercel.json) rewrites SPA routes to `index.html`.
-- The checked-in [`api/[...path].js`](../../frontend/api/[...path].js) proxies `/api/*` requests from the Vercel app to `NEXTPLAY_GATEWAY_URL`, which preserves the existing cookie and CSRF flow.
 
 ## Styling
 
