@@ -145,7 +145,7 @@ const StyledWrapper = styled.div`
     }
 
     .search_input {
-      font-size: 0.9em;
+      font-size: 16px;
     }
 
     .iconContainer {

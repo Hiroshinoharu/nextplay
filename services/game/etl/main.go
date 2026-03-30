@@ -988,6 +988,18 @@ func collectIDs(games []igdb.Game, getter func(igdb.Game) []int) []int {
 	return ids
 }
 
+// isAdditionalContentGameType returns true if the given game type is one of the additional content types.
+// The additional content types are:
+// - DLC (igdbGameTypeDLCAAddon)
+// - Expansion (igdbGameTypeExpansion)
+// - Bundle (igdbGameTypeBundle)
+// - Standalone Expansion (igdbGameTypeStandaloneExpansion)
+// - Mod (igdbGameTypeMod)
+// - Episode (igdbGameTypeEpisode)
+// - Season (igdbGameTypeSeason)
+// - Expanded Game (igdbGameTypeExpandedGame)
+// - Pack (igdbGameTypePack)
+// - Update (igdbGameTypeUpdate)
 func isAdditionalContentGameType(gameType int) bool {
 	switch gameType {
 	case igdbGameTypeDLCAAddon,
@@ -1006,6 +1018,8 @@ func isAdditionalContentGameType(gameType int) bool {
 	}
 }
 
+// relationTypeForGameType returns the IGDB relation type associated with a given game type.
+// The default relation type is "additional_content".
 func relationTypeForGameType(gameType int) string {
 	switch gameType {
 	case igdbGameTypeDLCAAddon:
@@ -1033,6 +1047,9 @@ func relationTypeForGameType(gameType int) string {
 	}
 }
 
+// collectAdditionalContentIDs extracts unique IDs from a slice of games.
+// It returns a slice of unique IDs representing DLCs, Expansions, Standalone Expansions, Expanded Games, and Bundles.
+// The IDs are extracted from the given slice of games and returned as a slice of integers.
 func collectAdditionalContentIDs(games []igdb.Game) []int {
 	seen := make(map[int]struct{})
 	for _, game := range games {
@@ -1070,6 +1087,19 @@ func collectAdditionalContentIDs(games []igdb.Game) []int {
 	return ids
 }
 
+// filterAdditionalContentGames filters out games that are not additional content from the given list of games.
+// It returns a new slice of games that only contains additional content games.
+// The additional content game types are:
+// - DLC (igdbGameTypeDLCAAddon)
+// - Expansion (igdbGameTypeExpansion)
+// - Bundle (igdbGameTypeBundle)
+// - Standalone Expansion (igdbGameTypeStandaloneExpansion)
+// - Mod (igdbGameTypeMod)
+// - Episode (igdbGameTypeEpisode)
+// - Season (igdbGameTypeSeason)
+// - Expanded Game (igdbGameTypeExpandedGame)
+// - Pack (igdbGameTypePack)
+// - Update (igdbGameTypeUpdate)
 func filterAdditionalContentGames(games []igdb.Game) []igdb.Game {
 	filtered := make([]igdb.Game, 0, len(games))
 	for _, game := range games {
@@ -1081,6 +1111,11 @@ func filterAdditionalContentGames(games []igdb.Game) []igdb.Game {
 	return filtered
 }
 
+// appendUniqueGames appends unique games to the existing list of games.
+// It returns a new slice of games that only contains unique games based on their IGDB IDs.
+// The function takes a variable number of arguments, where the first argument is the existing list of games and the subsequent arguments are the games to be appended.
+// If any of the appended games have an ID that is already present in the existing list, they are skipped.
+// The function returns the updated list of games.
 func appendUniqueGames(existing []igdb.Game, incoming ...igdb.Game) []igdb.Game {
 	if len(incoming) == 0 {
 		return existing
