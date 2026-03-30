@@ -81,7 +81,6 @@ services:
     environment:
       CONFIG_FILE: /config/config.yaml
       DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL in .env}"
-      LOCAL_DATABASE_URL: "${LOCAL_DATABASE_URL:?set LOCAL_DATABASE_URL in .env}"
       GATEWAY_SERVICE_TOKEN: "${GATEWAY_SERVICE_TOKEN:?set GATEWAY_SERVICE_TOKEN in .env}"
       IGDB_CLIENT_ID: "${IGDB_CLIENT_ID:?set IGDB_CLIENT_ID in .env}"
       IGDB_ACCESS_TOKEN: "${IGDB_ACCESS_TOKEN:?set IGDB_ACCESS_TOKEN in .env}"

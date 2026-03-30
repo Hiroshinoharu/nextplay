@@ -125,7 +125,7 @@ docker compose --env-file .env -f deploy/docker-compose.yml down
 The ETL service is configured as an optional Compose profile.
 
 ```bash
-docker compose --env-file .env -f deploy/docker-compose.yml run --rm game-etl
+docker compose --env-file .\.env -f .\deploy\docker-compose.yml run --build --rm game-etl
 ```
 
 ### Run the Frontend Against the Local Gateway
