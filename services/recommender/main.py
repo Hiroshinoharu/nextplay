@@ -25,6 +25,9 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s service=recommender %(message)s",
 )
 
+DEFAULT_SERVER_HOST = "0.0.0.0"
+DEFAULT_SERVER_PORT = 8082
+
 
 def _service_url(env_key: str, default: str) -> str:
     return os.getenv(env_key, default).rstrip("/")
@@ -164,6 +167,19 @@ def _initialise_optional_model_state(app: FastAPI, validated_model_path: Path | 
     app.state.loaded_model_identity = _build_loaded_model_identity(app)
 
 
+def _resolve_server_host() -> str:
+    return os.getenv("HOST", DEFAULT_SERVER_HOST).strip() or DEFAULT_SERVER_HOST
+
+
+def _resolve_server_port() -> int:
+    raw_port = os.getenv("PORT", str(DEFAULT_SERVER_PORT)).strip()
+    try:
+        return int(raw_port)
+    except ValueError:
+        logger.warning("Invalid PORT value %r; falling back to %s", raw_port, DEFAULT_SERVER_PORT)
+        return DEFAULT_SERVER_PORT
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.service_urls = {
@@ -231,6 +247,7 @@ async def lifespan(app: FastAPI):
         identity["model_load_failed"],
         identity["model_load_failure_reason"] or "none",
     )
+    logger.info("recommender.ranking_profile active_profile=%s", ACTIVE_RANKING_PROFILE.name)
     try:
         yield
     finally:
@@ -269,4 +286,8 @@ register_routes(app)
 
 
 if __name__ == "__main__":
-    uvicorn.run("services.recommender.main:app", host="::", port=8082)
+    uvicorn.run(
+        "services.recommender.main:app",
+        host=_resolve_server_host(),
+        port=_resolve_server_port(),
+    )

@@ -8,6 +8,22 @@ import pytest
 from services.recommender import main
 
 
+def test_resolve_server_host_defaults_to_ipv4_wildcard(monkeypatch) -> None:
+    monkeypatch.delenv("HOST", raising=False)
+    assert main._resolve_server_host() == "0.0.0.0"
+
+
+def test_resolve_server_port_defaults_and_handles_invalid_values(monkeypatch) -> None:
+    monkeypatch.delenv("PORT", raising=False)
+    assert main._resolve_server_port() == 8082
+
+    monkeypatch.setenv("PORT", "not-a-port")
+    assert main._resolve_server_port() == 8082
+
+    monkeypatch.setenv("PORT", "9090")
+    assert main._resolve_server_port() == 9090
+
+
 def test_lifespan_loads_model_and_exposes_state(monkeypatch) -> None:
     monkeypatch.setattr(
         main,
