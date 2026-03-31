@@ -153,6 +153,7 @@ The current recommended hosted layout is a single Railway project with five priv
 - `frontend` is public and deploys from [frontend/Dockerfile](frontend/Dockerfile).
 - `gateway`, `user`, `game`, `recommender`, and `postgres` stay private inside Railway.
 - Set `GATEWAY_UPSTREAM_URL` on the Railway `frontend` service to `http://${{gateway.RAILWAY_PRIVATE_DOMAIN}}:8084`.
+- Set the Railway health check path for the `frontend` service to `/healthz` so backend outages do not surface as a platform-level `502`.
 - Keep the production frontend setting `VITE_API_URL=/api`.
 - The templated proxy in [frontend/nginx.conf](frontend/nginx.conf) forwards browser `/api/*` traffic to the private gateway, so the gateway does not need its own public domain.
 - The frontend container now requires `GATEWAY_UPSTREAM_URL` explicitly at runtime so a missing Railway variable fails fast instead of silently proxying to the wrong host.
@@ -167,15 +168,39 @@ Recommended service order:
 5. `gateway`
 6. `frontend`
 
-Recommended Railway variables for model-serving recommender deploys:
+Recommended Railway variables:
 
 ```text
+frontend
+GATEWAY_UPSTREAM_URL=http://${{gateway.RAILWAY_PRIVATE_DOMAIN}}:8084
+VITE_API_URL=/api
+
+gateway
+PORT=8084
+USER_SERVICE_URL=http://${{user.RAILWAY_PRIVATE_DOMAIN}}:8083
+GAME_SERVICE_URL=http://${{game.RAILWAY_PRIVATE_DOMAIN}}:8081
+RECOMMENDER_SERVICE_URL=http://${{recommender.RAILWAY_PRIVATE_DOMAIN}}:8082
+JWT_SECRET=replace-with-shared-jwt-secret
+GATEWAY_SERVICE_TOKEN=replace-with-shared-service-token
+
+user
+PORT=8083
+DATABASE_URL=${{postgres.DATABASE_URL}}
+JWT_SECRET=replace-with-shared-jwt-secret
+PASSWORD_PEPPER=replace-with-password-pepper
+
+game
+PORT=8081
+DATABASE_URL=${{postgres.DATABASE_URL}}
+GATEWAY_SERVICE_TOKEN=replace-with-shared-service-token
+
+recommender
 PORT=8082
 DATABASE_URL=${{postgres.DATABASE_URL}}
 GATEWAY_SERVICE_TOKEN=replace-with-shared-service-token
-USER_SERVICE_URL=http://user.railway.internal:8083
-GAME_SERVICE_URL=http://game.railway.internal:8081
-GATEWAY_SERVICE_URL=http://gateway.railway.internal:8084
+USER_SERVICE_URL=http://${{user.RAILWAY_PRIVATE_DOMAIN}}:8083
+GAME_SERVICE_URL=http://${{game.RAILWAY_PRIVATE_DOMAIN}}:8081
+GATEWAY_SERVICE_URL=http://${{gateway.RAILWAY_PRIVATE_DOMAIN}}:8084
 MODEL_PATH=/models/recommender/current/model.keras
 MODEL_MANIFEST_PATH=/models/recommender/current/artifact_manifest.json
 MODEL_VERSION=20260313T164930Z
@@ -284,6 +309,4 @@ The checked-in bridge manifests expect a `nextplay-secrets` Kubernetes Secret; s
 - recommendation quality work is ongoing around calibration, richer data, and rollout controls;
 - observability, security hardening, and deployment operations still need expansion;
 - the frontend needs more product depth beyond the current discovery and recommendation flow.
-
-
 

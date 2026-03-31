@@ -32,7 +32,7 @@ spec:
                         command:
                             - /bin/sh
                             - -c
-                            - wget -qO- http://localhost/api/health >/dev/null 2>&1 || exit 1
+                            - wget -qO- http://localhost/healthz >/dev/null 2>&1 || exit 1
                     periodSeconds: 10
                     timeoutSeconds: 5
                     failureThreshold: 5
@@ -48,3 +48,4 @@ spec:
                 - name: frontend-nginx-config
                   configMap:
                     name: frontend-nginx-config
+

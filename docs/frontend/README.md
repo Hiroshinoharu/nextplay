@@ -30,6 +30,7 @@ VITE_API_URL=http://127.0.0.1:18084/api
 - Deploy the frontend with [frontend/Dockerfile](../../frontend/Dockerfile).
 - Keep `VITE_API_URL=/api` so browser requests stay same-origin.
 - Set `GATEWAY_UPSTREAM_URL` on the Railway `frontend` service to `http://${{gateway.RAILWAY_PRIVATE_DOMAIN}}:8084`.
+- Set the Railway health check path for the `frontend` service to `/healthz` so frontend liveness does not depend on downstream API health.
 - The frontend container now exits on startup if `GATEWAY_UPSTREAM_URL` is missing, which prevents silent `502` proxying to an invalid default host.
 - Give the `frontend` service the only public domain.
 - Keep `gateway`, `user`, `game`, `recommender`, and `postgres` private inside the Railway project.
@@ -49,3 +50,4 @@ If that port is already published, override it when you start Compose:
 ```bash
 FRONTEND_HOST_PORT=5175 GATEWAY_HOST_PORT=18085 docker compose --env-file .env -f deploy/docker-compose.yml up -d --build
 ```
+

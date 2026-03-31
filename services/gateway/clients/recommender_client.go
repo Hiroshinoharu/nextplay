@@ -54,7 +54,10 @@ type RecommenderClient struct {
 
 // NewRecommenderClient initializes a new RecommenderClient with the base URL from environment variables or defaults.
 func NewRecommenderClient() *RecommenderClient {
-	baseURL := os.Getenv("RECOMMENDER_SERVICE_URL")
+	baseURL := strings.TrimSpace(os.Getenv("RECOMMENDER_SERVICE_URL"))
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(RecommenderServiceURL)
+	}
 	if baseURL == "" {
 		baseURL = "http://recommender:8082"
 	}
@@ -139,3 +142,4 @@ func (c *RecommenderClient) RecommendSimilar(body []byte, headers map[string]str
 
 	return readResponse(resp)
 }
+
