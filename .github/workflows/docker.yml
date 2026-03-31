@@ -29,6 +29,25 @@ jobs:
           rm -rf "$DOCKER_CONFIG"
           mkdir -p "$DOCKER_CONFIG"
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Verify Docker Hub credentials
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -z "$DOCKERHUB_USERNAME" ] || [ -z "$DOCKERHUB_TOKEN" ]; then
+            echo "Missing DOCKERHUB_USERNAME or DOCKERHUB_TOKEN GitHub Actions secret." >&2
+            exit 1
+          fi
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -36,9 +55,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ---------------------------
-      # Build & Push Gateway
-      # ---------------------------
       - name: Build gateway
         uses: docker/build-push-action@v5
         with:
@@ -47,10 +63,9 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/gateway:latest
+          cache-from: type=gha,scope=gateway
+          cache-to: type=gha,mode=max,scope=gateway
 
-      # ---------------------------
-      # Build & Push User
-      # ---------------------------
       - name: Build user
         uses: docker/build-push-action@v5
         with:
@@ -59,10 +74,9 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/user:latest
+          cache-from: type=gha,scope=user
+          cache-to: type=gha,mode=max,scope=user
 
-      # ---------------------------
-      # Build & Push Game
-      # ---------------------------
       - name: Build game
         uses: docker/build-push-action@v5
         with:
@@ -71,10 +85,9 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/game:latest
+          cache-from: type=gha,scope=game
+          cache-to: type=gha,mode=max,scope=game
 
-      # ---------------------------
-      # Build & Push Recommender
-      # ---------------------------
       - name: Build recommender
         uses: docker/build-push-action@v5
         with:
@@ -83,10 +96,9 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/recommender:latest
+          cache-from: type=gha,scope=recommender
+          cache-to: type=gha,mode=max,scope=recommender
 
-      # ---------------------------
-      # Build & Push Frontend
-      # ---------------------------
       - name: Build frontend
         uses: docker/build-push-action@v5
         with:
@@ -95,3 +107,5 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ${{ env.IMAGE_PREFIX }}/frontend:latest
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend

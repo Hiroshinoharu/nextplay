@@ -124,6 +124,9 @@ func TestRequireSameUserParamRejectsMismatchedUser(t *testing.T) {
 	if resp.StatusCode != fiber.StatusForbidden {
 		t.Fatalf("expected status %d, got %d", fiber.StatusForbidden, resp.StatusCode)
 	}
+	if got := resp.Header.Get("X-NextPlay-Auth-Error"); got != "session-user-mismatch" {
+		t.Fatalf("expected X-NextPlay-Auth-Error=session-user-mismatch, got %q", got)
+	}
 }
 
 // TestRequireSameUserParamRejectsMalformedID tests that RequireSameUserParam rejects

@@ -50,7 +50,7 @@ func RequireSameUserParam(paramName string) fiber.Handler {
 		}
 
 		if rawUserID != subject {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
+			return rejectUserMismatch(c)
 		}
 
 		return c.Next()
@@ -60,4 +60,9 @@ func RequireSameUserParam(paramName string) fiber.Handler {
 func rejectInvalidSession(c *fiber.Ctx) error {
 	c.Set("X-NextPlay-Auth-Error", "session-invalid")
 	return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "missing or invalid token"})
+}
+
+func rejectUserMismatch(c *fiber.Ctx) error {
+	c.Set("X-NextPlay-Auth-Error", "session-user-mismatch")
+	return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
 }

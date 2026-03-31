@@ -751,9 +751,10 @@ function App() {
       ...args: Parameters<typeof fetch>
     ): Promise<Response> => {
       const response = await originalFetch(...args);
+      const authError = response.headers.get("x-nextplay-auth-error");
       if (
-        response.status === 401 &&
-        response.headers.get("x-nextplay-auth-error") === "session-invalid" &&
+        ((response.status === 401 && authError === "session-invalid") ||
+          (response.status === 403 && authError === "session-user-mismatch")) &&
         authUser &&
         !unauthorizedRedirectingRef.current
       ) {
@@ -990,12 +991,3 @@ function App() {
 }
 
 export default App;
-
-
-
-
-
-
-
-
-
