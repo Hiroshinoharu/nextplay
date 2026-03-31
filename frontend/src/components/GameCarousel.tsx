@@ -116,7 +116,8 @@ const GameCarousel = ({
   autoLoadOnNoOverflow = false,
 }: GameCarouselProps) => {
   const rowStyle: CSSProperties = { ...baseRowStyle, gap }
-  const itemStyle: CSSProperties = { flex: `0 0 ${itemWidth}px` }
+  const rankGutterWidth = showRank ? 66 : 0
+  const itemStyle: CSSProperties = { flex: `0 0 ${itemWidth + rankGutterWidth}px` }
   const rowRef = useRef<HTMLDivElement | null>(null)
   const hasTriggeredNearEndRef = useRef(false)
   const hasExtendedNearEndRef = useRef(false)
@@ -454,3 +455,5 @@ const GameCarousel = ({
 }
 
 export default memo(GameCarousel)
+
+

@@ -676,7 +676,7 @@ function Games({ authUser, theme }: GamesProps) {
     () => `${featuredCandidatesKey}:${featuredRotationBucket}`,
     [featuredCandidatesKey, featuredRotationBucket],
   );
-  const lastFeaturedSelectionSignatureRef = useRef<string | null>(null);
+  const lastFeaturedRotationBucketRef = useRef<number | null>(null);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -695,18 +695,18 @@ function Games({ authUser, theme }: GamesProps) {
   // time so the same title does not stay pinned indefinitely.
   useEffect(() => {
     if (!featuredCandidates.length) {
-      lastFeaturedSelectionSignatureRef.current = null;
+      lastFeaturedRotationBucketRef.current = null;
       setFeaturedGameId(null);
       setFeaturedDetail(null);
       return;
     }
 
     setFeaturedGameId((prevId) => {
-      const signatureChanged =
-        lastFeaturedSelectionSignatureRef.current !== featuredSelectionSignature;
-      lastFeaturedSelectionSignatureRef.current = featuredSelectionSignature;
+      const rotationChanged =
+        lastFeaturedRotationBucketRef.current !== featuredRotationBucket;
+      lastFeaturedRotationBucketRef.current = featuredRotationBucket;
 
-      if (!signatureChanged && prevId && featuredCandidates.some((game) => game.id === prevId)) {
+      if (prevId && featuredCandidates.some((game) => game.id === prevId) && !rotationChanged) {
         return prevId;
       }
 
@@ -720,7 +720,7 @@ function Games({ authUser, theme }: GamesProps) {
       }
       return nextId;
     });
-  }, [featuredCandidates, featuredSelectionSignature]);
+  }, [featuredCandidates, featuredRotationBucket, featuredSelectionSignature]);
 
   // useEffect for fetching detailed information about the featured game when the featuredGameId changes, with logic to handle API requests and responses, update the featuredDetail state, and manage potential errors gracefully, ensuring that users have access to comprehensive information about the featured game while also providing a responsive experience as they explore the hero section of the page
   useEffect(() => {
@@ -1730,4 +1730,5 @@ function Games({ authUser, theme }: GamesProps) {
 }
 
 export default Games;
+
 

@@ -21,6 +21,8 @@ FROM nginx:stable-alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY frontend/nginx.conf /etc/nginx/templates/default.conf.template
 COPY frontend/docker/40-validate-gateway-upstream.sh /docker-entrypoint.d/40-validate-gateway-upstream.sh
+RUN sed -i 's/\r$//' /docker-entrypoint.d/40-validate-gateway-upstream.sh \
+  && chmod +x /docker-entrypoint.d/40-validate-gateway-upstream.sh
 
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
