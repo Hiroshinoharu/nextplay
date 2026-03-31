@@ -272,7 +272,6 @@ function Games({ authUser, theme }: GamesProps) {
     {},
   );
   const [failedHeroUrls, setFailedHeroUrls] = useState<Record<string, true>>({});
-  const [featuredMediaPick, setFeaturedMediaPick] = useState<number>(0);
   const [searchInput, setSearchInput] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>(""); // Separate state for the actual search query to trigger searches on submit rather than on every keystroke
   const [searchPage, setSearchPage] = useState<number>(1);
@@ -300,7 +299,7 @@ function Games({ authUser, theme }: GamesProps) {
       "top_min_rating_count",
     );
     const parsed = Number(raw);
-    if (!Number.isFinite(parsed) || parsed < 1) return 50;
+    if (!Number.isFinite(parsed) || parsed < 1) return 1000;
     return Math.floor(parsed);
   }, []);
   const topPriorVotes = useMemo(() => {
@@ -649,14 +648,26 @@ function Games({ authUser, theme }: GamesProps) {
 
   // useCallback function for opening the lightbox to display a selected media item, with logic to determine the index of the selected media within the list of featured media candidates and to set the lightbox index accordingly, providing an immersive experience for users as they view game media in a larger format while ensuring that the correct media item is displayed based on user interaction
   const featuredCandidates = useMemo(() => {
-    const safePool = filteredGames.filter(
-      (game) => !isNsfwGame(game) && !isNonBaseContentGame(game),
+    const releasedPool = dedupeGames([
+      ...recentPopularGames,
+      ...topAllTimeGames,
+      ...games,
+    ]).filter(
+      (game) =>
+        !isNsfwGame(game) &&
+        !isNonBaseContentGame(game) &&
+        isReleasedGames(game),
     );
-    const withReleaseDates = safePool.filter((game) =>
-      Boolean(parseReleaseDate(game.release_date)),
+
+    const mediaReadyPool = releasedPool.filter(
+      (game) =>
+        Boolean(game.cover_image) ||
+        (Array.isArray(game.screenshots) && game.screenshots.length > 0) ||
+        (Array.isArray(game.media) && game.media.length > 0),
     );
-    return withReleaseDates.length ? withReleaseDates : safePool;
-  }, [filteredGames]);
+
+    return mediaReadyPool.length ? mediaReadyPool : releasedPool;
+  }, [games, recentPopularGames, topAllTimeGames]);
   const featuredCandidatesKey = useMemo(
     () => featuredCandidates.map((game) => String(game.id)).join("|"),
     [featuredCandidates],
@@ -966,89 +977,23 @@ function Games({ authUser, theme }: GamesProps) {
     coverFallbackUrl && !failedHeroUrls[coverFallbackUrl]
       ? coverFallbackUrl
       : null;
-  const heroPreferredPool = useMemo(() => {
-    if (heroEligibleScreenshotPool.length) return heroEligibleScreenshotPool;
-    if (heroEligibleFallbackScreenshotPool.length) {
-      return heroEligibleFallbackScreenshotPool;
-    }
-    if (provisionalScreenshotPool.length) return provisionalScreenshotPool;
-    if (provisionalFallbackScreenshotPool.length) {
-      return provisionalFallbackScreenshotPool;
-    }
-    if (heroEligibleArtworkPool.length) {
-      return heroEligibleArtworkPool;
-    }
-    return [];
-  }, [
-    heroEligibleArtworkPool,
-    heroEligibleFallbackScreenshotPool,
-    heroEligibleScreenshotPool,
-    provisionalFallbackScreenshotPool,
-    provisionalScreenshotPool,
-  ]);
-  const heroPreferredPoolKey = useMemo(
-    () => heroPreferredPool.join("|"),
-    [heroPreferredPool],
-  );
-  
-  useEffect(() => {
-    if (!heroPreferredPool.length) {
-      setFeaturedMediaPick((current) => (current === 0 ? current : 0));
-      return;
-    }
-
-    // If the current pick is out of bounds for the new pool, reset to 0. Otherwise, randomly pick a new index that is different from the current one to ensure variety in the hero images while maintaining consistency when possible.
-    setFeaturedMediaPick((current) => {
-      const next = pickPseudoRandomIndex(
-        heroPreferredPool.length,
-        `hero-media:${heroGame?.id ?? "none"}:${heroPreferredPoolKey}`,
-      );
-      if (heroPreferredPool.length === 1) return 0;
-      if (next === current) {
-        return (current + 1) % heroPreferredPool.length;
-      }
-      return next;
-    });
-  }, [heroGame?.id, heroPreferredPool.length, heroPreferredPoolKey]);
-
   const activeHeroMedia: HeroMediaCandidate | null = useMemo(() => {
-    if (heroEligibleScreenshotPool.length) {
+    const screenshotCandidate =
+      heroEligibleScreenshotPool[0] ??
+      heroEligibleFallbackScreenshotPool[0] ??
+      provisionalScreenshotPool[0] ??
+      provisionalFallbackScreenshotPool[0] ??
+      null;
+    if (screenshotCandidate) {
       return {
-        url: heroEligibleScreenshotPool[
-          featuredMediaPick % heroEligibleScreenshotPool.length
-        ],
+        url: screenshotCandidate,
         source: "screenshot",
       };
     }
-    if (heroEligibleFallbackScreenshotPool.length) {
+    const artworkCandidate = heroEligibleArtworkPool[0] ?? null;
+    if (artworkCandidate) {
       return {
-        url: heroEligibleFallbackScreenshotPool[
-          featuredMediaPick % heroEligibleFallbackScreenshotPool.length
-        ],
-        source: "screenshot",
-      };
-    }
-    if (provisionalScreenshotPool.length) {
-      return {
-        url: provisionalScreenshotPool[
-          featuredMediaPick % provisionalScreenshotPool.length
-        ],
-        source: "screenshot",
-      };
-    }
-    if (provisionalFallbackScreenshotPool.length) {
-      return {
-        url: provisionalFallbackScreenshotPool[
-          featuredMediaPick % provisionalFallbackScreenshotPool.length
-        ],
-        source: "screenshot",
-      };
-    }
-    if (heroEligibleArtworkPool.length) {
-      return {
-        url: heroEligibleArtworkPool[
-          featuredMediaPick % heroEligibleArtworkPool.length
-        ],
+        url: artworkCandidate,
         source: "artwork",
       };
     }
@@ -1058,7 +1003,6 @@ function Games({ authUser, theme }: GamesProps) {
     return null;
   }, [
     coverHeroCandidate,
-    featuredMediaPick,
     heroEligibleArtworkPool,
     heroEligibleFallbackScreenshotPool,
     heroEligibleScreenshotPool,
@@ -1074,33 +1018,22 @@ function Games({ authUser, theme }: GamesProps) {
         ? "games-hero__image games-hero__image--artwork"
         : "games-hero__image games-hero__image--screenshot";
   
-  // The featuredScreenshots list is created by selecting the appropriate pool of media URLs based on their eligibility for use as hero images, and then applying a rotation based on the featuredMediaPick index to ensure that different media items are showcased in the hero section over time. This allows the component to dynamically display a variety of media from the featured game while prioritizing those that are best suited for the hero image based on their dimensions and aspect ratios.
+  // Keep the screenshot rail tied to the currently featured game and preserve the source order so the hero stays visually coherent.
   const featuredScreenshots = useMemo(() => {
-    const base = heroEligibleScreenshotPool.length
-      ? heroEligibleScreenshotPool
-      : heroEligibleFallbackScreenshotPool.length
-        ? heroEligibleFallbackScreenshotPool
-        : provisionalScreenshotPool.length
-          ? provisionalScreenshotPool
-          : provisionalFallbackScreenshotPool.length
-            ? provisionalFallbackScreenshotPool
-            : heroEligibleArtworkPool.length
-              ? heroEligibleArtworkPool
-              : [];
-    if (!base.length) return [];
-    const offset = featuredMediaPick % base.length;
-    if (offset === 0) return base;
-    return [
-      ...base.slice(offset),
-      ...base.slice(0, offset),
-    ];
+    if (heroEligibleScreenshotPool.length) return heroEligibleScreenshotPool;
+    if (heroEligibleFallbackScreenshotPool.length) {
+      return heroEligibleFallbackScreenshotPool;
+    }
+    if (provisionalScreenshotPool.length) return provisionalScreenshotPool;
+    if (provisionalFallbackScreenshotPool.length) {
+      return provisionalFallbackScreenshotPool;
+    }
+    return [];
   }, [
-    heroEligibleScreenshotPool,
     heroEligibleFallbackScreenshotPool,
-    provisionalScreenshotPool,
+    heroEligibleScreenshotPool,
     provisionalFallbackScreenshotPool,
-    heroEligibleArtworkPool,
-    featuredMediaPick,
+    provisionalScreenshotPool,
   ]);
   // useCallback functions for rendering game items in carousels, including logic to determine the appropriate cover image and description for each game based on available data. These functions are passed as props to the GameCarousel components to ensure consistent rendering of game items across different carousels while allowing for dynamic content based on the specific media and metadata of each game.
   const carouselCover = useCallback(
@@ -1135,7 +1068,15 @@ function Games({ authUser, theme }: GamesProps) {
     [filteredUpcomingGames],
   );
   const safeTopAllTimeGames = useMemo(
-    () => topAllTimeGames.filter((game) => !isNsfwGame(game)).slice(0, 100),
+    () =>
+      topAllTimeGames
+        .filter(
+          (game) =>
+            !isNsfwGame(game) &&
+            !isNonBaseContentGame(game) &&
+            isReleasedGames(game),
+        )
+        .slice(0, 100),
     [topAllTimeGames],
   );
   const safeRecentPopularGames = useMemo(
@@ -1789,5 +1730,4 @@ function Games({ authUser, theme }: GamesProps) {
 }
 
 export default Games;
-
 
