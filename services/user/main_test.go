@@ -45,3 +45,15 @@ func TestResolveUserDatabaseURLEmptyDatabaseUsesLocal(t *testing.T) {
 		t.Fatalf("expected %q, got %q", want, got)
 	}
 }
+
+func TestResolveUserDatabaseURLWithoutLocalOverrideKeepsDatabaseURL(t *testing.T) {
+	got := resolveUserDatabaseURL(
+		"postgresql://nextplay:secret@postgres:5432/nextplay?sslmode=disable",
+		"",
+	)
+
+	want := "postgresql://nextplay:secret@postgres:5432/nextplay?sslmode=disable"
+	if got != want {
+		t.Fatalf("expected %q, got %q", want, got)
+	}
+}

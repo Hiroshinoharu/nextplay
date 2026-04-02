@@ -48,7 +48,7 @@ func run() error {
 	}
 
 	cfg, err := config.Load(config.Defaults{
-		DatabaseURL:       "postgres://nextplay:nextplay@localhost:5432/nextplay?sslmode=disable",
+		DatabaseURL:       "postgres://nextplay:cdeebfe06ac79cde9c9d3a3104a2096901281ecd6ba4f05a@localhost:5432/nextplay?sslmode=disable",
 		GatewayServiceURL: "http://localhost:8084",
 	})
 	if err != nil {

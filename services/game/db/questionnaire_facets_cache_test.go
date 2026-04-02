@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// TestGetQuestionnaireFacetsCachesResults tests that GetQuestionnaireFacets caches questionnaire facets and returns a cloned value from the cache.
 func TestGetQuestionnaireFacetsCachesResults(t *testing.T) {
 	restore := snapshotQuestionnaireFacetsCacheState()
 	defer restore()
