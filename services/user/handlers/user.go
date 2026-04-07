@@ -81,20 +81,24 @@ func UpdateUser(c *fiber.Ctx) error {
 func DeleteUser(c *fiber.Ctx) error {
 	id := c.Params("id")
 
+	// Check if the database connection is initialized
 	if db.DB == nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "database not initialized"})
 	}
 
+	// Start a transaction
 	tx, err := db.DB.Begin()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to start delete transaction"})
 	}
 	defer tx.Rollback()
 
+	// Delete user interactions
 	if _, err := tx.Exec("DELETE FROM user_interactions WHERE user_id = $1", id); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to delete user interactions"})
 	}
 
+	// Delete user interaction events
 	var recommendationEventsTable sql.NullString
 	if err := tx.QueryRow("SELECT to_regclass('public.recommendation_events')::text").Scan(&recommendationEventsTable); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to inspect user event storage"})
@@ -105,12 +109,14 @@ func DeleteUser(c *fiber.Ctx) error {
 		}
 	}
 
+	// Soft-delete the user by setting deleted_at. This preserves the user record for auditing purposes
 	var (
 		deletedID    int64
 		deletedUser  string
 		deletedEmail string
 		deletedAt    sql.NullTime
 	)
+	// Soft-delete the user by setting deleted_at. This preserves the user record for auditing purposes
 	err = tx.QueryRow(
 		`UPDATE app_user
 		 SET deleted_at = NOW()
@@ -126,6 +132,7 @@ func DeleteUser(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to soft-delete user"})
 	}
 
+	// If the user deletion audit table exists, insert a record of the deleted user for auditing purposes.
 	var deletionAuditTable sql.NullString
 	if err := tx.QueryRow("SELECT to_regclass('public.user_deletion_audit')::text").Scan(&deletionAuditTable); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to inspect deletion audit storage"})
@@ -142,6 +149,7 @@ func DeleteUser(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to write deletion audit"})
 		}
 	}
+	// Commit the transaction
 	if err := tx.Commit(); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to finalize user deletion"})
 	}

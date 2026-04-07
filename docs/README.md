@@ -17,6 +17,7 @@ The root [README.md](../README.md) stays at the repository root as the main entr
 
 ## Services
 
+- [Gateway API Inventory](./services/gateway/API_GATEWAY.md)
 - [Game ETL Notes](./services/game/etl/etl-franchise-series-weak-entity.md)
 - [Recommender Plan](./services/recommender/PLAN.md)
 - [Recommender Training Readiness Checklist](./services/recommender/TRAINING_READINESS_CHECKLIST.md)

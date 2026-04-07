@@ -44,6 +44,19 @@ class KerasInferenceService:
     popularity_prior_map: dict[int, float] | None = None
 
     def infer(self, payload: ModelInputSchema) -> ModelOutputSchema:
+        """
+        Perform inference based on the input schema and return the output schema.
+
+        The implementation wraps a loaded Keras-compatible model and uses it to generate scores for each candidate game.
+        The scores are then combined with popularity prior information (if available) and ranked using the rank_candidate_rows function.
+        The top MAX_MODEL_CANDIDATES candidates are returned as part of the output schema, along with a strategy indicating how the recommendations were generated.
+
+        The strategy can be one of the following:
+        - "keras_popularity_hybrid_v3": The recommendations were generated using a combination of a machine learning model and popularity prior information.
+        - "keras_inference_v1": The recommendations were generated using a machine learning model only.
+
+        The implementation also logs the recommendation generation metrics for traceability.
+        """
         feature_vector = build_feature_vector_from_payload(payload)
         scores = _predict_scores(self.model, feature_vector)
         candidate_rows: list[tuple[int, float, float]] = []

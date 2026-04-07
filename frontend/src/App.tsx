@@ -149,6 +149,14 @@ const RouteTransitionLoader = ({
   );
 };
 
+/**
+ * Installs a patched version of the fetch function that
+ * automatically attaches a CSRF token to requests to protected
+ * origins. This function should be called once the app has
+ * initialized.
+ *
+ * @returns {void} Nothing.
+ */
 const installSecureFetchDefaults = () => {
   if (typeof window === "undefined") return;
 
