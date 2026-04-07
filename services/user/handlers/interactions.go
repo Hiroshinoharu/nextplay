@@ -63,6 +63,9 @@ var allowedRecommendationEventTypes = map[string]struct{}{
 	"recommendation_dismiss":  {},
 }
 
+// parseLimit parses a string into an integer, returning the fallback value if the string is empty or contains an invalid integer.
+// If the fallback value is less than or equal to 0, it is set to 50.
+// The parsed value is capped at 200 and will return 200 if the parsed value is greater than 200.
 func parseLimit(raw string, fallback int) int {
 	if fallback <= 0 {
 		fallback = 50
@@ -80,6 +83,10 @@ func parseLimit(raw string, fallback int) int {
 	return parsed
 }
 
+// upsertInteractionFromRecommendationEvent updates or inserts a user's interaction with a game based on a recommendation event.
+// If the event type is "recommendation_favorite", it sets the game as favorited and sets the timestamp to now.
+// If the event type is "recommendation_dismiss", it sets the game as not liked and sets the favorited state to the current value of the favorited column.
+// If the event type is not recognized, it returns nil.
 func upsertInteractionFromRecommendationEvent(userID string, req recommendationEventRequest) error {
 	if db.DB == nil {
 		return nil

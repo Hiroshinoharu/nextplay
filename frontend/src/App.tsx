@@ -175,6 +175,7 @@ const RouteTransitionLoader = ({
 };
 
 /**
+<<<<<<< HEAD
  * Installs secure fetch defaults on the window object.
  * If the user prefers reduced motion, the secure fetch defaults will be
  * installed with a shorter timeout. If the user does not prefer reduced
@@ -183,6 +184,14 @@ const RouteTransitionLoader = ({
  * that are destined for the API or the current origin, if the user is logged
  * in.
  * @returns {void} Nothing is returned by this function.
+=======
+ * Installs a patched version of the fetch function that
+ * automatically attaches a CSRF token to requests to protected
+ * origins. This function should be called once the app has
+ * initialized.
+ *
+ * @returns {void} Nothing.
+>>>>>>> 5691160abae7be731af29b75aa616fef68c45094
  */
 const installSecureFetchDefaults = () => {
   if (typeof window === "undefined") return;

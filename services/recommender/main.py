@@ -112,6 +112,17 @@ def _build_loaded_model_identity(app: FastAPI) -> dict[str, str | bool | None]:
 
 
 def _initialise_optional_model_state(app: FastAPI, validated_model_path: Path | None) -> None:
+    """
+    Initialises the FastAPI app's model state with optional model files.
+
+    If MODEL_REQUIRED is set to true, this function will raise a RuntimeError
+    if the model or manifest cannot be loaded. If MODEL_REQUIRED is set to false,
+    this function will log a warning and continue without loading the model.
+
+    :param app: The FastAPI app object.
+    :param validated_model_path: The validated model path or None.
+    :return: None
+    """
     model_required = bool(app.state.model_config["required"])
     app.state.model_path = validated_model_path.as_posix() if validated_model_path else None
     app.state.model_manifest_path = _resolve_manifest_path(app.state.model_config, validated_model_path)

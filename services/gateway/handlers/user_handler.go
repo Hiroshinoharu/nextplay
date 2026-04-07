@@ -121,6 +121,11 @@ func CreateUserInteractionEvent(c *fiber.Ctx) error {
 	return sendProxyJSON(c, resp, err)
 }
 
+// sendAuthProxyJSON sends a JSON response with the payload, sets the session cookie
+// to the extracted token and sets a new CSRF token. If the payload is missing a token,
+// or if there is an error generating the CSRF token, it returns an error response.
+// The response will be a JSON object with a single key "error" and a value describing
+// the error.
 func sendAuthProxyJSON(c *fiber.Ctx, payload interface{}, err error) error {
 	if err != nil {
 		return writeProxyError(c, err)
@@ -140,6 +145,9 @@ func sendAuthProxyJSON(c *fiber.Ctx, payload interface{}, err error) error {
 	return c.JSON(stripAuthToken(payload))
 }
 
+// extractAuthToken extracts a token from the payload if it exists.
+// It supports payloads of type map[string]interface{} and fiber.Map.
+// If the payload is of any other type, it returns an empty string.
 func extractAuthToken(payload interface{}) string {
 	switch data := payload.(type) {
 	case map[string]interface{}:
@@ -151,6 +159,9 @@ func extractAuthToken(payload interface{}) string {
 	}
 }
 
+// extractAuthTokenFromMap extracts a token from the given map if it exists.
+// It searches for the keys "token", "access_token", and "jwt" and returns the first non-empty token it finds.
+// If no token is found, it returns an empty string.
 func extractAuthTokenFromMap(data map[string]interface{}) string {
 	for _, key := range []string{"token", "access_token", "jwt"} {
 		if value, ok := data[key].(string); ok && strings.TrimSpace(value) != "" {
@@ -160,6 +171,14 @@ func extractAuthTokenFromMap(data map[string]interface{}) string {
 	return ""
 }
 
+
+// stripAuthToken removes any authentication tokens from the given payload.
+// It supports payloads of type map[string]interface{} and fiber.Map.
+// If the payload is of any other type, it returns the original payload.
+// The function iterates over the payload and removes any keys that match the
+// following values (case insensitive): "token", "access_token", "jwt".
+// The resulting payload is returned as an interface{} and can be safely cast
+// back to the original type.
 func stripAuthToken(payload interface{}) interface{} {
 	switch data := payload.(type) {
 	case map[string]interface{}:
@@ -185,6 +204,8 @@ func stripAuthToken(payload interface{}) interface{} {
 	}
 }
 
+// isAuthTokenKey returns true if the given key is one of the following (case insensitive):
+// "token", "access_token", "jwt". It returns false otherwise.
 func isAuthTokenKey(key string) bool {
 	switch strings.ToLower(strings.TrimSpace(key)) {
 	case "token", "access_token", "jwt":
