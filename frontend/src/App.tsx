@@ -99,6 +99,17 @@ const HEALTH_SERVICE_LABELS: Record<string, string> = {
   recommender: "Recommender Service",
 };
 
+/**
+ * Returns true if the given target element should be ignored when
+ * detecting vertical swipes, false otherwise.
+ * 
+ * This function is used to prevent vertical swipe gestures from being
+ * triggered when the user is interacting with certain elements on the
+ * page, such as text inputs, buttons, and contenteditable elements.
+ * 
+ * @param {EventTarget|null} target - The element to check, or null.
+ * @returns {boolean} True if the element should be ignored, false otherwise.
+ */
 const shouldIgnoreVerticalSwipe = (target: EventTarget | null) => {
   if (!(target instanceof Element)) return false;
   return Boolean(target.closest(SWIPE_IGNORE_SELECTOR));
@@ -112,6 +123,20 @@ type RouteTransitionLoaderProps = {
   theme: ThemeMode;
 };
 
+/**
+ * A full-screen loading screen that is displayed during route transitions.
+ * It respects the user's prefers-reduced-motion preference and adjusts the
+ * animation duration accordingly.
+ * 
+ * @param {RouteTransitionLoaderProps} props - The component props.
+ * @param {string} [props.Eyebrow] - The eyebrow CSS value to use for the title.
+ * @param {string} props.title - The title to display on the loading screen.
+ * @param {string} props.subtitle - The subtitle to display on the loading screen.
+ * @param {string[]} [props.hints] - Optional hints to display on the loading screen.
+ * @param {ThemeMode} props.theme - The theme mode to use for the loading screen.
+ * @returns {React.ReactElement | null} The loading screen component, or null if the
+ * user prefers reduced motion and the animation timeout has expired.
+ */
 const RouteTransitionLoader = ({
   eyebrow,
   title,
@@ -150,12 +175,23 @@ const RouteTransitionLoader = ({
 };
 
 /**
+<<<<<<< HEAD
+ * Installs secure fetch defaults on the window object.
+ * If the user prefers reduced motion, the secure fetch defaults will be
+ * installed with a shorter timeout. If the user does not prefer reduced
+ * motion, the secure fetch defaults will be installed with a longer timeout.
+ * The secure fetch defaults will add the necessary CSRF token to requests
+ * that are destined for the API or the current origin, if the user is logged
+ * in.
+ * @returns {void} Nothing is returned by this function.
+=======
  * Installs a patched version of the fetch function that
  * automatically attaches a CSRF token to requests to protected
  * origins. This function should be called once the app has
  * initialized.
  *
  * @returns {void} Nothing.
+>>>>>>> 5691160abae7be731af29b75aa616fef68c45094
  */
 const installSecureFetchDefaults = () => {
   if (typeof window === "undefined") return;
@@ -175,6 +211,16 @@ const installSecureFetchDefaults = () => {
   );
   let csrfBootstrapPromise: Promise<string> | null = null;
 
+  
+/**
+ * Ensures that a CSRF token is available for making requests to the API or the current origin.
+ * If a CSRF token is already available, it will be returned.
+ * If a CSRF token is not available, a request will be made to the
+ * /users/csrf endpoint to obtain one. If the request fails or
+ * the response does not contain a CSRF token, an empty string will
+ * be returned.
+ * @returns {Promise<string>} A promise that resolves to the CSRF token, or an empty string if no token could be obtained.
+ */
   const ensureCSRFToken = async () => {
     const existingToken = getCSRFCookieValue();
     if (existingToken) {
@@ -259,6 +305,14 @@ type HomeProps = {
   theme: ThemeMode;
 };
 
+/**
+ * The Home component is the entry point of the NextPlay application.
+ * It displays a hero section with a form to enter an email address to find games,
+ * a section to display popular games, and a footer with links to relevant pages.
+ * It also handles authentication and signing out.
+ * @param {{ authUser: AuthUser | null, onSignOut: () => void, theme: ThemeMode }} props - Component props.
+ * @returns {JSX.Element} - The Home component.
+ */
 const Home = ({ authUser, onSignOut, theme }: HomeProps) => {
   // Define service cards for the home page
   const navigate = useNavigate();
@@ -277,6 +331,13 @@ const Home = ({ authUser, onSignOut, theme }: HomeProps) => {
   useEffect(() => {
     const controller = new AbortController();
 
+/**
+ * Loads a list of popular games for the given year.
+ * If no games are found, it will fetch the next set of games from the /games endpoint.
+ * If an error occurs, it will display an error message.
+ * It will also append a cache busting parameter to the URL to force a reload if the user has already loaded the page.
+ * @returns {Promise<void>} - A promise that resolves when the games are loaded.
+ */
     const loadPopularGames = async () => {
       setPopularLoading(true);
       setPopularError(null);
@@ -284,6 +345,15 @@ const Home = ({ authUser, onSignOut, theme }: HomeProps) => {
 
       try {
         const cacheBust = String(Date.now());
+/**
+ * Fetches a list of popular games for the given year.
+ * If no games are found, it will fetch the next set of games from the /games endpoint.
+ * If an error occurs, it will display an error message.
+ * It will also append a cache busting parameter to the URL to force a reload if the user has already loaded the page.
+ * @param {string} path - The path to fetch the games from.
+ * @param {URLSearchParams} params - The parameters to pass to the fetch request.
+ * @returns {Promise<PopularGameResponse[]>} - A promise that resolves to the list of popular games.
+ */
         const fetchGames = async (
           path: string,
           params: URLSearchParams,
@@ -458,6 +528,19 @@ const Home = ({ authUser, onSignOut, theme }: HomeProps) => {
 };
 
 
+/**
+ * Displays the system status page.
+ *
+ * This page will display the overall system health based on the
+ * health checks performed by the server. It will also display the
+ * individual service health checks.
+ *
+ * The page will also contain buttons to refresh the health checks and
+ * to go back to the services page.
+ *
+ * @param {ThemeMode} theme - The theme mode to use for the page.
+ * @returns {JSX.Element} The system status page.
+ */
 const HealthPage = ({ theme }: { theme: ThemeMode }) => {
   // State and handlers for health checks
   const navigate = useNavigate();
@@ -643,6 +726,13 @@ const HealthPage = ({ theme }: { theme: ThemeMode }) => {
   );
 };
 
+/**
+ * The main App component.
+ *
+ * Handles session state, routing, and route loading.
+ *
+ * @returns {JSX.Element} The App component.
+ */
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -671,6 +761,17 @@ function App() {
     }
   });
 
+/**
+ * Handles a successful authentication event.
+ *
+ * Normalizes the given payload into an AuthUser object, and if it is valid,
+ * sets the AuthUser state and stores it in localStorage.
+ *
+ * If the payload cannot be normalized into a valid AuthUser object, the function
+ * does nothing.
+ *
+ * If storage errors occur (e.g., private mode), they are ignored.
+ */
   const handleAuthSuccess = (payload: unknown) => {
     const user = normalizeAuthUser(payload);
     if (!user) return;
@@ -719,12 +820,21 @@ function App() {
     let ready = typeof document !== "undefined" && document.readyState === "complete";
     let minimumElapsed = false;
 
+/**
+ * If the document is ready and the minimum elapsed time has passed,
+ * sets showBootLoadingScreen to false.
+ */
     const finishIfReady = () => {
       if (ready && minimumElapsed) {
         setShowBootLoadingScreen(false);
       }
     };
 
+/**
+ * Marks the document as ready and calls finishIfReady to
+ * potentially hide the boot loading screen if the minimum
+ * elapsed time has passed.
+ */
     const handleReady = () => {
       ready = true;
       finishIfReady();
@@ -787,6 +897,16 @@ function App() {
     let startY = 0;
     let touchStartTs = 0;
 
+/**
+ * Handles touchstart events to record the start of a touch gesture.
+ *
+ * This function only records the start of a touch gesture if the event
+ * has a single touch point and the target element is not a descendant
+ * of a node that should be ignored for vertical swipes.
+ *
+ * @param {TouchEvent} event - The touchstart event.
+ */
+
     const handleTouchStart = (event: TouchEvent) => {
       if (event.touches.length !== 1) return;
       if (shouldIgnoreVerticalSwipe(event.target)) {
@@ -799,6 +919,17 @@ function App() {
       touchStartTs = Date.now();
     };
 
+/**
+ * Handles touchend events to detect vertical swipes and scroll the page accordingly.
+ * The function only handles the event if it has a single touch point and the
+ * touch gesture started within the allowed time window.
+ * The function ignores touch gestures that are too short or too long, or
+ * those that are mostly horizontal.
+ * The function scrolls the page by a fixed amount in the direction of the
+ * touch gesture.
+ *
+ * @param {TouchEvent} event - The touchend event.
+ */
     const handleTouchEnd = (event: TouchEvent) => {
       if (touchStartTs <= 0 || event.changedTouches.length !== 1) return;
       const elapsedMs = Date.now() - touchStartTs;

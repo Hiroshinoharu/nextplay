@@ -85,6 +85,10 @@ func positiveIntFromEnv(name string, fallback int) int {
 	return fallback
 }
 
+// rateLimitKeyIP returns a string representing the client's IP address, taking into account the
+// value of the TRUST_PROXY_HEADERS environment variable. If TRUST_PROXY_HEADERS is set to a
+// truthy value, the function will return the first IP address found in the X-Forwarded-For
+// header, otherwise it will return the IP address of the client as determined by c.IP().
 func rateLimitKeyIP(c *fiber.Ctx) string {
 	if trustProxyHeaders() {
 		if forwardedIP := firstForwardedIP(c.Get("X-Forwarded-For")); forwardedIP != "" {
@@ -94,6 +98,9 @@ func rateLimitKeyIP(c *fiber.Ctx) string {
 	return c.IP()
 }
 
+// trustProxyHeaders returns true if the TRUST_PROXY_HEADERS environment variable is set to a truthy value,
+// and false otherwise. This determines whether the rate limiter should trust the X-Forwarded-For
+// header when determining the client IP address.
 func trustProxyHeaders() bool {
 	raw := strings.TrimSpace(os.Getenv("TRUST_PROXY_HEADERS"))
 	if raw == "" {
@@ -103,6 +110,9 @@ func trustProxyHeaders() bool {
 	return err == nil && parsed
 }
 
+// firstForwardedIP returns the first IP address from the given header string, or an empty string if none of the candidates can be parsed as an IP address.
+// The function iterates over the comma-separated values in the header string, trims any whitespace from each candidate, and checks if the trimmed value can be parsed as an IP address.
+// If a valid IP address is found, it is returned as a string. Otherwise, an empty string is returned.
 func firstForwardedIP(header string) string {
 	for _, candidate := range strings.Split(header, ",") {
 		trimmed := strings.TrimSpace(candidate)
