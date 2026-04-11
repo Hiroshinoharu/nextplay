@@ -59,6 +59,9 @@ func requestAuthorizationHeader(c *fiber.Ctx) string {
 	)
 }
 
+// forwardingHeaders returns a map of headers that should be forwarded to the upstream
+// service. It includes the request ID, the Authorization header if present,
+// and the X-Service-Token header if configured.
 func forwardingHeaders(c *fiber.Ctx) map[string]string {
 	headers := map[string]string{
 		observability.HeaderRequestID: requestIDFromCtx(c),
@@ -72,6 +75,10 @@ func forwardingHeaders(c *fiber.Ctx) map[string]string {
 	return headers
 }
 
+// gatewayServiceToken returns the expected service token for the gateway service,
+// first checking the GATEWAY_SERVICE_TOKEN environment variable and then
+// falling back to the SERVICE_TOKEN environment variable if not configured.
+// The returned token is trimmed of whitespace to ensure it is valid.
 func gatewayServiceToken() string {
 	if token := strings.TrimSpace(os.Getenv("GATEWAY_SERVICE_TOKEN")); token != "" {
 		return token

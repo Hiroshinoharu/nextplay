@@ -6,6 +6,7 @@ The root [README.md](../README.md) stays at the repository root as the main entr
 
 - [PostgreSQL Desktop Access](./postgres-dbeaver-access.md)
 - [2026-03-10 Session Summary](./2026-03-10-session-summary.md)
+- [Project Testing Overview](./PROJECT_TESTING_OVERVIEW.md)
 
 ## Frontend
 
